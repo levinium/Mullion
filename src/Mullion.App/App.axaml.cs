@@ -27,7 +27,7 @@ public partial class App : Application
         }
 
         _desktop = desktop;
-        _host = CreateHost();
+        _host = CreateHost(desktop.Args);
 
         _tray = new TrayController();
         var hasTray = _tray.TryCreate(ShowWindow, () => _host.Rescan(), TogglePause, Quit, () => _host.Paused);
@@ -73,11 +73,11 @@ public partial class App : Application
 
         var startHidden = desktop.Args?.Contains("--tray") == true && hasTray;
 
-        if (ShouldRunWizard())
+        if (ShouldRunWizard() && !IsSimulating())
         {
             ShowWizard();
         }
-        else if (!startHidden)
+        else if (!startHidden || IsSimulating())
         {
             _window.Show();
         }
@@ -149,6 +149,13 @@ public partial class App : Application
         _settings.Show(_window!);
     }
 
+    private bool IsSimulating() =>
+#if PLATFORM_WINDOWS
+        OperatingSystem.IsWindows() && _host is WindowsAppHost { Simulated: not null };
+#else
+        false;
+#endif
+
     private bool ShouldRunWizard() =>
 #if PLATFORM_WINDOWS
         OperatingSystem.IsWindows() && _host is WindowsAppHost { NeedsWizard: true };
@@ -197,14 +204,31 @@ public partial class App : Application
     }
 #endif
 
-    private static IAppHost CreateHost()
+    private static IAppHost CreateHost(string[]? args)
     {
 #if PLATFORM_WINDOWS
         // The runtime check is what satisfies the platform analyzer; the #if
         // controls whether the assembly is referenced at all.
-        if (OperatingSystem.IsWindows()) return new WindowsAppHost();
+        if (OperatingSystem.IsWindows()) return new WindowsAppHost(FindSimulation(args));
 #endif
 
         return new DesignAppHost();
+    }
+
+    /// <summary>
+    /// --simulate &lt;id&gt; previews a fake display arrangement. Most setups Mullion
+    /// has to handle cannot be plugged into the machine it is developed on, so
+    /// without this the multi-monitor defaults are never actually looked at.
+    /// </summary>
+    private static Core.Simulation.SimulatedTopology? FindSimulation(string[]? args)
+    {
+        if (args is null) return null;
+
+        var index = Array.FindIndex(args, a =>
+            a.Equals("--simulate", StringComparison.OrdinalIgnoreCase));
+
+        if (index < 0 || index + 1 >= args.Length) return null;
+
+        return Core.Simulation.SimulatedTopologies.Find(args[index + 1]);
     }
 }

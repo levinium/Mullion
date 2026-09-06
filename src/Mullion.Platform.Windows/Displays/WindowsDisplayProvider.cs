@@ -12,10 +12,10 @@ namespace Mullion.Platform.Windows.Displays;
 /// GDI device name the two APIs share.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class WindowsDisplayProvider
+public sealed class WindowsDisplayProvider : Mullion.Core.Abstractions.IDisplayProvider
 {
     /// <summary>
-    /// Must run before any UI framework initialises. The manifest also declares
+    /// Must run before any UI framework initializes. The manifest also declares
     /// PerMonitorV2; this is belt and braces, because without it every coordinate
     /// we read is virtualised and the zone maths silently operates on lies.
     /// </summary>

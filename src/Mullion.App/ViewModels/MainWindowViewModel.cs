@@ -32,6 +32,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private bool _isElevated;
 
     [ObservableProperty]
+    private string? _simulationName;
+
+    public bool IsSimulating => SimulationName is not null;
+
+    public string SimulationLine =>
+        $"Simulating: {SimulationName}. This is a preview of what a first launch would produce on that "
+        + "arrangement — hotkeys are disabled and nothing is saved.";
+
+    [ObservableProperty]
     private string? _blockedByWindow;
 
     /// <summary>
@@ -118,8 +127,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Conflicts = snapshot.Conflicts;
         IsElevated = snapshot.IsElevated;
         BlockedByWindow = snapshot.BlockedByWindow;
+        SimulationName = snapshot.SimulationName;
 
         OnPropertyChanged(nameof(HasConflicts));
+        OnPropertyChanged(nameof(IsSimulating));
+        OnPropertyChanged(nameof(SimulationLine));
         OnPropertyChanged(nameof(ShowElevationBanner));
         OnPropertyChanged(nameof(ElevationHeadline));
         OnPropertyChanged(nameof(ElevationDetail));

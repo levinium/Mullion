@@ -14,7 +14,10 @@ public sealed record AppSnapshot(
     bool IsElevated,
 
     /// <summary>Title of the elevated window currently blocking hotkeys, or null.</summary>
-    string? BlockedByWindow);
+    string? BlockedByWindow,
+
+    /// <summary>Name of the simulated arrangement, or null when using real hardware.</summary>
+    string? SimulationName);
 
 /// <summary>
 /// Everything the UI needs from the platform, behind one interface so the
@@ -64,6 +67,7 @@ public sealed class DesignAppHost : IAppHost
                     Bounds = new Rect(0, 0, 5120, 1440),
                     IsPrimary = true,
                     HasTaskbar = true,
+                    LabelAbove = true,
                     TaskbarArea = new Rect(0, 1 - 48.0 / 1440, 1, 48.0 / 1440),
                     Cells =
                     [
@@ -84,6 +88,7 @@ public sealed class DesignAppHost : IAppHost
             "No hotkey pressed yet.",
             [],
             false,
+            null,
             null);
     }
 

@@ -6,6 +6,7 @@ using Mullion.Core.Config;
 using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Model;
+using Mullion.Core.Simulation;
 using Mullion.Platform.Windows.Displays;
 using Mullion.Platform.Windows.Hotkeys;
 using Mullion.Platform.Windows.Windows;
@@ -16,7 +17,18 @@ namespace Mullion.App.Services;
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisposable
 {
-    private readonly WindowsDisplayProvider _displayProvider = new();
+    private readonly IDisplayProvider _displayProvider;
+
+    /// <summary>Non-null when previewing a fake arrangement rather than real hardware.</summary>
+    public SimulatedTopology? Simulated { get; }
+
+    public WindowsAppHost(SimulatedTopology? simulated = null)
+    {
+        Simulated = simulated;
+        _displayProvider = simulated is null
+            ? new WindowsDisplayProvider()
+            : new SimulatedDisplayProvider(simulated);
+    }
     private readonly ConfigStore _configStore = new();
     private readonly Log _log = new();
 
@@ -63,7 +75,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _config = _configStore.Load();
 
-        _log.Info($"Mullion starting. Config: {_configStore.Path_}");
+        _log.Info($"Mullion {BuildInfo.Full} starting. Config: {_configStore.Path_}");
         foreach (var note in _configStore.LoadNotes) _log.Warn(note);
 
         // Write back a migrated config once, rather than re-migrating on every
@@ -79,6 +91,19 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _engine.Diagnostic += m => _log.Info(m);
 
         Rescan();
+
+        // In simulation nothing that touches the real machine runs. The zones
+        // describe monitors that are not there, so a hotkey would fling a real
+        // window to coordinates off-screen; and watching for display changes
+        // would immediately overwrite the simulated arrangement with the real
+        // one. It is a preview, not a dry run.
+        if (Simulated is not null)
+        {
+            _log.Info($"Simulating: {Simulated.Name}. Hotkeys and config saving are disabled.");
+            StateChanged?.Invoke();
+            return;
+        }
+
         _engine.Start();
 
         // Monitors get plugged in, resolutions change, laptops dock. Without
@@ -127,7 +152,12 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _lastFingerprint = TopologyFingerprint.GeometrySignature(_displays);
 
-        var resolution = ProfileResolver.Resolve(_config, _displays);
+        // Simulation always shows what a FIRST launch would produce. Matching a
+        // stored profile would show a customised layout instead, which is the
+        // opposite of what a preview of the defaults is for.
+        var resolution = Simulated is null
+            ? ProfileResolver.Resolve(_config, _displays)
+            : new ProfileResolution(ProfileMatch.None, null, "Simulated arrangement.");
 
         // A stored profile is reused when the displays are recognizable, so a
         // resolution change or a rearrangement does not discard the user's
@@ -141,7 +171,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
                     _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions),
         };
 
-        if (resolution.Match == ProfileMatch.None)
+        if (resolution.Match == ProfileMatch.None && Simulated is null)
         {
             var profile = ProfileResolver.CreateProfile(_displays, _layout);
             _config = _config with
@@ -236,7 +266,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _lastAction,
             _conflicts,
             Elevation.IsCurrentProcessElevated,
-            _reach.Reachable ? null : _reach.WindowTitle);
+            _reach.Reachable ? null : _reach.WindowTitle,
+            Simulated?.Name);
     }
 
     // ---- wizard ------------------------------------------------------------
@@ -364,8 +395,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _layout?.Surface.Id ?? KeySurface.LeftHandBlock.Id,
             [.. KeySurface.All.Select(s => (s.Id, s.Name))],
             bindings,
-            _configStore.Path_);
+            _configStore.Path_,
+            _log.Path_);
     }
+
+    public void OpenLogFolder() => OpenFolder(Path.GetDirectoryName(_log.Path_));
 
     public string? SetAutoStart(AutoStartMode mode)
     {
@@ -412,9 +446,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         if (Elevation.TryRestartElevated("--tray")) Environment.Exit(0);
     }
 
-    public void OpenConfigFolder()
+    public void OpenConfigFolder() => OpenFolder(Path.GetDirectoryName(_configStore.Path_));
+
+    private static void OpenFolder(string? folder)
     {
-        var folder = Path.GetDirectoryName(_configStore.Path_);
         if (folder is null) return;
 
         Directory.CreateDirectory(folder);
@@ -527,6 +562,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     private void Save()
     {
+        // A simulated arrangement must never reach the real config: its
+        // profiles describe monitors that do not exist.
+        if (Simulated is not null) return;
+
         try { _configStore.Save(_config); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
