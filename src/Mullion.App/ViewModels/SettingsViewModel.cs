@@ -80,6 +80,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     private string _configPath = string.Empty;
 
     [ObservableProperty]
+    private string _logPath = string.Empty;
+
+    /// <summary>Includes the commit, so a bug report identifies the exact build.</summary>
+    public string VersionLine => $"Mullion {Services.BuildInfo.Full}";
+
+    [ObservableProperty]
     private string? _error;
 
     [ObservableProperty]
@@ -138,6 +144,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                               ?? SuppressionModes[0];
         IsElevated = s.IsElevated;
         ConfigPath = s.ConfigPath;
+        LogPath = s.LogPath;
 
         Surfaces = [.. s.AvailableSurfaces.Select(x => new SurfaceOption(x.Id, x.Name))];
         SelectedSurface = Surfaces.FirstOrDefault(x => x.Id == s.SurfaceId);
@@ -285,6 +292,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void OpenConfigFolder() => _host.OpenConfigFolder();
 
     [RelayCommand]
+    private void OpenLogFolder() => _host.OpenLogFolder();
+
+    [RelayCommand]
     private void RerunWizard() => _host.RerunWizard();
 }
 
@@ -299,7 +309,8 @@ public sealed class DesignSettingsHost : ISettingsHost
             new BindingEntry("Win+S", "Center", 1, 1),
             new BindingEntry("Win+D", "Right", 1, 2),
         ],
-        @"%APPDATA%\Mullion\config.json");
+        @"%APPDATA%\Mullion\config.json",
+        @"%LOCALAPPDATA%\Mullion\logs\mullion.log");
 
     public string? SetAutoStart(AutoStartMode mode) => null;
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
@@ -312,5 +323,6 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void SetKeySurface(string surfaceId) { }
     public void RestartElevated() { }
     public void OpenConfigFolder() { }
+    public void OpenLogFolder() { }
     public void RerunWizard() { }
 }

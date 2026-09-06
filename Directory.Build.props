@@ -12,11 +12,41 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
+  <!--
+    Single source of truth for the version. Semantic versioning:
+      MAJOR  a change that breaks existing setups - config that will not load,
+             or default hotkeys moving under someone who has learned them.
+      MINOR  new capability, backwards compatible.
+      PATCH  fixes only.
+    Bump this before publishing a build anywhere.
+  -->
   <PropertyGroup>
     <Product>Mullion</Product>
     <Company>Mullion</Company>
-    <Version>0.1.0</Version>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
+    <Copyright>Mullion</Copyright>
   </PropertyGroup>
+
+  <!--
+    Stamp the commit onto InformationalVersion, so a log line or a bug report
+    identifies the exact build rather than just "1.0.0" - which is ambiguous
+    across every commit that ships under it. Failures here are ignored: a
+    missing git, or a source drop with no repository, must not break the build.
+  -->
+  <Target Name="StampCommit" BeforeTargets="GetAssemblyVersion" Condition="'$(SourceRevisionId)' == ''">
+    <Exec Command="git rev-parse --short HEAD"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="low"
+          ContinueOnError="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="MullionCommit" />
+      <Output TaskParameter="ExitCode" PropertyName="MullionGitExit" />
+    </Exec>
+
+    <PropertyGroup Condition="'$(MullionGitExit)' == '0' AND '$(MullionCommit)' != ''">
+      <SourceRevisionId>$(MullionCommit.Trim())</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
 
 </Project>

@@ -21,7 +21,8 @@ public sealed record SettingsSnapshot(
     string SurfaceId,
     IReadOnlyList<(string Id, string Name)> AvailableSurfaces,
     IReadOnlyList<BindingEntry> Bindings,
-    string ConfigPath);
+    string ConfigPath,
+    string LogPath);
 
 public interface ISettingsHost
 {
@@ -41,6 +42,8 @@ public interface ISettingsHost
     void RestartElevated();
 
     void OpenConfigFolder();
+
+    void OpenLogFolder();
 
     void RerunWizard();
 
