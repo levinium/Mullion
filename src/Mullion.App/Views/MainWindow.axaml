@@ -30,6 +30,14 @@
     <!-- Diagram + conflicts -->
     <Grid Grid.Row="1" RowDefinitions="Auto,*">
 
+      <Border Grid.Row="0" Classes="warning" Margin="0,0,0,14"
+              IsVisible="{Binding HasTrayFailure}">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="h2" Text="No tray icon" />
+          <TextBlock Classes="body" Text="{Binding TrayFailure}" />
+        </StackPanel>
+      </Border>
+
       <ItemsControl Grid.Row="0"
                     ItemsSource="{Binding Conflicts}"
                     IsVisible="{Binding HasConflicts}"

@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using Mullion.App.Services;
 using Mullion.App.ViewModels;
 using Mullion.App.Views;
@@ -11,6 +13,8 @@ public partial class App : Application
 {
     private IAppHost? _host;
     private MainWindow? _window;
+    private TrayController? _tray;
+    private IClassicDesktopStyleApplicationLifetime? _desktop;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -22,21 +26,44 @@ public partial class App : Application
             return;
         }
 
-        // Closing the window hides it; Mullion keeps running in the tray, so the
-        // process must only exit when explicitly asked to.
-        desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
-
+        _desktop = desktop;
         _host = CreateHost();
 
-        DataContext = new TrayViewModel(_host, ShowWindow, () => desktop.Shutdown());
+        _tray = new TrayController();
+        var hasTray = _tray.TryCreate(ShowWindow, () => _host.Rescan(), TogglePause, Quit, () => _host.Paused);
 
-        _window = new MainWindow { DataContext = new MainWindowViewModel(_host) };
+        _window = new MainWindow
+        {
+            DataContext = new MainWindowViewModel(_host),
+            Icon = LoadWindowIcon(),
+        };
+
+        // Only detach the lifetime from the window when there is genuinely
+        // somewhere else to control the app from. Without a tray icon,
+        // OnExplicitShutdown plus a window that hides on close leaves the app
+        // running with no way to reach it - which is exactly what happened.
+        //
+        // OnMainWindowClose rather than OnLastWindowClose: the zone-flash
+        // overlay is a real Window that stays open between flashes, so
+        // "last window" would never be reached and the app still could not exit.
+        desktop.MainWindow = _window;
+        desktop.ShutdownMode = hasTray
+            ? ShutdownMode.OnExplicitShutdown
+            : ShutdownMode.OnMainWindowClose;
+
+        // The window only hides on close while the tray can bring it back.
+        _window.HideInsteadOfClosing = hasTray;
+
+        if (!hasTray && _tray.FailureReason is not null)
+        {
+            // Surfaced rather than swallowed: the app is usable without a tray
+            // icon, but the user needs to know why it is not there.
+            (_window.DataContext as MainWindowViewModel)?.ReportTrayFailure(_tray.FailureReason);
+        }
 
         _host.Start();
 
-        // --tray starts minimised to the tray, which is how the auto-start entry
-        // launches it; a manual launch shows the window.
-        var startHidden = desktop.Args?.Contains("--tray") == true;
+        var startHidden = desktop.Args?.Contains("--tray") == true && hasTray;
 
         if (ShouldRunWizard())
         {
@@ -47,9 +74,27 @@ public partial class App : Application
             _window.Show();
         }
 
-        desktop.Exit += (_, _) => (_host as IDisposable)?.Dispose();
+        desktop.Exit += (_, _) =>
+        {
+            _tray?.Dispose();
+            (_host as IDisposable)?.Dispose();
+        };
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void TogglePause()
+    {
+        if (_host is null) return;
+
+        _host.Paused = !_host.Paused;
+        _tray?.SetPaused(_host.Paused);
+    }
+
+    private void Quit()
+    {
+        _tray?.Dispose();
+        _desktop?.Shutdown();
     }
 
     private void ShowWindow()
@@ -57,8 +102,17 @@ public partial class App : Application
         if (_window is null) return;
 
         _window.Show();
-        _window.WindowState = Avalonia.Controls.WindowState.Normal;
+        _window.WindowState = WindowState.Normal;
         _window.Activate();
+    }
+
+    private static WindowIcon? LoadWindowIcon()
+    {
+        var uri = new Uri("avares://Mullion/Assets/mullion.ico");
+        if (!AssetLoader.Exists(uri)) return null;
+
+        using var stream = AssetLoader.Open(uri);
+        return new WindowIcon(stream);
     }
 
     private bool ShouldRunWizard() =>
@@ -72,7 +126,11 @@ public partial class App : Application
     {
         if (_host is not IWizardHost wizardHost) return;
 
-        var wizard = new WizardWindow { DataContext = new WizardViewModel(wizardHost) };
+        var wizard = new WizardWindow
+        {
+            DataContext = new WizardViewModel(wizardHost),
+            Icon = LoadWindowIcon(),
+        };
 
 #if PLATFORM_WINDOWS
         if (OperatingSystem.IsWindows() && _host is WindowsAppHost windowsHost)
@@ -90,7 +148,7 @@ public partial class App : Application
     /// through a closure.
     /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static void WireWizardClose(WindowsAppHost host, Avalonia.Controls.Window wizard, Action showWindow)
+    private static void WireWizardClose(WindowsAppHost host, Window wizard, Action showWindow)
     {
         host.WizardCloseRequested = () =>
         {
@@ -105,13 +163,10 @@ public partial class App : Application
     {
 #if PLATFORM_WINDOWS
         // The runtime check is what satisfies the platform analyzer; the #if
-        // controls whether the assembly is referenced at all. Both are needed,
-        // and that is the boundary keeping a macOS backend a drop-in job.
+        // controls whether the assembly is referenced at all.
         if (OperatingSystem.IsWindows()) return new WindowsAppHost();
 #endif
 
-        // macOS and Linux backends are not implemented yet; the design host at
-        // least lets the UI run so layout work is not Windows-gated.
         return new DesignAppHost();
     }
 }

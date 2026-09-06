@@ -48,6 +48,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasConflicts => Conflicts.Count > 0;
 
+    [ObservableProperty]
+    private string? _trayFailure;
+
+    public bool HasTrayFailure => TrayFailure is not null;
+
+    /// <summary>Surface a missing tray icon rather than leaving it a mystery.</summary>
+    public void ReportTrayFailure(string reason)
+    {
+        TrayFailure =
+            $"The tray icon could not be created ({reason}). Mullion still works, but closing this " +
+            "window will exit the app rather than minimising to the tray.";
+
+        OnPropertyChanged(nameof(HasTrayFailure));
+    }
+
     [RelayCommand]
     private void Rescan() => _host.Rescan();
 

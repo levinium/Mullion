@@ -8,12 +8,18 @@ public partial class MainWindow : Window
     public MainWindow() => AvaloniaXamlLoader.Load(this);
 
     /// <summary>
-    /// Closing hides rather than exits: Mullion lives in the tray, and closing
-    /// the window is not a request to stop managing hotkeys.
+    /// Whether closing hides the window instead of exiting.
+    /// <para>
+    /// Only ever true when a tray icon exists to bring it back. Hiding with no
+    /// tray leaves the app running and unreachable, with no way to quit short
+    /// of Task Manager.
+    /// </para>
     /// </summary>
+    public bool HideInsteadOfClosing { get; set; }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (!e.IsProgrammatic)
+        if (HideInsteadOfClosing && !e.IsProgrammatic)
         {
             e.Cancel = true;
             Hide();

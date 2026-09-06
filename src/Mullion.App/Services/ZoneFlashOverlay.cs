@@ -41,7 +41,20 @@ public sealed class ZoneFlashOverlay : IDisposable
         _timer.Tick += (_, _) =>
         {
             _timer?.Stop();
-            if (_window is not null) _window.Opacity = 0;
+            if (_window is null) return;
+
+            _window.Opacity = 0;
+
+            // Hide once faded rather than leaving an invisible window sitting on
+            // top of the desktop indefinitely.
+            var hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
+            hide.Tick += (_, _) =>
+            {
+                hide.Stop();
+                if (_window is { IsVisible: true }) _window.Hide();
+            };
+
+            hide.Start();
         };
 
         _timer.Start();
