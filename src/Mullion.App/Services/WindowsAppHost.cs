@@ -18,7 +18,13 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 {
     private readonly WindowsDisplayProvider _displayProvider = new();
     private readonly ConfigStore _configStore = new();
-    private readonly WindowManager _windows = new();
+    private readonly Log _log = new();
+
+    // Constructed once config is loaded, so UndoDepth is actually honoured
+    // rather than silently defaulting.
+    private WindowManager? _windowsManager;
+
+    private WindowManager Windows => _windowsManager ??= new WindowManager(_config.General.UndoDepth);
 
     private HotkeyEngine? _engine;
     private IReadOnlyList<DisplayInfo> _displays = [];
@@ -42,12 +48,20 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _config = _configStore.Load();
 
+        _log.Info($"Mullion starting. Config: {_configStore.Path_}");
+        foreach (var note in _configStore.LoadNotes) _log.Warn(note);
+
         // Write back a migrated config once, rather than re-migrating on every
         // launch and leaving the file permanently out of date.
         if (_configStore.MigratedOnLoad) Save();
 
-        _engine = new HotkeyEngine(_windows, ParseSuppression(_config.General.WinKeySuppression));
+        _engine = new HotkeyEngine(Windows, ParseSuppression(_config.General.WinKeySuppression))
+        {
+            PauseWhenFullscreen = _config.General.PauseWhenFullscreen,
+        };
+
         _engine.Fired += OnFired;
+        _engine.Diagnostic += m => _log.Info(m);
 
         Rescan();
         _engine.Start();

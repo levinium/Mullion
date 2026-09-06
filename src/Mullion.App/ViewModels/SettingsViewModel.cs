@@ -28,6 +28,11 @@ public sealed record SurfaceOption(string Id, string Name)
     public override string ToString() => Name;
 }
 
+public sealed record SuppressionOption(string Id, string Name)
+{
+    public override string ToString() => Name;
+}
+
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsHost _host;
@@ -47,6 +52,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private string _winKeySuppression = "DummyKey";
+
+    [ObservableProperty]
+    private SuppressionOption? _selectedSuppression;
 
     [ObservableProperty]
     private SurfaceOption? _selectedSurface;
@@ -85,7 +93,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         Reload();
     }
 
-    public IReadOnlyList<string> SuppressionModes { get; } = ["DummyKey", "SwallowKeyUp", "None"];
+    /// <summary>
+    /// Labelled rather than raw enum names. "None" means the Start menu opens on
+    /// every hotkey - the app's most visible failure - so it has to say so
+    /// rather than looking like a neutral third choice.
+    /// </summary>
+    public IReadOnlyList<SuppressionOption> SuppressionModes { get; } =
+    [
+        new("DummyKey", "Suppress with a dummy keypress (recommended)"),
+        new("SwallowKeyUp", "Swallow the Windows key release"),
+        new("None", "Don't suppress — the Start menu will open (diagnostic only)"),
+    ];
+
+    public bool SuppressionIsDefault => WinKeySuppression == "DummyKey";
+
+    public string SuppressionWarning => WinKeySuppression switch
+    {
+        "None" => "The Start menu will open every time you use a Mullion hotkey. "
+                  + "Set this back to the recommended option unless you are diagnosing a problem.",
+        "SwallowKeyUp" => "The Windows key release is swallowed entirely. Use this only if the "
+                          + "recommended option fails to stop the Start menu appearing.",
+        _ => string.Empty,
+    };
 
     public bool HasError => Error is not null;
 
@@ -105,6 +134,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ShowZoneFlash = s.ShowZoneFlash;
         AllowSpanningUnions = s.AllowSpanningUnions;
         WinKeySuppression = s.WinKeySuppression;
+        SelectedSuppression = SuppressionModes.FirstOrDefault(x => x.Id == s.WinKeySuppression)
+                              ?? SuppressionModes[0];
         IsElevated = s.IsElevated;
         ConfigPath = s.ConfigPath;
 
@@ -139,10 +170,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!_loading) Reload();
     }
 
-    partial void OnWinKeySuppressionChanged(string value)
+    partial void OnSelectedSuppressionChanged(SuppressionOption? value)
     {
-        if (!_loading) _host.SetWinKeySuppression(value);
+        if (value is null) return;
+
+        WinKeySuppression = value.Id;
+        if (!_loading) _host.SetWinKeySuppression(value.Id);
+
+        OnPropertyChanged(nameof(SuppressionIsDefault));
+        OnPropertyChanged(nameof(SuppressionWarning));
     }
+
+    [RelayCommand]
+    private void ResetSuppression() =>
+        SelectedSuppression = SuppressionModes[0];
 
     partial void OnSelectedSurfaceChanged(SurfaceOption? value)
     {

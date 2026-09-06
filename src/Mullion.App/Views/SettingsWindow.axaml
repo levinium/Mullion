@@ -77,8 +77,19 @@
           <TextBlock Classes="body" Margin="0,6,0,0"
                      Text="Windows key handling — how Mullion stops the Start menu opening when it takes a Win shortcut. Change this only if the Start menu appears when it should not." />
           <ComboBox ItemsSource="{Binding SuppressionModes}"
-                    SelectedItem="{Binding WinKeySuppression}"
+                    SelectedItem="{Binding SelectedSuppression}"
                     HorizontalAlignment="Stretch" />
+
+          <!-- Anything but the default degrades the app's most visible
+               behaviour, so it says so rather than sitting silently. -->
+          <Border Classes="warning" IsVisible="{Binding !SuppressionIsDefault}">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="body" Text="{Binding SuppressionWarning}" />
+              <Button Content="Use the recommended setting"
+                      Command="{Binding ResetSuppressionCommand}"
+                      HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
         </StackPanel>
       </Border>
 

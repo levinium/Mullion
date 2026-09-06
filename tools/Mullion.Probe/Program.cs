@@ -105,11 +105,21 @@ if (injectIndex >= 0 && injectIndex + 1 < argv.Length)
 
     var after = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
     Console.WriteLine($"Injected Win+{key} at the running app.");
-    Console.WriteLine(after == before || after == target.Handle
-        ? "Focus stayed with the target window (Start menu did not open)."
-        : "Focus moved elsewhere - something else took it.");
 
-    return 0;
+    // Naming the process that holds focus matters: "focus moved" on its own
+    // cannot distinguish the Start menu opening from this console window
+    // simply taking focus back, and those mean opposite things.
+    var owner = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundProcessName();
+    var startMenu = owner is "StartMenuExperienceHost" or "SearchHost" or "ShellExperienceHost";
+
+    Console.WriteLine($"  foreground now: {owner}");
+    Console.WriteLine(startMenu
+        ? "  START MENU OPENED - suppression failed."
+        : after == before || after == target.Handle
+            ? "  focus stayed with the target window."
+            : "  focus moved, but not to the shell - suppression held.");
+
+    return startMenu ? 1 : 0;
 }
 
 if (argv.Contains("--watch-displays"))
@@ -130,6 +140,43 @@ if (argv.Contains("--watch-displays"))
 
     Thread.Sleep(TimeSpan.FromSeconds(seconds));
     Console.WriteLine("done");
+    return 0;
+}
+
+if (argv.Contains("--undo-test"))
+{
+    // Undo was implemented but unreachable: nothing in the app bound it.
+    // This drives it through the hook the way a user now can.
+    using var scratch = new Mullion.Platform.Windows.Testing.ScratchWindow("Mullion undo test");
+    scratch.Focus();
+    Thread.Sleep(400);
+
+    var mover = new WindowManager();
+    using var engine = new Mullion.Platform.Windows.Hotkeys.HotkeyEngine(mover);
+    engine.Apply(layout, displays);
+    engine.Diagnostic += m => Console.WriteLine($"  [diag] {m}");
+    engine.Start();
+    Thread.Sleep(300);
+
+    var before = mover.MoveForegroundTo(ProjectZone(layout.At(1, 0)!));
+    Console.WriteLine($"  placed left : {before.Achieved}");
+
+    scratch.Focus();
+    Thread.Sleep(250);
+
+    Console.WriteLine("  pressing Win+Backspace…");
+    Mullion.Platform.Windows.Testing.KeyInjector.Chord(
+        Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, 0x08, 0x0E);
+
+    Thread.Sleep(900);
+    Console.WriteLine("  (undo restores the pre-move placement)");
+    return 0;
+}
+
+if (argv.Contains("--fullscreen-check"))
+{
+    var active = Mullion.Platform.Windows.Windows.FullscreenDetector.IsFullscreenActive(out var why);
+    Console.WriteLine($"fullscreen active: {active}{(why is null ? "" : $" — {why}")}");
     return 0;
 }
 

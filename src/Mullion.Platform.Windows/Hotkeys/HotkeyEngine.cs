@@ -4,6 +4,7 @@ using Mullion.Core.Geometry;
 using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Model;
+using Mullion.Platform.Windows.Windows;
 
 namespace Mullion.Platform.Windows.Hotkeys;
 
@@ -56,6 +57,13 @@ public sealed class HotkeyEngine : IDisposable
     public HookHealth Health => _hook.GetHealth();
 
     /// <summary>
+    /// Stand down while something is running fullscreen. Default true, matching
+    /// the config default - which previously claimed this behaviour without
+    /// implementing it.
+    /// </summary>
+    public bool PauseWhenFullscreen { get; set; } = true;
+
+    /// <summary>
     /// Changeable at runtime: the point of offering alternatives is that a user
     /// whose Start menu misbehaves can try another without restarting.
     /// </summary>
@@ -95,9 +103,27 @@ public sealed class HotkeyEngine : IDisposable
             if (actions.Count > 1) rings[(modifiers, scan)] = actions;
         }
 
+        // Fixed actions live OUTSIDE the key surface on purpose: the allocator
+        // may claim any surface key when the display arrangement changes, so an
+        // action bound there would silently stop working.
+        foreach (var (scan, command) in FixedActions)
+        {
+            if (bindings.ContainsKey((modifiers, scan))) continue;
+            bindings[(modifiers, scan)] = new HotkeyAction(command, null, command);
+        }
+
         _zones = zones;
         _machine.SetBindings(bindings, rings);
     }
+
+    private const ushort ScanBackspace = 0x0E;
+
+    private static readonly (ushort Scan, string Command)[] FixedActions =
+    [
+        (ScanBackspace, CommandUndo),
+    ];
+
+    public const string CommandUndo = "undo";
 
     private static PxRect Project(IReadOnlyList<ZonePart> parts, IReadOnlyList<DisplayInfo> displays) =>
         PxRect.Union(parts.Select(p =>
@@ -118,6 +144,23 @@ public sealed class HotkeyEngine : IDisposable
         {
             await foreach (var action in _hook.Actions.ReadAllAsync(_cts.Token))
             {
+                // Checked here, off the hook thread, so it costs nothing on the
+                // input path. Moving a window into a fullscreen game is worse
+                // than doing nothing: it can drop the game out of exclusive
+                // mode, or resize something the user cannot even see.
+                if (PauseWhenFullscreen && FullscreenDetector.IsFullscreenActive(out var why))
+                {
+                    Diagnostic?.Invoke($"Ignored {action.Id}: {why}.");
+                    continue;
+                }
+
+                if (action.Command == CommandUndo)
+                {
+                    var undone = _windows.UndoLastMove();
+                    Diagnostic?.Invoke(undone ? "Undid the last move." : "Nothing to undo.");
+                    continue;
+                }
+
                 if (!_zones.TryGetValue(action.Id, out var zone)) continue;
 
                 var result = _windows.MoveForegroundTo(zone.Target);

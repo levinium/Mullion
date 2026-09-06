@@ -118,6 +118,19 @@ public sealed class LowLevelKeyboardHook : IDisposable
 
         while (WindowClass.GetMessage(out var msg, 0, 0, 0) > 0)
         {
+            // Handle thread messages HERE. PostThreadMessage delivers with
+            // hwnd == 0, and DispatchMessage silently discards those because
+            // there is no window procedure to route them to - this thread owns
+            // no window. Relying on DispatchMessage meant the watchdog posted
+            // re-hook requests that were never acted on, so it re-posted every
+            // couple of seconds forever and the hook was never actually
+            // reinstalled.
+            if (msg.hwnd == 0 && msg.message == WatchdogRehook)
+            {
+                Reinstall();
+                continue;
+            }
+
             WindowClass.TranslateMessage(ref msg);
             WindowClass.DispatchMessage(ref msg);
         }
@@ -146,10 +159,40 @@ public sealed class LowLevelKeyboardHook : IDisposable
         _hook = 0;
     }
 
+    /// <summary>
+    /// Install the replacement BEFORE removing the old one, so there is never an
+    /// instant with no hook.
+    /// <para>
+    /// Unhooking first leaves a gap, and a keypress landing in that gap reaches
+    /// the shell untouched - which for a Win chord means the Start menu opens
+    /// and the hotkey does nothing. That is exactly what happened while a
+    /// misfiring watchdog was re-arming every couple of seconds.
+    /// </para>
+    /// <para>
+    /// Both hooks are briefly in the chain, but that is harmless: the newer one
+    /// runs first and a swallowed key never reaches the older.
+    /// </para>
+    /// </summary>
     private void Reinstall()
     {
-        Uninstall();
+        var previous = _hook;
+        var previousCallback = _callback;
+
+        _hook = 0;
         Install();
+
+        if (_hook == 0)
+        {
+            // The replacement failed; keep the old one rather than ending up
+            // with none at all.
+            _hook = previous;
+            _callback = previousCallback;
+            return;
+        }
+
+        if (previous != 0) Hooks.UnhookWindowsHookEx(previous);
+
+        GC.KeepAlive(previousCallback);
         Interlocked.Increment(ref _reinstalls);
     }
 
@@ -224,18 +267,25 @@ public sealed class LowLevelKeyboardHook : IDisposable
                 return;
             }
 
-            // Trigger 2: silent for 5s while the user was demonstrably typing.
-            // Checking last-input avoids mistaking an idle machine for a dead hook.
-            if (sinceCallback > 5 && UserActiveWithin(5))
+            // There used to be a second trigger here: "silent for 5s while
+            // GetLastInputInfo says the user was active". It was unsound and
+            // fired constantly. GetLastInputInfo counts MOUSE input too, but a
+            // keyboard hook only ever sees keys - so any stretch of mouse-only
+            // work looked exactly like a dead hook. Logging caught it
+            // reinstalling twice within eight seconds of a normal startup.
+            //
+            // There is no cheap way to ask "when was the last KEY pressed"
+            // without the hook that is in question, so the heuristic is gone
+            // rather than papered over with a longer timeout.
+
+            // Trigger 2: unconditional re-arm. Idempotent, microseconds, and the
+            // safety net for every failure mode not anticipated above. 30s
+            // bounds worst-case recovery without churning the hook chain.
+            if (sinceCallback > 30)
             {
                 Post(WatchdogRehook);
-                Diagnostic?.Invoke("Hook stopped receiving input while the user was active; reinstalling.");
-                return;
+                Diagnostic?.Invoke($"Hook idle for {sinceCallback:0}s; re-arming as a precaution.");
             }
-
-            // Trigger 3: unconditional re-arm every 60s. Idempotent, microseconds,
-            // and the safety net for every failure mode not anticipated above.
-            if (sinceCallback > 60) Post(WatchdogRehook);
         }
         catch
         {

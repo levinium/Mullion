@@ -26,6 +26,23 @@ public static class KeyInjector
     /// </summary>
     public static nint ForegroundWindow() => Win.GetForegroundWindow();
 
+    /// <summary>
+    /// The process owning the foreground window. Distinguishes the Start menu
+    /// opening from focus merely moving, which are opposite outcomes.
+    /// </summary>
+    public static string ForegroundProcessName()
+    {
+        var hwnd = Win.GetForegroundWindow();
+        if (hwnd == 0) return "(none)";
+
+        Win.GetWindowThreadProcessId(hwnd, out var pid);
+        if (pid == 0) return "(unknown)";
+
+        try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; }
+        catch (ArgumentException) { return "(exited)"; }
+        catch (InvalidOperationException) { return "(unknown)"; }
+    }
+
     public static void Press(ushort virtualKey, ushort scanCode)
     {
         Send(virtualKey, scanCode, keyUp: false);
