@@ -86,6 +86,13 @@ public static class LayoutBuilder
         }
 
         // --- Step 3: assign surface columns, then build each sub-column ------
+        // Exactly two zones across get the OUTER keys - A and D on QWERTY -
+        // rather than packing from the left. That is the left/right mnemonic the
+        // two-monitor default is built on, and it leaves the home key between
+        // them free for the span. Three or more pack with no gap, so the home
+        // row keeps meaning "the whole of this column" everywhere.
+        var spread = Granted(demand, s.Cols) == 2 && s.Cols >= 3;
+
         var zones = new List<Zone>();
         var surfaceCol = 0;
 
@@ -95,10 +102,113 @@ public static class LayoutBuilder
             var splits = Math.Max(1, Math.Min(demand[ci], s.Cols - surfaceCol));
 
             for (var slice = 0; slice < splits; slice++, surfaceCol++)
-                zones.AddRange(BuildSubColumn(column, slice, splits, surfaceCol, s, t, hasOthers, allowSpanningUnions, notes));
+            {
+                var target = spread && surfaceCol == 1 ? 2 : surfaceCol;
+                zones.AddRange(BuildSubColumn(column, slice, splits, target, s, t, hasOthers, allowSpanningUnions, notes));
+            }
         }
 
+        // --- Step 4: the key left sitting between them -----------------------
+        if (spread) zones.AddRange(BuildSpanZone(zones, displays, s, allowSpanningUnions, notes));
+
         return new LayoutResult(zones, s, notes);
+    }
+
+    /// <summary>How many surface columns the allocation actually consumes.</summary>
+    private static int Granted(IReadOnlyList<int> demand, int cols)
+    {
+        var used = 0;
+        foreach (var d in demand)
+        {
+            if (used >= cols) break;
+            used += Math.Max(1, Math.Min(d, cols - used));
+        }
+
+        return used;
+    }
+
+    /// <summary>
+    /// Bind the key between two flanking zones to their span. Inside one display
+    /// that just means "maximize here" and is always worth having; across two it
+    /// is a bezel-crossing zone, so it needs the same clean-rectangle guard a
+    /// stacked pair does - otherwise two ordinary monitors silently gain a span
+    /// nobody asked for, and mixed DPI gives a window that renders wrong on one.
+    /// </summary>
+    private static IEnumerable<Zone> BuildSpanZone(
+        List<Zone> zones,
+        IReadOnlyList<DisplayInfo> displays,
+        KeySurface s,
+        bool allowSpanningUnions,
+        List<string> notes)
+    {
+        var home = s.HomeRow;
+        var left = zones.FirstOrDefault(z => z.Position == new GridPos(home, 0));
+        var right = zones.FirstOrDefault(z => z.Position == new GridPos(home, 2));
+
+        // A ragged stack can leave a column's home key unbound; there is then no
+        // pair to span.
+        if (left is null || right is null) yield break;
+
+        var keys = left.Parts.Concat(right.Parts).Select(p => p.DisplayKey).Distinct().ToList();
+
+        if (keys.Count > 1)
+        {
+            var involved = displays.Where(d => keys.Contains(d.StableKey)).ToList();
+            if (!allowSpanningUnions) yield break;
+
+            if (!DisplayGrid.FormsCleanRectangle(involved))
+            {
+                notes.Add(
+                    "The displays either side do not form a clean rectangle " +
+                    "(mismatched size, a gap, or differing scaling), so the key between them is unbound.");
+                yield break;
+            }
+        }
+
+        var parts = left.Parts.Concat(right.Parts)
+            .GroupBy(p => p.DisplayKey)
+            .Select(g => new ZonePart(g.Key, Cover([.. g.Select(p => p.Area)])))
+            .ToList();
+
+        // The rows above and below the span key would otherwise sit idle, while
+        // every other column already spends its spare rows on the upper and
+        // lower halves of what its home key holds. This makes the span column
+        // the same as the rest rather than a special case.
+        foreach (var (row, index, name) in new[]
+                 {
+                     (home - 1, 0, "Upper half"),
+                     (home + 1, 1, "Lower half"),
+                 })
+        {
+            if (!s.Contains(new GridPos(row, 1))) continue;
+
+            yield return new Zone
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                Parts = [.. parts.Select(p =>
+                    new ZonePart(p.DisplayKey, p.Area.Split(Axis.Vertical, [1, 1])[index]))],
+                Position = new GridPos(row, 1),
+                Kind = ZoneKind.Union,
+            };
+        }
+
+        yield return new Zone
+        {
+            Id = Guid.NewGuid(),
+            Name = keys.Count > 1 ? "Both displays" : "Whole display",
+            Parts = parts,
+            Position = new GridPos(home, 1),
+            Kind = ZoneKind.Union,
+        };
+    }
+
+    /// <summary>The smallest rectangle containing them all.</summary>
+    private static NormRect Cover(IReadOnlyList<NormRect> areas)
+    {
+        var x = areas.Min(a => a.X);
+        var y = areas.Min(a => a.Y);
+        return new NormRect(x, y, areas.Max(a => a.Right) - x, areas.Max(a => a.Bottom) - y);
     }
 
     /// <summary>

@@ -55,7 +55,7 @@ public class LayoutBuilderTests
     /// the union on the home row.
     /// </summary>
     [Fact]
-    public void VerticalsFlankingStackedPairProduceNineKeysWithACentreUnion()
+    public void VerticalsFlankingStackedPairProduceNineKeysWithACenterUnion()
     {
         var r = LayoutBuilder.Build(TestDisplays.VerticalsFlankingStackedPair(), Left);
 
@@ -172,19 +172,145 @@ public class LayoutBuilderTests
         }
     }
 
+    // ---- Two across take the outer keys, not the leftmost two --------------
+
+    /// <summary>
+    /// A lone 16:9 splits in two, and those halves belong on A and D - the
+    /// left/right mnemonic - with S expanding to the whole monitor. Packing
+    /// from the left would put the right half on S, which reads as "middle".
+    /// </summary>
+    [Fact]
+    public void OneDisplaySplitInTwoTakesTheOuterKeysAndBindsTheWholeMonitorBetween()
+    {
+        var r = LayoutBuilder.Build([TestDisplays.At(0, 0, 2560, 1440, primary: true)], Left);
+        var home = Left.HomeRow;
+
+        r.Zones.Single(z => z.Position == new GridPos(home, 0)).Name.ShouldBe("Left");
+        r.Zones.Single(z => z.Position == new GridPos(home, 2)).Name.ShouldBe("Right");
+
+        var whole = r.Zones.Single(z => z.Position == new GridPos(home, 1));
+        whole.Kind.ShouldBe(ZoneKind.Union);
+        whole.SpansDisplays.ShouldBeFalse();
+        whole.Parts.Single().Area.ShouldBe(NormRect.Full);
+    }
+
+    /// <summary>
+    /// The span column spends its spare rows the way every other column does.
+    /// Without this the middle column bound one key of three while each
+    /// neighbour bound all three - the same surplus, treated inconsistently.
+    /// </summary>
+    [Fact]
+    public void TheSpanColumnAlsoGetsUpperAndLowerHalves()
+    {
+        var displays = TestDisplays.TwoAcross();
+        var r = LayoutBuilder.Build(displays, Left);
+        var home = Left.HomeRow;
+
+        var upper = r.At(home - 1, 1)!;
+        var lower = r.At(home + 1, 1)!;
+
+        upper.Kind.ShouldBe(ZoneKind.Union);
+        lower.Kind.ShouldBe(ZoneKind.Union);
+        upper.SpansDisplays.ShouldBeTrue();
+        lower.SpansDisplays.ShouldBeTrue();
+
+        // Each half covers the top or bottom of every display the span touches.
+        var work = displays[0].WorkArea;
+        var top = upper.Parts[0].Area.Project(work);
+        var bottom = lower.Parts[0].Area.Project(work);
+
+        top.Y.ShouldBe(work.Y);
+        top.Height.ShouldBe(work.Height / 2);
+        bottom.Bottom.ShouldBe(work.Bottom);
+        bottom.Y.ShouldBe(top.Bottom);
+    }
+
+    /// <summary>
+    /// The guard covers all three together: no span, no halves of it either.
+    /// </summary>
+    [Fact]
+    public void NoSpanMeansNoSpanTiers()
+    {
+        var displays = new List<DisplayInfo>
+        {
+            TestDisplays.At(0, 0, 1280, 1024, key: "OLD"),
+            TestDisplays.At(1280, 0, 2560, 1440, primary: true, key: "NEW"),
+        };
+
+        var r = LayoutBuilder.Build(displays, Left);
+
+        r.Zones.ShouldAllBe(z => z.Position.Col != 1);
+    }
+
+    [Fact]
+    public void TwoDisplaysTakeTheOuterKeys()
+    {
+        var r = LayoutBuilder.Build(TestDisplays.TwoAcross(), Left);
+        var home = Left.HomeRow;
+
+        r.Zones.ShouldContain(z => z.Position == new GridPos(home, 0));
+        r.Zones.ShouldContain(z => z.Position == new GridPos(home, 2));
+    }
+
+    /// <summary>
+    /// Three or more pack from the left with no gap, so the home row keeps
+    /// meaning "the whole of this column" in every position.
+    /// </summary>
+    [Fact]
+    public void ThreeAcrossPackWithNoGap()
+    {
+        var r = LayoutBuilder.Build(TestDisplays.ThreeAcross(), Left);
+        var home = Left.HomeRow;
+
+        for (var col = 0; col < 3; col++)
+            r.Zones.ShouldContain(z => z.Position == new GridPos(home, col));
+
+        r.Zones.ShouldAllBe(z => z.Kind != ZoneKind.Union);
+    }
+
     // ---- The cross-monitor union guard ------------------------------------
 
     /// <summary>
-    /// The regression net. Two ordinary side-by-side monitors must NOT silently
-    /// gain a bezel-spanning zone - that behavior appearing in the most common
-    /// setup on earth is exactly what the clean-rectangle guard prevents.
+    /// Two matched monitors side by side ARE a clean rectangle, so the key
+    /// between them spans the pair. This is the one arrangement where a
+    /// bezel-crossing zone is worth having, and it stays behind the toggle.
     /// </summary>
     [Fact]
-    public void TwoSideBySideMonitorsGetNoSpanningZone()
+    public void TwoMatchedMonitorsSideBySideSpanFromTheKeyBetweenThem()
     {
         var r = LayoutBuilder.Build(TestDisplays.TwoAcross(), Left);
 
+        var span = r.Zones.Single(z => z.Position == new GridPos(Left.HomeRow, 1));
+        span.SpansDisplays.ShouldBeTrue();
+        span.Kind.ShouldBe(ZoneKind.Union);
+    }
+
+    [Fact]
+    public void SpanningZonesCanBeTurnedOff()
+    {
+        var r = LayoutBuilder.Build(TestDisplays.TwoAcross(), Left, allowSpanningUnions: false);
+
         r.Zones.ShouldAllBe(z => !z.SpansDisplays);
+    }
+
+    /// <summary>
+    /// The regression net. Mismatched monitors have no clean rectangle to span -
+    /// the bounding box is a ragged shape with dead space in it - so the key
+    /// between them stays unbound rather than binding something nobody wants.
+    /// </summary>
+    [Fact]
+    public void MismatchedMonitorsSideBySideGetNoSpanningZone()
+    {
+        var displays = new List<DisplayInfo>
+        {
+            TestDisplays.At(0, 0, 1280, 1024, key: "OLD"),
+            TestDisplays.At(1280, 0, 2560, 1440, primary: true, key: "NEW"),
+        };
+
+        var r = LayoutBuilder.Build(displays, Left);
+
+        r.Zones.ShouldAllBe(z => !z.SpansDisplays);
+        r.Notes.ShouldContain(n => n.Contains("clean rectangle"));
     }
 
     [Fact]
