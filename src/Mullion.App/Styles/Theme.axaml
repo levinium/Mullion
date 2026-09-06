@@ -136,6 +136,20 @@
     <Setter Property="BorderThickness" Value="3" />
   </Style>
 
+  <!-- A region inside a zone, not a zone of its own: dashed and faded so the
+       hierarchy reads at a glance. Border has no dash support in Avalonia,
+       hence a Rectangle. -->
+  <Style Selector="Rectangle.subZone">
+    <Setter Property="Stroke" Value="{DynamicResource Accent}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="StrokeDashArray" Value="3,3" />
+    <Setter Property="Opacity" Value="0.45" />
+    <Setter Property="RadiusX" Value="4" />
+    <Setter Property="RadiusY" Value="4" />
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Margin" Value="2" />
+  </Style>
+
   <Style Selector="Border.keyChip">
     <Setter Property="Background" Value="{DynamicResource ChipBack}" />
     <Setter Property="CornerRadius" Value="5" />

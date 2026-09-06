@@ -65,7 +65,17 @@
                           Command="{Binding ActivateCommand}"
                           ToolTip.Tip="{Binding Name}">
 
-                    <Grid RowDefinitions="Auto,*,Auto" Margin="6">
+                    <Grid>
+
+                      <!-- The upper and lower halves drawn as they actually
+                           are, dashed and faded so they read as regions inside
+                           this zone rather than as separate zones beside it. -->
+                      <Grid RowDefinitions="*,*" Margin="3">
+                        <Rectangle Grid.Row="0" Classes="subZone" IsVisible="{Binding HasUpper}" />
+                        <Rectangle Grid.Row="1" Classes="subZone" IsVisible="{Binding HasLower}" />
+                      </Grid>
+
+                      <Grid RowDefinitions="Auto,*,Auto" Margin="6">
 
                       <!-- Upper tier: the top half of this column. Inset from the
                            top so it clears the display label in the first column. -->
@@ -113,6 +123,7 @@
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
+                      </Grid>
                     </Grid>
                   </Button>
                 </DataTemplate>
