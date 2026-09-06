@@ -62,26 +62,39 @@ public sealed class HotkeyEngine : IDisposable
         ChordModifiers modifiers = ChordModifiers.Win)
     {
         var bindings = new Dictionary<(ChordModifiers, ushort), HotkeyAction>();
+        var rings = new Dictionary<(ChordModifiers, ushort), IReadOnlyList<HotkeyAction>>();
         var zones = new Dictionary<string, (GridPos, string, PxRect)>();
 
         foreach (var zone in layout.Zones)
         {
             var scan = layout.Surface.ScanCodeAt(zone.Position);
-            var id = $"{zone.Position.Row}:{zone.Position.Col}";
 
-            var rect = PxRect.Union(zone.Parts.Select(p =>
+            // Each ring step gets its own id so the executor can resolve which
+            // rectangle a given press meant.
+            var steps = RingBuilder.Build(zone, layout, displays);
+            var actions = new List<HotkeyAction>(steps.Count);
+
+            for (var i = 0; i < steps.Count; i++)
             {
-                var display = displays.First(d => d.StableKey == p.DisplayKey);
-                return p.Area.Project(display.WorkArea);
-            }));
+                var id = $"{zone.Position.Row}:{zone.Position.Col}:{i}";
+                zones[id] = (zone.Position, steps[i].Name, Project(steps[i].Parts, displays));
+                actions.Add(new HotkeyAction(id, zone.Position));
+            }
 
-            bindings[(modifiers, scan)] = new HotkeyAction(id, zone.Position);
-            zones[id] = (zone.Position, zone.Name, rect);
+            bindings[(modifiers, scan)] = actions[0];
+            if (actions.Count > 1) rings[(modifiers, scan)] = actions;
         }
 
         _zones = zones;
-        _machine.SetBindings(bindings);
+        _machine.SetBindings(bindings, rings);
     }
+
+    private static PxRect Project(IReadOnlyList<ZonePart> parts, IReadOnlyList<DisplayInfo> displays) =>
+        PxRect.Union(parts.Select(p =>
+        {
+            var display = displays.First(d => d.StableKey == p.DisplayKey);
+            return p.Area.Project(display.WorkArea);
+        }));
 
     public void Start()
     {

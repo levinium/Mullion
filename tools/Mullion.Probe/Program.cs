@@ -112,6 +112,64 @@ if (injectIndex >= 0 && injectIndex + 1 < argv.Length)
     return 0;
 }
 
+if (argv.Contains("--cycle-test"))
+{
+    // Repeat-press cycling: the same key pressed again WHILE Win is still held
+    // must widen the window, and releasing Win must reset to the first step.
+    using var scratch = new Mullion.Platform.Windows.Testing.ScratchWindow("Mullion cycle test");
+    scratch.Focus();
+    Thread.Sleep(400);
+
+    using var engine = new Mullion.Platform.Windows.Hotkeys.HotkeyEngine(new WindowManager());
+    engine.Apply(layout, displays);
+
+    var seen = new List<Mullion.Platform.Windows.Hotkeys.HotkeyFired>();
+    engine.Fired += f => { lock (seen) seen.Add(f); };
+    engine.Start();
+    Thread.Sleep(300);
+
+    Console.WriteLine("Holding Win and tapping A three times:");
+    lock (seen) seen.Clear();
+
+    Mullion.Platform.Windows.Testing.KeyInjector.Chord(
+        Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, 0x41, 0x1E, taps: 3);
+
+    Thread.Sleep(900);
+
+    List<Mullion.Platform.Windows.Hotkeys.HotkeyFired> held;
+    lock (seen) held = [.. seen];
+
+    foreach (var f in held) Console.WriteLine($"    {f.ZoneName,-42} {f.Result.Achieved}");
+
+    var widened = held.Count >= 2 &&
+                  held.Zip(held.Skip(1)).All(p => p.Second.Result.Achieved.Area >= p.First.Result.Achieved.Area);
+
+    Console.WriteLine(widened ? "  ok - each press widened" : "  FAIL - did not widen");
+
+    Console.WriteLine();
+    Console.WriteLine("Releasing Win between presses (three separate chords):");
+    lock (seen) seen.Clear();
+
+    for (var i = 0; i < 3; i++)
+    {
+        Mullion.Platform.Windows.Testing.KeyInjector.Chord(
+            Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, 0x41, 0x1E);
+        Thread.Sleep(500);
+    }
+
+    List<Mullion.Platform.Windows.Hotkeys.HotkeyFired> separate;
+    lock (seen) separate = [.. seen];
+
+    foreach (var f in separate) Console.WriteLine($"    {f.ZoneName,-42} {f.Result.Achieved}");
+
+    var reset = separate.Count >= 2 &&
+                separate.Select(f => f.Result.Achieved).Distinct().Count() == 1;
+
+    Console.WriteLine(reset ? "  ok - reset to the first step each time" : "  FAIL - did not reset on release");
+
+    return widened && reset ? 0 : 1;
+}
+
 if (argv.Contains("--hotkey-test"))
 {
     // End-to-end proof that Win-modified hotkeys work natively: install the
