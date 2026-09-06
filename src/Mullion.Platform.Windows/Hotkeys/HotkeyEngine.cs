@@ -55,6 +55,16 @@ public sealed class HotkeyEngine : IDisposable
 
     public HookHealth Health => _hook.GetHealth();
 
+    /// <summary>
+    /// Changeable at runtime: the point of offering alternatives is that a user
+    /// whose Start menu misbehaves can try another without restarting.
+    /// </summary>
+    public WinKeySuppression Suppression
+    {
+        get => _machine.Suppression;
+        set => _machine.Suppression = value;
+    }
+
     /// <summary>Bind a layout, resolving every zone to absolute pixels once.</summary>
     public void Apply(
         LayoutResult layout,

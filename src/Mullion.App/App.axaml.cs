@@ -32,9 +32,12 @@ public partial class App : Application
         _tray = new TrayController();
         var hasTray = _tray.TryCreate(ShowWindow, () => _host.Rescan(), TogglePause, Quit, () => _host.Paused);
 
+        var mainViewModel = new MainWindowViewModel(_host);
+        mainViewModel.ShowSettingsRequested = ShowSettings;
+
         _window = new MainWindow
         {
-            DataContext = new MainWindowViewModel(_host),
+            DataContext = mainViewModel,
             Icon = LoadWindowIcon(),
         };
 
@@ -60,6 +63,11 @@ public partial class App : Application
             // icon, but the user needs to know why it is not there.
             (_window.DataContext as MainWindowViewModel)?.ReportTrayFailure(_tray.FailureReason);
         }
+
+#if PLATFORM_WINDOWS
+        if (OperatingSystem.IsWindows() && _host is WindowsAppHost rerunHost)
+            WireRerunWizard(rerunHost, ShowWizard);
+#endif
 
         _host.Start();
 
@@ -115,6 +123,32 @@ public partial class App : Application
         return new WindowIcon(stream);
     }
 
+    private SettingsWindow? _settings;
+
+    private void ShowSettings()
+    {
+        if (_host is not ISettingsHost settingsHost) return;
+
+        // Reuse the window rather than stacking duplicates, and refresh it so it
+        // never shows state that changed while it was closed.
+        if (_settings is not null)
+        {
+            (_settings.DataContext as SettingsViewModel)?.Reload();
+            _settings.Show();
+            _settings.Activate();
+            return;
+        }
+
+        _settings = new SettingsWindow
+        {
+            DataContext = new SettingsViewModel(settingsHost),
+            Icon = LoadWindowIcon(),
+        };
+
+        _settings.Closed += (_, _) => _settings = null;
+        _settings.Show(_window!);
+    }
+
     private bool ShouldRunWizard() =>
 #if PLATFORM_WINDOWS
         OperatingSystem.IsWindows() && _host is WindowsAppHost { NeedsWizard: true };
@@ -147,6 +181,10 @@ public partial class App : Application
     /// covers the lambda body too - the analyzer does not see a call-site guard
     /// through a closure.
     /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void WireRerunWizard(WindowsAppHost host, Action showWizard) =>
+        host.RerunWizardRequested = showWizard;
+
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void WireWizardClose(WindowsAppHost host, Window wizard, Action showWindow)
     {

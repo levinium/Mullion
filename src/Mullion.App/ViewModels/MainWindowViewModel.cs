@@ -63,6 +63,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasTrayFailure));
     }
 
+    /// <summary>Set by the app shell; the view model does not create windows itself.</summary>
+    public Action? ShowSettingsRequested { get; set; }
+
+    [RelayCommand]
+    private void ShowSettings() => ShowSettingsRequested?.Invoke();
+
     [RelayCommand]
     private void Rescan() => _host.Rescan();
 

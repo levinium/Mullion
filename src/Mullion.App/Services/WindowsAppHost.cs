@@ -1,6 +1,7 @@
 #if PLATFORM_WINDOWS
 using Avalonia.Threading;
 using Mullion.App.ViewModels;
+using Mullion.Core.Abstractions;
 using Mullion.Core.Config;
 using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
@@ -13,7 +14,7 @@ namespace Mullion.App.Services;
 
 /// <summary>Wires the Windows platform pieces together and exposes them to the UI.</summary>
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-public sealed class WindowsAppHost : IAppHost, IWizardHost, IDisposable
+public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisposable
 {
     private readonly WindowsDisplayProvider _displayProvider = new();
     private readonly ConfigStore _configStore = new();
@@ -242,6 +243,147 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, IDisposable
 
         WizardCloseRequested?.Invoke();
     }
+
+    // ---- settings ----------------------------------------------------------
+
+    private readonly WindowsAutoStartService _autoStart = new();
+
+    public Action? RerunWizardRequested { get; set; }
+
+    public SettingsSnapshot GetSettings()
+    {
+        var status = _autoStart.GetStatus();
+
+        var bindings = _layout is null
+            ? []
+            : _layout.Zones
+                .OrderBy(z => z.Position.Row).ThenBy(z => z.Position.Col)
+                .Select(z => ($"Win+{_layout.Surface.FallbackLabelAt(z.Position)}", z.Name))
+                .ToList();
+
+        return new SettingsSnapshot(
+            status.Mode,
+            Elevation.IsCurrentProcessElevated,
+            Elevation.IsCurrentProcessElevated,
+            _config.General.ShowZoneFlash,
+            _config.General.AllowSpanningUnions,
+            _config.General.WinKeySuppression,
+            _layout?.Surface.Id ?? KeySurface.LeftHandBlock.Id,
+            [.. KeySurface.All.Select(s => (s.Id, s.Name))],
+            bindings,
+            _configStore.Path_);
+    }
+
+    public string? SetAutoStart(AutoStartMode mode)
+    {
+        if (!_autoStart.TrySetMode(mode, out var error)) return error;
+
+        UpdateGeneral(g => g with { AutoStart = mode.ToString() });
+        return null;
+    }
+
+    public void SetShowZoneFlash(bool value) => UpdateGeneral(g => g with { ShowZoneFlash = value });
+
+    public void SetAllowSpanningUnions(bool value)
+    {
+        UpdateGeneral(g => g with { AllowSpanningUnions = value });
+
+        // This changes which zones exist, so the layout has to be rebuilt.
+        Regenerate();
+    }
+
+    public void SetWinKeySuppression(string value)
+    {
+        UpdateGeneral(g => g with { WinKeySuppression = value });
+
+        // Applied live: the whole point of offering alternatives is that the
+        // user can try one when the Start menu misbehaves, without a restart.
+        if (_engine is not null) _engine.Suppression = ParseSuppression(value);
+    }
+
+    public void SetKeySurface(string surfaceId)
+    {
+        var surface = KeySurface.All.FirstOrDefault(s => s.Id == surfaceId);
+        if (surface is null || _displays.Count == 0) return;
+
+        _layout = LayoutBuilder.Build(
+            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+
+        _engine?.Apply(_layout, _displays);
+        PersistCurrentLayout();
+        StateChanged?.Invoke();
+    }
+
+    public void RestartElevated()
+    {
+        if (Elevation.TryRestartElevated("--tray")) Environment.Exit(0);
+    }
+
+    public void OpenConfigFolder()
+    {
+        var folder = Path.GetDirectoryName(_configStore.Path_);
+        if (folder is null) return;
+
+        Directory.CreateDirectory(folder);
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = folder,
+            UseShellExecute = true,
+        });
+    }
+
+    public void RerunWizard() => RerunWizardRequested?.Invoke();
+
+    private void Regenerate()
+    {
+        if (_displays.Count == 0) return;
+
+        var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
+
+        _layout = LayoutBuilder.Build(
+            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+
+        _engine?.Apply(_layout, _displays);
+        PersistCurrentLayout();
+        StateChanged?.Invoke();
+    }
+
+    private void PersistCurrentLayout()
+    {
+        if (_layout is null || _displays.Count == 0) return;
+
+        var profile = ProfileResolver.CreateProfile(_displays, _layout);
+
+        _config = _config with
+        {
+            Profiles = [.. _config.Profiles.Where(p =>
+                p.ArrangementFingerprint != profile.ArrangementFingerprint), profile],
+            ActiveProfileId = profile.Id,
+        };
+
+        Save();
+    }
+
+    private void UpdateGeneral(Func<GeneralSettings, GeneralSettings> update)
+    {
+        _config = _config with { General = update(_config.General) };
+        Save();
+        StateChanged?.Invoke();
+    }
+
+    private void Save()
+    {
+        try { _configStore.Save(_config); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A failed save must not take the app down; the in-memory state is
+            // still correct for this session.
+            Diagnostic($"Could not save settings: {e.Message}");
+        }
+    }
+
+    private void Diagnostic(string message) => _lastAction = message;
 
     private static string SummariseKeys(LayoutResult layout) =>
         string.Join(" / ", Enumerable.Range(0, layout.Surface.Rows)
