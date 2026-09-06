@@ -75,8 +75,9 @@ public sealed record AppConfig
     /// <summary>
     /// 1 - initial.
     /// 2 - zone names switched to American spelling ("centre" -> "center").
+    /// 3 - zone names dropped their display-name prefix ("C49RG9x left" -> "Left").
     /// </summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public bool WizardCompleted { get; init; }

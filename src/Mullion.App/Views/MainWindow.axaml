@@ -28,10 +28,32 @@
       </StackPanel>
     </Grid>
 
-    <!-- Diagram + conflicts -->
+    <!-- Diagram + notices -->
     <Grid Grid.Row="1" RowDefinitions="Auto,*">
 
-      <Border Grid.Row="0" Classes="warning" Margin="0,0,0,14"
+      <!-- All notices stack; several can apply at once. -->
+      <StackPanel Grid.Row="0">
+
+      <!-- Elevation banner. Placed at the top because the failure it describes
+           is otherwise invisible: an elevated window's keystrokes never reach
+           Mullion, so there is no failed hotkey to report anywhere else. -->
+      <Border Classes="warning" Margin="0,0,0,14"
+              IsVisible="{Binding ShowElevationBanner}">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Spacing="4">
+            <TextBlock Classes="h2" Text="{Binding ElevationHeadline}" />
+            <TextBlock Classes="body" Text="{Binding ElevationDetail}" />
+          </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="accent"
+                  Content="Restart as administrator"
+                  Command="{Binding RestartElevatedCommand}"
+                  VerticalAlignment="Center"
+                  Margin="16,0,0,0" />
+        </Grid>
+      </Border>
+
+      <Border Classes="warning" Margin="0,0,0,14"
               IsVisible="{Binding HasTrayFailure}">
         <StackPanel Spacing="4">
           <TextBlock Classes="h2" Text="No tray icon" />
@@ -39,8 +61,7 @@
         </StackPanel>
       </Border>
 
-      <ItemsControl Grid.Row="0"
-                    ItemsSource="{Binding Conflicts}"
+      <ItemsControl ItemsSource="{Binding Conflicts}"
                     IsVisible="{Binding HasConflicts}"
                     Margin="0,0,0,14">
         <ItemsControl.ItemTemplate>
@@ -56,6 +77,8 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
+      </StackPanel>
+
       <Border Grid.Row="1" Classes="card">
         <ctl:MonitorDiagram DataContext="{Binding Diagram}" />
       </Border>
@@ -66,7 +89,9 @@
       <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="h2" Text="Hotkeys" />
         <TextBlock Grid.Row="1" Grid.Column="0" Classes="body" Text="{Binding HookStatus}" />
-        <TextBlock Grid.Row="2" Grid.Column="0" Classes="body" Text="{Binding PrivilegeStatus}" Margin="0,4,0,0" />
+        <!-- Hidden while the banner is up, which says the same thing louder. -->
+        <TextBlock Grid.Row="2" Grid.Column="0" Classes="body" Text="{Binding PrivilegeStatus}"
+                   Margin="0,4,0,0" IsVisible="{Binding !ShowElevationBanner}" />
 
         <TextBlock Grid.Row="0" Grid.Column="1" Classes="h2" Text="Last action" Margin="20,0,0,0" />
         <TextBlock Grid.Row="1" Grid.Column="1" Classes="body" Text="{Binding LastAction}" Margin="20,0,0,0" />

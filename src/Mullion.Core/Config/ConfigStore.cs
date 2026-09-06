@@ -136,8 +136,42 @@ public sealed class ConfigStore
             };
         }
 
+        // v2 -> v3: zone names dropped the display-name prefix, since the
+        // diagram labels each display directly. Stored names still carry it.
+        if (config.SchemaVersion < 3)
+        {
+            config = config with
+            {
+                Profiles = [.. config.Profiles.Select(p => p with
+                {
+                    Zones = [.. p.Zones.Select(z => z with { Name = StripDisplayPrefix(z.Name, p) })],
+                })],
+            };
+        }
+
         notes.Add($"Migrated config from schema v{from} to v{AppConfig.CurrentSchemaVersion}.");
         return config with { SchemaVersion = AppConfig.CurrentSchemaVersion };
+    }
+
+    /// <summary>
+    /// Remove a leading display name from a zone name, capitalising what is
+    /// left. A zone whose name IS the display name is untouched: that is the
+    /// whole-display case, where the display name is the only sensible label.
+    /// </summary>
+    private static string StripDisplayPrefix(string name, ProfileRecord profile)
+    {
+        foreach (var display in profile.Displays)
+        {
+            var prefix = display.FriendlyName + " ";
+            if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+
+            var rest = name[prefix.Length..].Trim();
+            if (rest.Length == 0) return name;
+
+            return char.ToUpperInvariant(rest[0]) + rest[1..];
+        }
+
+        return name;
     }
 
     private static string Americanise(string name) => name

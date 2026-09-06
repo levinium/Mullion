@@ -29,6 +29,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string _privilegeStatus = string.Empty;
 
     [ObservableProperty]
+    private bool _isElevated;
+
+    [ObservableProperty]
+    private string? _blockedByWindow;
+
+    /// <summary>
+    /// Shown while Mullion is not elevated. This is not a nag: the failure it
+    /// warns about is completely silent, because an elevated window's keystrokes
+    /// never reach our hook at all - there is no failed hotkey to report.
+    /// </summary>
+    public bool ShowElevationBanner => !IsElevated;
+
+    public string ElevationHeadline => BlockedByWindow is null
+        ? "Not running as administrator"
+        : $"Hotkeys are inactive right now — \"{BlockedByWindow}\"";
+
+    public string ElevationDetail => BlockedByWindow is null
+        ? "Windows hides keystrokes from Mullion while a window running as administrator has focus, "
+          + "and such windows cannot be moved. Everything else works normally."
+        : "That window runs as administrator, so Windows is not delivering its keystrokes to Mullion. "
+          + "Hotkeys will start working again as soon as you focus another window.";
+
+    [RelayCommand]
+    private void RestartElevated() => _host.RestartElevated();
+
+    [ObservableProperty]
     private bool _isPaused;
 
     [ObservableProperty]
@@ -90,7 +116,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsPaused = snapshot.Paused;
         LastAction = snapshot.LastAction;
         Conflicts = snapshot.Conflicts;
+        IsElevated = snapshot.IsElevated;
+        BlockedByWindow = snapshot.BlockedByWindow;
 
         OnPropertyChanged(nameof(HasConflicts));
+        OnPropertyChanged(nameof(ShowElevationBanner));
+        OnPropertyChanged(nameof(ElevationHeadline));
+        OnPropertyChanged(nameof(ElevationDetail));
     }
 }

@@ -173,6 +173,50 @@ if (argv.Contains("--undo-test"))
     return 0;
 }
 
+if (argv.Contains("--elevation-check"))
+{
+    var self = Mullion.Platform.Windows.Windows.Elevation.IsCurrentProcessElevated;
+    Console.WriteLine($"Mullion elevated : {self}");
+    Console.WriteLine($"Mullion integrity: {Mullion.Platform.Windows.Windows.Elevation.CurrentIntegrity}");
+    Console.WriteLine();
+
+    // A specific window can be named; otherwise take whatever has focus.
+    var raw = Environment.GetEnvironmentVariable("MULLION_TEST_HWND");
+    var hwnd = long.TryParse(raw, out var parsed) && parsed != 0
+        ? (nint)parsed
+        : Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
+
+    if (hwnd == 0) { Console.Error.WriteLine("No target window."); return 1; }
+
+    var integrity = Mullion.Platform.Windows.Windows.Elevation.IntegrityOfWindow(hwnd);
+    var outOfReach = Mullion.Platform.Windows.Windows.Elevation.IsOutOfReach(hwnd);
+
+    Console.WriteLine($"Target window    : 0x{hwnd:X}");
+    Console.WriteLine($"Target integrity : {integrity}");
+    Console.WriteLine($"Out of reach     : {outOfReach}");
+    Console.WriteLine();
+
+    var target = ProjectZone(layout.At(1, 0)!);
+    var result = new WindowManager().MoveWindowTo(hwnd, target);
+
+    Console.WriteLine($"Move outcome     : {result.Outcome}");
+    Console.WriteLine($"Achieved         : {result.Achieved}");
+    if (result.Note is not null) Console.WriteLine($"Note             : {result.Note}");
+
+    // Success here means the move matched what the integrity check predicted,
+    // whichever way round that is.
+    var consistent = outOfReach
+        ? result.Outcome == MoveOutcome.FailedAccessDenied
+        : result.Success;
+
+    Console.WriteLine();
+    Console.WriteLine(consistent
+        ? "Prediction and outcome agree."
+        : "MISMATCH - the integrity check disagrees with what actually happened.");
+
+    return consistent ? 0 : 1;
+}
+
 if (argv.Contains("--fullscreen-check"))
 {
     var active = Mullion.Platform.Windows.Windows.FullscreenDetector.IsFullscreenActive(out var why);

@@ -17,7 +17,20 @@ namespace Mullion.App.Services;
 public sealed class ZoneFlashOverlay : IDisposable
 {
     private Window? _window;
-    private DispatcherTimer? _timer;
+    private DispatcherTimer? _hold;
+    private DispatcherTimer? _fade;
+
+    /// <summary>
+    /// Incremented on every flash so that callbacks belonging to a superseded
+    /// one do nothing.
+    /// <para>
+    /// Stopping the timers is not enough on its own: a tick already queued on
+    /// the dispatcher still runs after Stop(). Without this guard a stale
+    /// hide-callback fires part-way through the NEXT flash and blanks it, which
+    /// looks exactly like the second press having no effect.
+    /// </para>
+    /// </summary>
+    private int _generation;
 
     public void Flash(PxRect target, TimeSpan? duration = null)
     {
@@ -26,7 +39,12 @@ public sealed class ZoneFlashOverlay : IDisposable
 
     private void Show(PxRect target, TimeSpan duration)
     {
-        _timer?.Stop();
+        var generation = ++_generation;
+
+        // Cancel both timers. A flash interrupted mid-fade must restart cleanly
+        // rather than inheriting the previous one's schedule.
+        _hold?.Stop();
+        _fade?.Stop();
 
         _window ??= CreateWindow();
 
@@ -35,36 +53,54 @@ public sealed class ZoneFlashOverlay : IDisposable
         _window.Height = target.Height;
 
         if (!_window.IsVisible) _window.Show();
-        _window.Opacity = 1;
 
-        _timer = new DispatcherTimer { Interval = duration };
-        _timer.Tick += (_, _) =>
+        // Snap to full opacity rather than transitioning up: an interrupting
+        // flash should appear immediately at the new zone, not fade in from
+        // wherever the previous one had got to.
+        SetOpacityImmediately(1);
+
+        _hold = new DispatcherTimer { Interval = duration };
+        _hold.Tick += (_, _) =>
         {
-            _timer?.Stop();
-            if (_window is null) return;
+            _hold?.Stop();
+            if (generation != _generation || _window is null) return;
 
-            _window.Opacity = 0;
+            _window.Opacity = 0;   // transitions out
 
-            // Hide once faded rather than leaving an invisible window sitting on
-            // top of the desktop indefinitely.
-            var hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
-            hide.Tick += (_, _) =>
+            _fade = new DispatcherTimer { Interval = FadeDuration };
+            _fade.Tick += (_, _) =>
             {
-                hide.Stop();
+                _fade?.Stop();
+                if (generation != _generation) return;
                 if (_window is { IsVisible: true }) _window.Hide();
             };
 
-            hide.Start();
+            _fade.Start();
         };
 
-        _timer.Start();
+        _hold.Start();
+    }
+
+    private static readonly TimeSpan FadeDuration = TimeSpan.FromMilliseconds(220);
+
+    /// <summary>
+    /// Set opacity without the fade transition, so an interrupting flash is
+    /// visible at once.
+    /// </summary>
+    private void SetOpacityImmediately(double value)
+    {
+        if (_window is null) return;
+
+        var transitions = _window.Transitions;
+        _window.Transitions = null;
+        _window.Opacity = value;
+        _window.Transitions = transitions;
     }
 
     private static Window CreateWindow() => new()
     {
         // Click-through and never activated: the overlay must not steal focus
         // from the window that was just moved, which would defeat the point.
-        // Avalonia 12 renamed SystemDecorations to WindowDecorations.
         WindowDecorations = WindowDecorations.None,
         Background = Brushes.Transparent,
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent],
@@ -87,14 +123,16 @@ public sealed class ZoneFlashOverlay : IDisposable
             new Avalonia.Animation.DoubleTransition
             {
                 Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(220),
+                Duration = FadeDuration,
             },
         ],
     };
 
     public void Dispose()
     {
-        _timer?.Stop();
+        _generation++;   // invalidate anything still queued
+        _hold?.Stop();
+        _fade?.Stop();
         _window?.Close();
         _window = null;
     }

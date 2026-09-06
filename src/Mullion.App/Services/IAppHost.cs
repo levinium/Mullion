@@ -10,7 +10,11 @@ public sealed record AppSnapshot(
     string PrivilegeStatus,
     bool Paused,
     string LastAction,
-    IReadOnlyList<ConflictViewModel> Conflicts);
+    IReadOnlyList<ConflictViewModel> Conflicts,
+    bool IsElevated,
+
+    /// <summary>Title of the elevated window currently blocking hotkeys, or null.</summary>
+    string? BlockedByWindow);
 
 /// <summary>
 /// Everything the UI needs from the platform, behind one interface so the
@@ -22,6 +26,8 @@ public interface IAppHost
     event Action? StateChanged;
 
     bool Paused { get; set; }
+
+    void RestartElevated();
 
     AppSnapshot GetSnapshot();
 
@@ -38,6 +44,8 @@ public sealed class DesignAppHost : IAppHost
     public bool Paused { get; set; }
 
     public void Start() => StateChanged?.Invoke();
+
+    public void RestartElevated() { }
 
     public void Rescan() => StateChanged?.Invoke();
 
@@ -74,7 +82,9 @@ public sealed class DesignAppHost : IAppHost
             "Not elevated",
             Paused,
             "No hotkey pressed yet.",
-            []);
+            [],
+            false,
+            null);
     }
 
     private static ZoneCellViewModel Cell(

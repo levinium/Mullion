@@ -42,7 +42,22 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     }
 
     private DisplayChangeWatcher? _watcher;
+    private ForegroundWatcher? _foreground;
     private string _lastFingerprint = string.Empty;
+
+    /// <summary>Set while an elevated window has focus and hotkeys therefore cannot fire.</summary>
+    private ReachState _reach = new(true, null, null);
+
+    private void OnReachChanged(ReachState state)
+    {
+        _reach = state;
+
+        _log.Info(state.Reachable
+            ? "Hotkeys active again."
+            : $"Hotkeys inactive: \"{state.WindowTitle}\" {state.Reason}.");
+
+        Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+    }
 
     public void Start()
     {
@@ -71,6 +86,14 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // longer there.
         _watcher = new DisplayChangeWatcher();
         _watcher.Changed += OnDisplaysChanged;
+
+        // Only meaningful while we are NOT elevated: that is the case where
+        // keystrokes are hidden from us and the failure is otherwise silent.
+        if (!Elevation.IsCurrentProcessElevated)
+        {
+            _foreground = new ForegroundWatcher();
+            _foreground.ReachChanged += OnReachChanged;
+        }
 
         // Rescan raised StateChanged before the hook existed, so the UI would
         // otherwise sit showing "Not installed" until something else changed.
@@ -159,6 +182,14 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _lastAction = $"{fired.ZoneName} — {fired.Result.Outcome}";
         if (fired.Result.Note is not null) _lastAction += $" ({fired.Result.Note})";
 
+        // Log successes too, not just problems. "It moved to the wrong place"
+        // and "it did not fire at all" are different faults, and without a
+        // record of what did fire there is no way to tell them apart after
+        // the fact. The zone name and outcome only - never the key pressed.
+        var key = _layout is null ? "?" : _layout.Surface.FallbackLabelAt(fired.Position);
+        _log.Info($"Win+{key} -> {fired.ZoneName}: {fired.Result.Outcome} {fired.Result.Achieved}" +
+                  (fired.Result.Attempts > 1 ? $" after {fired.Result.Attempts} attempts" : string.Empty));
+
         // Only flash on a successful placement: flashing a zone the window did
         // not reach would assert something untrue.
         if (_config.General.ShowZoneFlash && fired.Result.Success)
@@ -180,9 +211,16 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
                   $"{health.ReinstallCount} reinstall(s) · budget {health.LowLevelHooksTimeoutMs} ms"
                 : "Not installed";
 
-        var privilege = Elevation.IsCurrentProcessElevated
-            ? "Running elevated — windows that run as administrator can be managed."
-            : "Not elevated — hotkeys will not fire while a window running as administrator has focus.";
+        // When hotkeys are actually blocked right now, say so concretely and
+        // name the window - that is far more useful than the general caveat,
+        // and it is the only warning the user will ever get, because the
+        // keypress itself never reaches us.
+        var privilege = !_reach.Reachable
+            ? $"Hotkeys are inactive right now — \"{_reach.WindowTitle}\" {_reach.Reason}. "
+              + "Restart Mullion as administrator to manage windows like this one."
+            : Elevation.IsCurrentProcessElevated
+                ? "Running elevated — windows that run as administrator can be managed."
+                : "Not elevated — hotkeys will not fire while a window running as administrator has focus.";
 
         var summary = _displays.Count == 0
             ? "No displays detected"
@@ -196,7 +234,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             privilege,
             Paused,
             _lastAction,
-            _conflicts);
+            _conflicts,
+            Elevation.IsCurrentProcessElevated,
+            _reach.Reachable ? null : _reach.WindowTitle);
     }
 
     // ---- wizard ------------------------------------------------------------
@@ -512,9 +552,12 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     public void Dispose()
     {
+        _foreground?.Dispose();
         _watcher?.Dispose();
         _engine?.Dispose();
         _flash.Dispose();
+        _log.Info("Mullion stopping.");
+        _log.Dispose();
     }
 }
 #endif

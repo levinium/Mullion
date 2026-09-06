@@ -141,7 +141,7 @@ public static class LayoutBuilder
                     yield return new Zone
                     {
                         Id = Guid.NewGuid(),
-                        Name = $"{display.FriendlyName} {VerticalLabel(r, s.Rows)}",
+                        Name = VerticalLabel(r, s.Rows),
                         Parts = [new ZonePart(display.StableKey, parts[r])],
                         Position = new GridPos(r, surfaceCol),
                         Kind = ZoneKind.Region,
@@ -158,8 +158,10 @@ public static class LayoutBuilder
             // three-way-split monitor, naming them all after the display gives
             // three zones called "Display upper" and the wizard cannot tell them
             // apart.
+            // Position only. With no split there is no positional word, so the
+            // display name is the only sensible label for the whole thing.
             var baseName = sliceCount > 1
-                ? $"{display.FriendlyName} {HorizontalLabel(slice, sliceCount)}"
+                ? HorizontalLabel(slice, sliceCount)
                 : display.FriendlyName;
 
             yield return new Zone
@@ -211,7 +213,7 @@ public static class LayoutBuilder
             {
                 Id = Guid.NewGuid(),
                 Name = sliceCount > 1
-                    ? $"{display.FriendlyName} {HorizontalLabel(slice, sliceCount)}"
+                    ? HorizontalLabel(slice, sliceCount)
                     : display.FriendlyName,
                 Parts = [new ZonePart(display.StableKey, area)],
                 Position = new GridPos(rows[i], surfaceCol),
@@ -284,17 +286,22 @@ public static class LayoutBuilder
             ? ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, t).Preferred
             : 1;
 
+    // Zone names carry POSITION only, not the monitor. The diagram labels each
+    // display directly above it, so repeating the name in every zone was noise -
+    // "C49RG9x left" says nothing "Left" does not. Where a list needs to
+    // disambiguate between monitors it composes the two itself.
     private static string HorizontalLabel(int index, int count) => count switch
     {
-        2 => index == 0 ? "left" : "right",
-        3 => index switch { 0 => "left", 1 => "center", _ => "right" },
-        _ => $"column {index + 1}",
+        2 => index == 0 ? "Left" : "Right",
+        3 => index switch { 0 => "Left", 1 => "Center", _ => "Right" },
+        4 => index switch { 0 => "Far left", 1 => "Left", 2 => "Right", _ => "Far right" },
+        _ => $"Column {index + 1}",
     };
 
     private static string VerticalLabel(int index, int count) => count switch
     {
-        2 => index == 0 ? "upper" : "lower",
-        3 => index switch { 0 => "upper", 1 => "middle", _ => "lower" },
-        _ => $"row {index + 1}",
+        2 => index == 0 ? "Upper" : "Lower",
+        3 => index switch { 0 => "Upper", 1 => "Middle", _ => "Lower" },
+        _ => $"Row {index + 1}",
     };
 }

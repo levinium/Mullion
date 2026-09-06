@@ -57,6 +57,13 @@ public sealed partial class DisplayNodeViewModel : ObservableObject
 {
     public required string Key { get; init; }
     public required string Title { get; init; }
+
+    /// <summary>
+    /// Resolution, scaling and primary flag. Shown as a tooltip rather than a
+    /// second label line: inside a narrow column it collided with the tier key
+    /// above it, and stacking it would only make the label taller and the
+    /// collision worse. The window header already states the same thing.
+    /// </summary>
     public required string Detail { get; init; }
     public required Rect Bounds { get; init; }
     public required bool IsPrimary { get; init; }
