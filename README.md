@@ -51,6 +51,18 @@ dotnet test
 dotnet run --project src/Mullion.App
 ```
 
+## Cycling
+
+Press a key again **while still holding Win** and the window widens through a
+cycle — its zone, then the half of the display it sits in, then the display.
+Releasing Win resets to the first step, so an accidental extra press cannot
+leave a window somewhere unexpected minutes later.
+
+```
+Win held, A tapped 3x    1280 -> 2560 -> 5120 wide
+Win released between     1280 each time
+```
+
 ## The probe
 
 `tools/Mullion.Probe` exercises the engine without any UI in the way, which is
@@ -60,10 +72,19 @@ how most of it was verified:
 mullion-probe                        detected displays and the derived layout
 mullion-probe --self-test            drive a real window through every zone
 mullion-probe --hotkey-test          install the hook and verify Win+key end to end
+mullion-probe --cycle-test           verify repeat-press cycling and reset-on-release
+mullion-probe --watch-displays       log display-change messages as they arrive
 mullion-probe --inject Q             inject Win+Q at an already-running Mullion
 mullion-probe --snap S --delay 3     snap the foreground window
 mullion-probe --undo                 restore the last move
 ```
+
+## The icon
+
+`tools/icon/Build-Icon.ps1` regenerates `mullion.ico` and, with `-Mockup`, a
+contact sheet of every candidate at every size on light and dark backgrounds.
+16px is where icons fail, so they are judged there rather than by scaling a
+large one down.
 
 ## Layout
 
@@ -96,8 +117,12 @@ a self-contained job rather than a rewrite.
 - **macOS and Linux are not implemented.** The abstractions are in place; the
   backends are not.
 
+- **Tray icon visibility.** Windows 11 hides new tray icons in the overflow
+  flyout by default. Drag it onto the taskbar, or enable it under Settings →
+  Personalization → Taskbar → Other system tray icons.
+
 ## Not yet built
 
-A settings UI (zones and keybindings are currently changed by re-running the
-wizard or editing `%APPDATA%\Mullion\config.json`), repeat-press cycling wired
-to the UI, and display-change layout rescue.
+Per-zone key rebinding in the UI (the key surface can be switched and the
+layout regenerated, but individual keys still need `config.json`), named layout
+snapshots, per-app rules, and drag-to-snap.
