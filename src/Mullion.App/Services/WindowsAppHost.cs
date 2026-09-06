@@ -102,10 +102,17 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, IDisposable
             })];
     }
 
+    private readonly ZoneFlashOverlay _flash = new();
+
     private void OnFired(HotkeyFired fired)
     {
         _lastAction = $"{fired.ZoneName} — {fired.Result.Outcome}";
         if (fired.Result.Note is not null) _lastAction += $" ({fired.Result.Note})";
+
+        // Only flash on a successful placement: flashing a zone the window did
+        // not reach would assert something untrue.
+        if (_config.General.ShowZoneFlash && fired.Result.Success)
+            _flash.Flash(fired.Result.Achieved);
 
         // The hotkey executor runs on its own thread; UI state must be touched
         // on the UI thread.
@@ -248,6 +255,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, IDisposable
             ? parsed
             : WinKeySuppression.DummyKey;
 
-    public void Dispose() => _engine?.Dispose();
+    public void Dispose()
+    {
+        _engine?.Dispose();
+        _flash.Dispose();
+    }
 }
 #endif

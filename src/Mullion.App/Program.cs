@@ -8,6 +8,11 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Two instances would each install a keyboard hook and both act on the
+        // same keypress, moving the window twice.
+        using var instance = new Services.SingleInstance();
+        if (!instance.IsPrimary) return;
+
         // Before any Avalonia call: if the process is not per-monitor DPI aware,
         // every Win32 coordinate we read is virtualised and the zone maths
         // operates on lies. The manifest declares it too; this is belt and braces.
