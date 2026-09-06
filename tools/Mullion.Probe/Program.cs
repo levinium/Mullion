@@ -76,6 +76,116 @@ if (argv.Contains("--self-test"))
     return failures == 0 ? 0 : 1;
 }
 
+if (argv.Contains("--hotkey-test"))
+{
+    // End-to-end proof that Win-modified hotkeys work natively: install the
+    // hook, synthesise real Win+key events, and verify the window actually
+    // moved to the right zone.
+    using var scratch = new Mullion.Platform.Windows.Testing.ScratchWindow("Mullion hotkey test");
+    scratch.Focus();
+    Thread.Sleep(500);
+
+    using var engine = new Mullion.Platform.Windows.Hotkeys.HotkeyEngine(new WindowManager());
+    engine.Apply(layout, displays);
+
+    var fired = new List<Mullion.Platform.Windows.Hotkeys.HotkeyFired>();
+    engine.Fired += f => { lock (fired) fired.Add(f); };
+    engine.Diagnostic += m => Console.WriteLine($"  [diag] {m}");
+
+    engine.Start();
+    Thread.Sleep(300);
+
+    var health = engine.Health;
+    Console.WriteLine($"Hook installed        : {health.Installed}");
+    Console.WriteLine($"LowLevelHooksTimeout  : {health.LowLevelHooksTimeoutMs}ms");
+    Console.WriteLine($"Running elevated      : {health.Elevated}");
+    Console.WriteLine();
+
+    if (!health.Installed) { Console.Error.WriteLine("Hook failed to install."); return 1; }
+
+    var problems = 0;
+
+    foreach (var (label, vk, scan) in new (string, ushort, ushort)[]
+             {
+                 ("A", 0x41, 0x1E),
+                 ("S", 0x53, 0x1F),
+                 ("D", 0x44, 0x20),
+                 ("W", 0x57, 0x11),
+             })
+    {
+        scratch.Focus();
+        Thread.Sleep(200);
+
+        lock (fired) fired.Clear();
+        Mullion.Platform.Windows.Testing.KeyInjector.Chord(
+            Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, vk, scan);
+
+        Thread.Sleep(600);
+
+        Mullion.Platform.Windows.Hotkeys.HotkeyFired? hit;
+        lock (fired) hit = fired.LastOrDefault();
+
+        if (hit is null)
+        {
+            Console.WriteLine($"  Win+{label}: NO FIRE");
+            problems++;
+            continue;
+        }
+
+        var expected = layout.Zones.First(z => surface.FallbackLabelAt(z.Position) == label);
+        var target = ProjectZone(expected);
+        var ok = hit.Result.Success &&
+                 Math.Abs(hit.Result.Achieved.Left - target.Left) <= 2 &&
+                 Math.Abs(hit.Result.Achieved.Width - target.Width) <= 2;
+
+        Console.WriteLine($"  Win+{label}: {hit.ZoneName,-28} {hit.Result.Outcome,-8} {hit.Result.Achieved} {(ok ? "ok" : "MISMATCH")}");
+        if (!ok) problems++;
+    }
+
+    var final = engine.Health;
+    Console.WriteLine();
+    Console.WriteLine($"Reinstalls {final.ReinstallCount}   latency p50 {final.LatencyP50Ms:0.###}ms max {final.LatencyMaxMs:0.###}ms");
+    Console.WriteLine(problems == 0 ? "Hotkeys fired and moved windows correctly." : $"{problems} problem(s).");
+
+    return problems == 0 ? 0 : 1;
+}
+
+if (argv.Contains("--listen"))
+{
+    // Live hotkey test. This is the real proof that Win+A/S/D can be bound
+    // natively without a PowerToys remap in the chain.
+    using var engine = new Mullion.Platform.Windows.Hotkeys.HotkeyEngine(new WindowManager());
+    engine.Apply(layout, displays);
+
+    engine.Diagnostic += m => Console.WriteLine($"  [diag] {m}");
+    engine.Fired += f => Console.WriteLine(
+        $"  Win+{surface.FallbackLabelAt(f.Position),-3} -> {f.ZoneName,-28} {f.Result.Outcome} {f.Result.Achieved}");
+
+    engine.Start();
+
+    var health = engine.Health;
+    Console.WriteLine($"Hook installed: {health.Installed}");
+    Console.WriteLine($"LowLevelHooksTimeout: {health.LowLevelHooksTimeoutMs}ms");
+    Console.WriteLine($"Elevated: {health.Elevated}");
+    Console.WriteLine();
+    Console.WriteLine($"Bound: {BoundKeys()}   (press Win + one of these)");
+    Console.WriteLine("Press Ctrl+C to stop. The Start menu should NOT open on a bound key.");
+    Console.WriteLine();
+
+    var seconds = 60;
+    var forIndex = Array.IndexOf(argv, "--for");
+    if (forIndex >= 0 && forIndex + 1 < argv.Length && int.TryParse(argv[forIndex + 1], out var s)) seconds = s;
+
+    var stop = new ManualResetEventSlim(false);
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+    stop.Wait(TimeSpan.FromSeconds(seconds));
+
+    var final = engine.Health;
+    Console.WriteLine();
+    Console.WriteLine($"Reinstalls: {final.ReinstallCount}   latency p50 {final.LatencyP50Ms:0.###}ms max {final.LatencyMaxMs:0.###}ms");
+    return 0;
+}
+
 var snapIndex = Array.IndexOf(argv, "--snap");
 if (snapIndex >= 0 && snapIndex + 1 < argv.Length)
 {
