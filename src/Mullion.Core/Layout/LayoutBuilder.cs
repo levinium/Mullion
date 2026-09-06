@@ -153,12 +153,19 @@ public static class LayoutBuilder
 
             // Otherwise: home row is the whole slice, rows above and below are
             // its upper and lower halves. Additive - the home row is untouched.
+            //
+            // Tier names must be built from the SLICE, not the display: on a
+            // three-way-split monitor, naming them all after the display gives
+            // three zones called "Display upper" and the wizard cannot tell them
+            // apart.
+            var baseName = sliceCount > 1
+                ? $"{display.FriendlyName} {HorizontalLabel(slice, sliceCount)}"
+                : display.FriendlyName;
+
             yield return new Zone
             {
                 Id = Guid.NewGuid(),
-                Name = sliceCount > 1
-                    ? $"{display.FriendlyName} {HorizontalLabel(slice, sliceCount)}"
-                    : display.FriendlyName,
+                Name = baseName,
                 Parts = [new ZonePart(display.StableKey, area)],
                 Position = new GridPos(home, surfaceCol),
                 Kind = sliceCount > 1 ? ZoneKind.Region : ZoneKind.WholeDisplay,
@@ -171,7 +178,7 @@ public static class LayoutBuilder
                 yield return new Zone
                 {
                     Id = Guid.NewGuid(),
-                    Name = $"{display.FriendlyName} upper",
+                    Name = $"{baseName} upper",
                     Parts = [new ZonePart(display.StableKey, halves[0])],
                     Position = new GridPos(home - 1, surfaceCol),
                 };
@@ -182,7 +189,7 @@ public static class LayoutBuilder
                 yield return new Zone
                 {
                     Id = Guid.NewGuid(),
-                    Name = $"{display.FriendlyName} lower",
+                    Name = $"{baseName} lower",
                     Parts = [new ZonePart(display.StableKey, halves[1])],
                     Position = new GridPos(home + 1, surfaceCol),
                 };

@@ -1,9 +1,22 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Plain net10.0, NOT net10.0-windows: raw P/Invoke needs no Windows-specific
+    TFM (only WinForms/WPF/CsWinRT do). Keeping it neutral means Mullion.App can
+    stay platform-agnostic and a macOS backend drops in with no TFM surgery.
+    SupportedOSPlatform gives the analyzers what they need instead.
+  -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <RootNamespace>Mullion.Platform.Windows</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Mullion.Core\Mullion.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
 
 </Project>

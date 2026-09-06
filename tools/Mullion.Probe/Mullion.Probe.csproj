@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Mullion.Probe</RootNamespace>
+    <AssemblyName>mullion-probe</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Mullion.Core\Mullion.Core.csproj" />
+    <ProjectReference Include="..\..\src\Mullion.Platform.Windows\Mullion.Platform.Windows.csproj" />
+  </ItemGroup>
+
+</Project>
