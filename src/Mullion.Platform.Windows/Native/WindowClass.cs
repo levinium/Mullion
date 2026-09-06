@@ -36,8 +36,17 @@ internal static partial class WindowClass
     internal const long WS_VISIBLE = 0x10000000L;
     internal const int CW_USEDEFAULT = unchecked((int)0x80000000);
 
-    /// <summary>HWND_MESSAGE: a message-only window, never rendered.</summary>
+    /// <summary>
+    /// HWND_MESSAGE: a message-only window, never rendered.
+    /// <para>
+    /// Note it does NOT receive broadcast messages such as WM_DISPLAYCHANGE or
+    /// WM_SETTINGCHANGE. Anything listening for those needs a hidden top-level
+    /// window instead.
+    /// </para>
+    /// </summary>
     internal static readonly nint HwndMessage = -3;
+
+    internal const long WS_EX_TOOLWINDOW = 0x00000080L;
 
     internal const uint WM_DESTROY = 0x0002;
     internal const uint WM_QUIT = 0x0012;

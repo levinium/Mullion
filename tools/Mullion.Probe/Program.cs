@@ -112,6 +112,27 @@ if (injectIndex >= 0 && injectIndex + 1 < argv.Length)
     return 0;
 }
 
+if (argv.Contains("--watch-displays"))
+{
+    using var watcher = new Mullion.Platform.Windows.Displays.DisplayChangeWatcher(
+        TimeSpan.FromMilliseconds(400));
+
+    Console.WriteLine($"watcher hwnd: 0x{watcher.Handle:X}");
+    Console.WriteLine("Listening. Change a display setting, move the taskbar, or plug a monitor.");
+    Console.WriteLine();
+
+    watcher.MessageObserved += m => Console.WriteLine($"  [msg]     {m}");
+    watcher.Changed += () => Console.WriteLine($"  [CHANGED] arrangement settled at {DateTime.Now:HH:mm:ss.fff}");
+
+    var seconds = 30;
+    var forIdx = Array.IndexOf(argv, "--for");
+    if (forIdx >= 0 && forIdx + 1 < argv.Length && int.TryParse(argv[forIdx + 1], out var s)) seconds = s;
+
+    Thread.Sleep(TimeSpan.FromSeconds(seconds));
+    Console.WriteLine("done");
+    return 0;
+}
+
 if (argv.Contains("--cycle-test"))
 {
     // Repeat-press cycling: the same key pressed again WHILE Win is still held

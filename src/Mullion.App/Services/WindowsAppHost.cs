@@ -35,6 +35,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         set { if (_engine is not null) _engine.Paused = value; }
     }
 
+    private DisplayChangeWatcher? _watcher;
+    private string _lastFingerprint = string.Empty;
+
     public void Start()
     {
         _config = _configStore.Load();
@@ -45,15 +48,43 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         Rescan();
         _engine.Start();
 
+        // Monitors get plugged in, resolutions change, laptops dock. Without
+        // this the app keeps snapping to zones that describe a desk that is no
+        // longer there.
+        _watcher = new DisplayChangeWatcher();
+        _watcher.Changed += OnDisplaysChanged;
+
         // Rescan raised StateChanged before the hook existed, so the UI would
         // otherwise sit showing "Not installed" until something else changed.
         StateChanged?.Invoke();
+    }
+
+    private void OnDisplaysChanged()
+    {
+        // The watcher coalesces the burst, but Windows also emits messages for
+        // changes that leave the arrangement identical - a resolution set to
+        // what it already was, a device event for something unrelated. Comparing
+        // fingerprints avoids rebuilding the layout for those.
+        var current = _displayProvider.GetDisplays();
+        if (current.Count == 0) return;
+
+        var signature = TopologyFingerprint.GeometrySignature(current);
+        if (signature == _lastFingerprint) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            Rescan();
+            _lastAction = $"Displays changed — {_displays.Count} connected, layout reapplied.";
+            StateChanged?.Invoke();
+        });
     }
 
     public void Rescan()
     {
         _displays = _displayProvider.GetDisplays();
         if (_displays.Count == 0) return;
+
+        _lastFingerprint = TopologyFingerprint.GeometrySignature(_displays);
 
         var resolution = ProfileResolver.Resolve(_config, _displays);
 
@@ -399,8 +430,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     public void Dispose()
     {
+        _watcher?.Dispose();
         _engine?.Dispose();
         _flash.Dispose();
     }
 }
 #endif
+

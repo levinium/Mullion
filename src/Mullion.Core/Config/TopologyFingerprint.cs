@@ -33,6 +33,28 @@ public readonly record struct TopologyFingerprint(string Hardware, string Arrang
         return new TopologyFingerprint($"hw_{Short(hardware)}", $"ar_{Short(arrangement)}");
     }
 
+    /// <summary>
+    /// Everything that affects where a zone actually lands, including the work
+    /// area.
+    /// <para>
+    /// Deliberately separate from the two fingerprints above, which answer
+    /// "which profile is this?" and must NOT change when the taskbar moves or
+    /// auto-hides - that would spawn a new profile for a trivial change.
+    /// This answers a different question: "are the cached pixel rectangles
+    /// still correct?" A taskbar toggle changes the work area, so zones stored
+    /// as fractions of it project to different pixels and must be recomputed.
+    /// </para>
+    /// </summary>
+    public static string GeometrySignature(IReadOnlyList<DisplayInfo> displays)
+    {
+        var ordered = displays.OrderBy(d => d.StableKey, StringComparer.Ordinal);
+
+        return Short(string.Join('|', ordered.Select(d =>
+            $"{d.StableKey}:{d.Bounds.X},{d.Bounds.Y},{d.Bounds.Width},{d.Bounds.Height}" +
+            $":{d.WorkArea.X},{d.WorkArea.Y},{d.WorkArea.Width},{d.WorkArea.Height}" +
+            $":{d.Dpi}:{(d.IsPrimary ? 1 : 0)}")));
+    }
+
     private static string Short(string input)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
