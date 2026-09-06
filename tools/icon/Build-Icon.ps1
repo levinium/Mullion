@@ -209,13 +209,13 @@ function Write-Mockup {
     $y = 55
     foreach ($style in $styles) {
         foreach ($bg in @('dark', 'light')) {
-            $bgColour = if ($bg -eq 'dark') {
+            $bgColor = if ($bg -eq 'dark') {
                 [System.Drawing.Color]::FromArgb(255, 32, 32, 38)
             } else {
                 [System.Drawing.Color]::FromArgb(255, 243, 243, 246)
             }
 
-            $bgBrush = New-Object System.Drawing.SolidBrush($bgColour)
+            $bgBrush = New-Object System.Drawing.SolidBrush($bgColor)
             $g.FillRectangle($bgBrush, 0, $y, $width, $rowH)
             $bgBrush.Dispose()
 

@@ -31,7 +31,7 @@ public class SplitGeneratorTests
     /// again with no threshold involved.
     /// </summary>
     [Fact]
-    public void UltrawideRejectsThe16x9CentreInFavourOfEqualThirds()
+    public void UltrawideRejectsThe16x9CenterInFavorOfEqualThirds()
     {
         var best = SplitGenerator.Best(R(3440, 1440), 3);
 

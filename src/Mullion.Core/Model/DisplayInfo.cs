@@ -42,7 +42,7 @@ public sealed record DisplayInfo
 
     public Rotation Rotation { get; init; } = Rotation.None;
 
-    /// <summary>Opaque platform handle (HMONITOR). Volatile, never serialised.</summary>
+    /// <summary>Opaque platform handle (HMONITOR). Volatile, never serialized.</summary>
     public nint Handle { get; init; }
 
     public double Scale => Dpi / 96.0;

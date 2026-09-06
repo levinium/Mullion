@@ -58,7 +58,7 @@ public sealed class HotkeyEngine : IDisposable
 
     /// <summary>
     /// Stand down while something is running fullscreen. Default true, matching
-    /// the config default - which previously claimed this behaviour without
+    /// the config default - which previously claimed this behavior without
     /// implementing it.
     /// </summary>
     public bool PauseWhenFullscreen { get; set; } = true;

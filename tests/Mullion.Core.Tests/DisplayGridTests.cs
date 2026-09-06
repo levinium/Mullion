@@ -13,7 +13,7 @@ public class DisplayGridTests
     /// 3 columns with depths 1, 2, 1.
     /// </summary>
     [Fact]
-    public void VerticalsFlankingStackedPairKeepsTheCentreColumnTwoDeep()
+    public void VerticalsFlankingStackedPairKeepsTheCenterColumnTwoDeep()
     {
         var columns = DisplayGrid.Columns(TestDisplays.VerticalsFlankingStackedPair());
 

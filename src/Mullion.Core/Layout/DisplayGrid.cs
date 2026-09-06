@@ -13,7 +13,7 @@ public sealed record DisplayColumn(int Index, IReadOnlyList<DisplayInfo> Display
 }
 
 /// <summary>
-/// Groups displays into columns, then analyses stacking WITHIN each column.
+/// Groups displays into columns, then analyzes stacking WITHIN each column.
 /// <para>
 /// Per-column analysis is load-bearing. Clustering bands globally with union-find
 /// over displays cannot represent a desk containing a tall display: two verticals

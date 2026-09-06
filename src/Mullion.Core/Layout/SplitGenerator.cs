@@ -90,16 +90,16 @@ public static class SplitGenerator
         // (a 32:9 resolves to exactly 25/50/25). Anchoring to the work area
         // instead would give a mathematically exact pane but untidy numbers;
         // that variant is offered as a separate candidate by the caller.
-        var centreLength = shortAxis * ratio;
-        if (centreLength <= 0 || centreLength >= longAxis) yield break;
+        var centerLength = shortAxis * ratio;
+        if (centerLength <= 0 || centerLength >= longAxis) yield break;
 
-        var centreFraction = centreLength / longAxis;
-        var sideFraction = (1.0 - centreFraction) / (count - 1);
+        var centerFraction = centerLength / longAxis;
+        var sideFraction = (1.0 - centerFraction) / (count - 1);
         if (sideFraction <= 0) yield break;
 
         var weights = new double[count];
         for (var i = 0; i < count; i++) weights[i] = sideFraction;
-        weights[count / 2] = centreFraction;
+        weights[count / 2] = centerFraction;
 
         yield return weights;
     }
