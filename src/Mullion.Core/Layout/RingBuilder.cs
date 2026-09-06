@@ -47,12 +47,12 @@ public static class RingBuilder
         // widen within the upper half, not suddenly claim full height.
         var band = new NormRect(0, area.Y, 1, area.H);
 
-        var centre = area.X + area.W / 2;
-        var half = centre < 0.5
+        var center = area.X + area.W / 2;
+        var half = center < 0.5
             ? new NormRect(0, band.Y, 0.5, band.H)
             : new NormRect(0.5, band.Y, 0.5, band.H);
 
-        Add(half, centre < 0.5 ? "Left half" : "Right half");
+        Add(half, center < 0.5 ? "Left half" : "Right half");
         Add(band, band.H >= 0.999 ? "Whole display" : "Full width");
 
         return steps;

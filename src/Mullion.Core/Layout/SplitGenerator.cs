@@ -38,21 +38,21 @@ public static class SplitGenerator
 
         void Add(string id, string name, double[] weights, string rationale)
         {
-            var normalised = Normalise(weights);
+            var normalized = Normalize(weights);
             candidates.Add(new SplitCandidate(
-                id, name, normalised, Score(bounds, normalised, t), rationale));
+                id, name, normalized, Score(bounds, normalized, t), rationale));
         }
 
         Add("equal", $"Equal {Ordinal(count)}",
             [.. Enumerable.Repeat(1.0, count)],
             $"{count} equal columns");
 
-        // Centre-weighted, only meaningful for odd counts >= 3.
+        // Center-weighted, only meaningful for odd counts >= 3.
         if (count >= 3 && count % 2 == 1)
         {
             var w = Enumerable.Repeat(1.0, count).ToArray();
             w[count / 2] = 2.0;
-            Add("center-weighted", "Wider centre", w, "Centre pane double width for a primary window");
+            Add("center-weighted", "Wider center", w, "Center pane double width for a primary window");
         }
 
         // Content-anchored: size one pane to match a canonical ratio EXACTLY.
@@ -62,8 +62,8 @@ public static class SplitGenerator
         {
             foreach (var anchored in AnchoredWeights(bounds, count, canonical.Ratio))
             {
-                Add($"anchor-{canonical.Label}", $"Centre {canonical.Label}", anchored,
-                    $"Centre pane is exactly {canonical.Label}");
+                Add($"anchor-{canonical.Label}", $"Center {canonical.Label}", anchored,
+                    $"Center pane is exactly {canonical.Label}");
             }
         }
 
@@ -80,7 +80,7 @@ public static class SplitGenerator
     private static IEnumerable<double[]> AnchoredWeights(
         PxRect bounds, int count, double ratio)
     {
-        // Only a symmetric odd split has a well-defined single centre pane.
+        // Only a symmetric odd split has a well-defined single center pane.
         if (count < 3 || count % 2 == 0) yield break;
 
         var longAxis = (double)bounds.LongAxis;
@@ -113,7 +113,7 @@ public static class SplitGenerator
     /// The anchor term is deliberately layout-level and area-weighted rather than
     /// a per-pane average: averaging lets three merely-decent panes outscore one
     /// perfect pane plus two side columns, which is backwards. The penalty term is
-    /// what rejects a 16:9 centre on a 21:9 - its side panes fall to aspect 0.31,
+    /// what rejects a 16:9 center on a 21:9 - its side panes fall to aspect 0.31,
     /// far below the usable floor - with no threshold anywhere.
     /// </summary>
     private static double Score(PxRect bounds, IReadOnlyList<double> weights, ShapeTuning t)
@@ -163,7 +163,7 @@ public static class SplitGenerator
         return Math.Exp(-3.0 * distance);
     }
 
-    private static IReadOnlyList<double> Normalise(IReadOnlyList<double> weights)
+    private static IReadOnlyList<double> Normalize(IReadOnlyList<double> weights)
     {
         var sum = weights.Sum();
         return sum <= 0 ? weights : [.. weights.Select(w => w / sum)];

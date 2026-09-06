@@ -9,7 +9,7 @@ public class DisplayGridTests
     /// <summary>
     /// The regression that motivated per-column analysis. Global union-find over
     /// displays collapses this arrangement into a single band, because each
-    /// vertical overlaps both centre monitors. Per-column analysis must report
+    /// vertical overlaps both center monitors. Per-column analysis must report
     /// 3 columns with depths 1, 2, 1.
     /// </summary>
     [Fact]
@@ -88,7 +88,7 @@ public class DisplayGridTests
 
 public class CleanRectangleTests
 {
-    /// <summary>The 4-monitor case: the centre pair may bind a spanning union key.</summary>
+    /// <summary>The 4-monitor case: the center pair may bind a spanning union key.</summary>
     [Fact]
     public void StackedSameWidthSameDpiFormsACleanRectangle()
     {

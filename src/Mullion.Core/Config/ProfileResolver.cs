@@ -15,7 +15,7 @@ public enum ProfileMatch
     /// <summary>Some monitors in common. Reproject what matches, patch the rest.</summary>
     Partial,
 
-    /// <summary>Nothing recognisable. Generate a fresh profile.</summary>
+    /// <summary>Nothing recognizable. Generate a fresh profile.</summary>
     None,
 }
 

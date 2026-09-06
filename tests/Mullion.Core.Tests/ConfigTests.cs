@@ -249,6 +249,59 @@ public class ConfigStoreTests : IDisposable
         store.LoadNotes.ShouldNotBeEmpty();
     }
 
+    /// <summary>
+    /// Zone names are persisted, so changing how they are generated does not
+    /// reach a profile that is already saved - the migration is what makes the
+    /// change visible to existing users rather than only to new ones.
+    /// </summary>
+    [Fact]
+    public void MigratesPersistedZoneNamesToAmericanSpelling()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "wizardCompleted": true,
+              "profiles": [{
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "Desk",
+                "hardwareFingerprint": "hw_test",
+                "arrangementFingerprint": "ar_test",
+                "displays": [],
+                "zones": [
+                  { "name": "C49RG9x centre", "row": 1, "col": 1, "parts": [], "kind": "Region" },
+                  { "name": "C49RG9x centre upper", "row": 0, "col": 1, "parts": [], "kind": "Region" },
+                  { "name": "C49RG9x left", "row": 1, "col": 0, "parts": [], "kind": "Region" }
+                ]
+              }]
+            }
+            """);
+
+        var store = new ConfigStore(ConfigPath);
+        var loaded = store.Load();
+
+        store.MigratedOnLoad.ShouldBeTrue();
+        loaded.SchemaVersion.ShouldBe(AppConfig.CurrentSchemaVersion);
+
+        var names = loaded.Profiles[0].Zones.Select(z => z.Name).ToList();
+        names.ShouldContain("C49RG9x center");
+        names.ShouldContain("C49RG9x center upper");
+        names.ShouldContain("C49RG9x left", "unrelated names must be untouched");
+        names.ShouldNotContain(n => n.Contains("centre"));
+    }
+
+    [Fact]
+    public void DoesNotReportMigrationForACurrentConfig()
+    {
+        var store = new ConfigStore(ConfigPath);
+        store.Save(new AppConfig { WizardCompleted = true });
+
+        var reloaded = new ConfigStore(ConfigPath);
+        reloaded.Load();
+
+        reloaded.MigratedOnLoad.ShouldBeFalse();
+    }
+
     /// <summary>A config from a newer build must be preserved, not silently reset.</summary>
     [Fact]
     public void NewerSchemaIsFlaggedButKept()

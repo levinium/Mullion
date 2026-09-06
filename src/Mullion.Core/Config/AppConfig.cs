@@ -72,7 +72,11 @@ public sealed record ShapeTuningRecord
 
 public sealed record AppConfig
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>
+    /// 1 - initial.
+    /// 2 - zone names switched to American spelling ("centre" -> "center").
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public bool WizardCompleted { get; init; }

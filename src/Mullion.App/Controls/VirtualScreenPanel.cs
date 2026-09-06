@@ -5,7 +5,7 @@ namespace Mullion.App.Controls;
 
 /// <summary>
 /// Lays children out at their true relative positions and sizes within the
-/// virtual desktop, scaled uniformly to fit and centred.
+/// virtual desktop, scaled uniformly to fit and centered.
 /// <para>
 /// A Panel with attached properties rather than a custom Render override, so
 /// children stay real controls: hit-testing, hover, tooltips, focus, keyboard

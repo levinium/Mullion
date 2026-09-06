@@ -51,7 +51,7 @@ public class LayoutBuilderTests
 
     /// <summary>
     /// The 4-display arrangement that broke global band clustering. Verticals get
-    /// three tiers each; the centre column's two monitors take the outer rows with
+    /// three tiers each; the center column's two monitors take the outer rows with
     /// the union on the home row.
     /// </summary>
     [Fact]
@@ -65,7 +65,7 @@ public class LayoutBuilderTests
         r.At(1, 0)!.Kind.ShouldBe(ZoneKind.WholeDisplay);
         r.At(1, 2)!.Kind.ShouldBe(ZoneKind.WholeDisplay);
 
-        // Centre column: displays on the outer rows, union in the middle.
+        // Center column: displays on the outer rows, union in the middle.
         r.At(0, 1)!.Parts[0].DisplayKey.ShouldBe("CU");
         r.At(2, 1)!.Parts[0].DisplayKey.ShouldBe("CL");
 
@@ -176,7 +176,7 @@ public class LayoutBuilderTests
 
     /// <summary>
     /// The regression net. Two ordinary side-by-side monitors must NOT silently
-    /// gain a bezel-spanning zone - that behaviour appearing in the most common
+    /// gain a bezel-spanning zone - that behavior appearing in the most common
     /// setup on earth is exactly what the clean-rectangle guard prevents.
     /// </summary>
     [Fact]

@@ -21,6 +21,8 @@
           <SolidColorBrush x:Key="Taskbar" Color="#0C0E12" />
           <SolidColorBrush x:Key="SpanTint" Color="#28D9A441" />
           <SolidColorBrush x:Key="SpanBorder" Color="#D9A441" />
+          <SolidColorBrush x:Key="CaptureTint" Color="#3833D17A" />
+          <SolidColorBrush x:Key="CaptureBorder" Color="#33D17A" />
           <LinearGradientBrush x:Key="BezelFill" StartPoint="0%,0%" EndPoint="0%,100%">
             <GradientStop Offset="0" Color="#1E232B" />
             <GradientStop Offset="1" Color="#161A21" />
@@ -43,6 +45,8 @@
           <SolidColorBrush x:Key="Taskbar" Color="#DDE3EC" />
           <SolidColorBrush x:Key="SpanTint" Color="#2FB4801F" />
           <SolidColorBrush x:Key="SpanBorder" Color="#B4801F" />
+          <SolidColorBrush x:Key="CaptureTint" Color="#3A1E8E4A" />
+          <SolidColorBrush x:Key="CaptureBorder" Color="#1E8E4A" />
           <LinearGradientBrush x:Key="BezelFill" StartPoint="0%,0%" EndPoint="0%,100%">
             <GradientStop Offset="0" Color="#FFFFFF" />
             <GradientStop Offset="1" Color="#EEF1F6" />
@@ -67,12 +71,41 @@
     <Setter Property="Background" Value="{DynamicResource Taskbar}" />
   </Style>
 
-  <!-- Zone tiles -->
-  <Style Selector="Border.zoneTile">
+  <!-- Zone tiles. Templated flat so a Button reads as a zone, not a control. -->
+  <Style Selector="Button.zoneTileButton">
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="Arrow" />
+
+    <!-- All four are load-bearing for a to-scale diagram.
+         Alignment: unless it is Stretch, Avalonia's ArrangeCore clamps the
+         control to its DesiredSize instead of filling the rect the panel gave
+         it, so every tile ends up content-sized and the 25/50/25 split stops
+         looking like 25/50/25. Border defaults to Stretch; Button does not.
+         MinWidth/MinHeight: Fluent gives Button non-zero defaults, and Arrange
+         will not shrink below them, which inflates the narrow zones. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="tile"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background" Duration="0:0:0.15" />
@@ -80,15 +113,27 @@
     </Setter>
   </Style>
 
-  <Style Selector="Border.zoneTile:pointerover">
+  <!-- Only an interactive diagram invites clicking -->
+  <Style Selector="Button.zoneTileButton.interactive">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.zoneTileButton.interactive:pointerover">
     <Setter Property="Background" Value="{DynamicResource AccentMid}" />
   </Style>
 
   <!-- A zone crossing a physical bezel is unusual enough to look different -->
-  <Style Selector="Border.zoneTile.spanning">
+  <Style Selector="Button.zoneTileButton.spanning">
     <Setter Property="Background" Value="{DynamicResource SpanTint}" />
     <Setter Property="BorderBrush" Value="{DynamicResource SpanBorder}" />
     <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
+  <!-- Awaiting a keypress: unmistakable, since the next key goes here -->
+  <Style Selector="Button.zoneTileButton.capturing">
+    <Setter Property="Background" Value="{DynamicResource CaptureTint}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderThickness" Value="3" />
   </Style>
 
   <Style Selector="Border.keyChip">

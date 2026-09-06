@@ -138,7 +138,7 @@ public static class HookConflictDetector
 
     /// <summary>
     /// Other processes known to install low-level keyboard hooks. Their presence
-    /// is not itself a problem, but it explains erratic behaviour when it happens.
+    /// is not itself a problem, but it explains erratic behavior when it happens.
     /// </summary>
     private static IEnumerable<HookConflict> DetectOtherHookApps()
     {
@@ -159,7 +159,7 @@ public static class HookConflictDetector
     /// <summary>
     /// Letter and digit rows only, which covers every key surface Mullion ships.
     /// MapVirtualKey would be more general but pulls in layout-dependent
-    /// behaviour that is the very thing scan codes exist to avoid.
+    /// behavior that is the very thing scan codes exist to avoid.
     /// </summary>
     private static ushort ScanCodeForVirtualKey(ushort vk) => vk switch
     {

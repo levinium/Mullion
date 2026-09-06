@@ -1,4 +1,4 @@
-﻿# Renders Mullion's app icon at every size Windows asks for, and produces a
+# Renders Mullion's app icon at every size Windows asks for, and produces a
 # mockup sheet showing each candidate on light and dark backgrounds.
 #
 # Small sizes are where icons fail. At 16px a stroked outline with interior
@@ -78,11 +78,11 @@ function New-IconBitmap {
             $gap = [Math]::Max(1, [int][Math]::Round($Size * 0.055))
             $usable = $w - 2 * $gap
             $side = [int][Math]::Round($usable * 0.25)
-            $centre = $usable - 2 * $side
+            $center = $usable - 2 * $side
 
             $g.FillRectangle($dim, $pad, $top, $side, $h)
-            $g.FillRectangle($brush, ($pad + $side + $gap), $top, $centre, $h)
-            $g.FillRectangle($dim, ($pad + $side + $gap + $centre + $gap), $top, $side, $h)
+            $g.FillRectangle($brush, ($pad + $side + $gap), $top, $center, $h)
+            $g.FillRectangle($dim, ($pad + $side + $gap + $center + $gap), $top, $side, $h)
         }
 
         # The same 25/50/25 proportions in one tone. The two-tone version loses
@@ -93,11 +93,11 @@ function New-IconBitmap {
             $gap = [Math]::Max(1, [int][Math]::Round($Size * 0.055))
             $usable = $w - 2 * $gap
             $side = [int][Math]::Round($usable * 0.25)
-            $centre = $usable - 2 * $side
+            $center = $usable - 2 * $side
 
             $g.FillRectangle($brush, $pad, $top, $side, $h)
-            $g.FillRectangle($brush, ($pad + $side + $gap), $top, $centre, $h)
-            $g.FillRectangle($brush, ($pad + $side + $gap + $centre + $gap), $top, $side, $h)
+            $g.FillRectangle($brush, ($pad + $side + $gap), $top, $center, $h)
+            $g.FillRectangle($brush, ($pad + $side + $gap + $center + $gap), $top, $side, $h)
         }
 
         # A single strong vertical bar - the mullion itself - against a muted
@@ -200,10 +200,10 @@ function Write-Mockup {
     $font = New-Object System.Drawing.Font('Segoe UI', 11)
     $small = New-Object System.Drawing.Font('Segoe UI', 9)
     $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $grey = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 150, 150, 160))
+    $gray = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 150, 150, 160))
 
     for ($i = 0; $i -lt $shown.Count; $i++) {
-        $g.DrawString("$($shown[$i])px", $small, $grey, ($labelW + $i * $cell + 10), 20)
+        $g.DrawString("$($shown[$i])px", $small, $gray, ($labelW + $i * $cell + 10), 20)
     }
 
     $y = 55
@@ -219,9 +219,9 @@ function Write-Mockup {
             $g.FillRectangle($bgBrush, 0, $y, $width, $rowH)
             $bgBrush.Dispose()
 
-            $textBrush = if ($bg -eq 'dark') { $white } else { $grey }
+            $textBrush = if ($bg -eq 'dark') { $white } else { $gray }
             $g.DrawString("$style", $font, $textBrush, 12, ($y + $rowH / 2 - 18))
-            $g.DrawString("on $bg", $small, $grey, 12, ($y + $rowH / 2 + 2))
+            $g.DrawString("on $bg", $small, $gray, 12, ($y + $rowH / 2 + 2))
 
             for ($i = 0; $i -lt $shown.Count; $i++) {
                 $size = $shown[$i]
@@ -238,7 +238,7 @@ function Write-Mockup {
     $g.Dispose()
     $sheet.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     $sheet.Dispose()
-    $font.Dispose(); $small.Dispose(); $white.Dispose(); $grey.Dispose()
+    $font.Dispose(); $small.Dispose(); $white.Dispose(); $gray.Dispose()
 
     Write-Output "wrote mockup sheet $Path"
 }

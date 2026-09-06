@@ -48,7 +48,7 @@ public readonly record struct NormRect(double X, double Y, double W, double H)
         return acc ?? Full;
     }
 
-    /// <summary>Subdivide along an axis, splitting THIS rect by normalised weights.</summary>
+    /// <summary>Subdivide along an axis, splitting THIS rect by normalized weights.</summary>
     public IReadOnlyList<NormRect> Split(Axis axis, IReadOnlyList<double> weights)
     {
         ArgumentOutOfRangeException.ThrowIfZero(weights.Count);

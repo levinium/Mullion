@@ -135,6 +135,46 @@ public sealed class HotkeyEngine : IDisposable
     /// <summary>Recover modifier state after a session unlock, resume or re-hook.</summary>
     public void Resync() => _machine.ResyncModifiers(LowLevelKeyboardHook.ReadPhysicalModifiers());
 
+    /// <summary>
+    /// Raised when a chord is captured, with the physical scan code.
+    /// <para>
+    /// Capture has to run through the hook because the UI framework never
+    /// receives Win-modified keys - the shell takes them first. This is the only
+    /// way a "press a key" control can see Win+A at all.
+    /// </para>
+    /// </summary>
+    public event Action<ChordModifiers, ushort>? ChordCaptured;
+
+    private Action<ChordModifiers, ushort>? _captureHandler;
+
+    public void BeginCapture(Action<ChordModifiers, ushort> onCaptured)
+    {
+        EndCapture();
+
+        _captureHandler = onCaptured;
+        _machine.ChordCaptured += OnChordCaptured;
+        _machine.BeginCapture();
+    }
+
+    public void EndCapture()
+    {
+        _machine.EndCapture();
+        _machine.ChordCaptured -= OnChordCaptured;
+        _captureHandler = null;
+    }
+
+    private void OnChordCaptured(ChordModifiers mods, ushort scan)
+    {
+        var handler = _captureHandler;
+
+        // One capture per request: leaving it armed would swallow every
+        // subsequent keystroke.
+        EndCapture();
+
+        handler?.Invoke(mods, scan);
+        ChordCaptured?.Invoke(mods, scan);
+    }
+
     public void Dispose()
     {
         _cts.Cancel();

@@ -11,7 +11,7 @@ public class SplitGeneratorTests
 
     /// <summary>
     /// The headline case. On a 32:9 the content-anchored split must beat equal
-    /// thirds, producing 25/50/25 with a true 16:9 centre - and it must do so
+    /// thirds, producing 25/50/25 with a true 16:9 center - and it must do so
     /// through scoring, with no super-ultrawide branch anywhere in the code.
     /// </summary>
     [Fact]
@@ -26,8 +26,8 @@ public class SplitGeneratorTests
 
     /// <summary>
     /// The counter-case, which is what proves the rule generalises. On a 21:9 a
-    /// 16:9 centre would need 74% of the width, leaving side panes far outside
-    /// the aspect bounds. The penalty must reject it in favour of equal thirds -
+    /// 16:9 center would need 74% of the width, leaving side panes far outside
+    /// the aspect bounds. The penalty must reject it in favor of equal thirds -
     /// again with no threshold involved.
     /// </summary>
     [Fact]

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Mullion.Core.Abstractions;
@@ -79,23 +79,23 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             WaitForSettle(hwnd, 150);
         }
 
-        // A window that cannot be resized is centred at its current size rather
+        // A window that cannot be resized is centered at its current size rather
         // than skipped: a dialog that ignores the hotkey reads as a broken app,
         // whereas centring reads as intentional.
         if (!resizable)
         {
             var current = GetFrameBounds(hwnd);
-            var centred = new PxRect(
+            var centered = new PxRect(
                 target.Left + (target.Width - current.Width) / 2,
                 target.Top + (target.Height - current.Height) / 2,
                 current.Width,
                 current.Height);
 
-            var placed = Apply(hwnd, centred, out _);
+            var placed = Apply(hwnd, centered, out _);
             return new MoveResult(
-                placed ? MoveOutcome.Centred : MoveOutcome.FailedUnknown,
+                placed ? MoveOutcome.Centered : MoveOutcome.FailedUnknown,
                 GetFrameBounds(hwnd), 1,
-                "Window is not resizable; centred at its current size.");
+                "Window is not resizable; centered at its current size.");
         }
 
         var attempts = 0;
@@ -129,21 +129,21 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             if (error <= 2) return new MoveResult(MoveOutcome.Moved, achieved, attempts);
 
             // A window with a hard minimum size never converges. Detect it after
-            // two consecutive oversized results and centre what we got instead
+            // two consecutive oversized results and center what we got instead
             // of looping.
             var oversize = achieved.Width > target.Width + 2 || achieved.Height > target.Height + 2;
             if (oversize && previousOversize)
             {
-                var centred = new PxRect(
+                var centered = new PxRect(
                     target.Left + (target.Width - achieved.Width) / 2,
                     target.Top + (target.Height - achieved.Height) / 2,
                     achieved.Width,
                     achieved.Height);
 
-                Apply(hwnd, centred, out _);
+                Apply(hwnd, centered, out _);
                 return new MoveResult(
                     MoveOutcome.MovedApproximate, GetFrameBounds(hwnd), attempts,
-                    $"Window enforces a minimum size of {achieved.Width}x{achieved.Height}; centred in the zone.");
+                    $"Window enforces a minimum size of {achieved.Width}x{achieved.Height}; centered in the zone.");
             }
 
             previousOversize = oversize;

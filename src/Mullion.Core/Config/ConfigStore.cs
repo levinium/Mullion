@@ -41,9 +41,16 @@ public sealed class ConfigStore
     /// <summary>Diagnostics from the most recent load, e.g. a fallback to backup.</summary>
     public IReadOnlyList<string> LoadNotes { get; private set; } = [];
 
+    /// <summary>
+    /// True when the last load upgraded an older schema, so the caller can write
+    /// it back once instead of migrating on every launch.
+    /// </summary>
+    public bool MigratedOnLoad { get; private set; }
+
     public AppConfig Load()
     {
         var notes = new List<string>();
+        MigratedOnLoad = false;
 
         foreach (var candidate in new[] { _path, _backupPath })
         {
@@ -63,8 +70,10 @@ public sealed class ConfigStore
                 if (candidate == _backupPath)
                     notes.Add("Primary config was unreadable; recovered from backup.");
 
+                var migrated = Migrate(config, notes);
+                MigratedOnLoad = migrated.SchemaVersion != config.SchemaVersion;
                 LoadNotes = notes;
-                return Migrate(config, notes);
+                return migrated;
             }
             catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
             {
@@ -110,7 +119,28 @@ public sealed class ConfigStore
             return config;
         }
 
-        notes.Add($"Migrated config from schema v{config.SchemaVersion} to v{AppConfig.CurrentSchemaVersion}.");
+        var from = config.SchemaVersion;
+
+        // v1 -> v2: zone names are persisted, so changing how they are generated
+        // does not reach a profile that is already saved. Rewriting them here is
+        // what makes the spelling change actually visible to existing users
+        // rather than only to new ones.
+        if (config.SchemaVersion < 2)
+        {
+            config = config with
+            {
+                Profiles = [.. config.Profiles.Select(p => p with
+                {
+                    Zones = [.. p.Zones.Select(z => z with { Name = Americanise(z.Name) })],
+                })],
+            };
+        }
+
+        notes.Add($"Migrated config from schema v{from} to v{AppConfig.CurrentSchemaVersion}.");
         return config with { SchemaVersion = AppConfig.CurrentSchemaVersion };
     }
+
+    private static string Americanise(string name) => name
+        .Replace("centre", "center", StringComparison.Ordinal)
+        .Replace("Centre", "Center", StringComparison.Ordinal);
 }

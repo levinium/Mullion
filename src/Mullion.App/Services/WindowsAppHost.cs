@@ -42,6 +42,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _config = _configStore.Load();
 
+        // Write back a migrated config once, rather than re-migrating on every
+        // launch and leaving the file permanently out of date.
+        if (_configStore.MigratedOnLoad) Save();
+
         _engine = new HotkeyEngine(_windows, ParseSuppression(_config.General.WinKeySuppression));
         _engine.Fired += OnFired;
 
@@ -88,7 +92,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         var resolution = ProfileResolver.Resolve(_config, _displays);
 
-        // A stored profile is reused when the displays are recognisable, so a
+        // A stored profile is reused when the displays are recognizable, so a
         // resolution change or a rearrangement does not discard the user's
         // zones. Only genuinely new hardware generates a fresh layout.
         _layout = resolution.Match switch
@@ -289,7 +293,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             ? []
             : _layout.Zones
                 .OrderBy(z => z.Position.Row).ThenBy(z => z.Position.Col)
-                .Select(z => ($"Win+{_layout.Surface.FallbackLabelAt(z.Position)}", z.Name))
+                .Select(z => new BindingEntry(
+                    $"Win+{_layout.Surface.FallbackLabelAt(z.Position)}",
+                    z.Name,
+                    z.Position.Row,
+                    z.Position.Col))
                 .ToList();
 
         return new SettingsSnapshot(
@@ -365,6 +373,66 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     }
 
     public void RerunWizard() => RerunWizardRequested?.Invoke();
+
+    public void BeginRebind(int row, int col, Action<RebindResult> completed)
+    {
+        if (_engine is null || _layout is null)
+        {
+            completed(new RebindResult(false, "Hotkeys are not running."));
+            return;
+        }
+
+        var surface = _layout.Surface;
+
+        _engine.BeginCapture((mods, scan) => Dispatcher.UIThread.Post(() =>
+            completed(ApplyRebind(row, col, mods, scan, surface))));
+    }
+
+    public void CancelRebind() => _engine?.EndCapture();
+
+    private RebindResult ApplyRebind(
+        int row, int col, ChordModifiers mods, ushort scan, KeySurface surface)
+    {
+        if (_layout is null) return new RebindResult(false, "No layout.");
+
+        if (!mods.HasFlag(ChordModifiers.Win))
+            return new RebindResult(false, "Hold Win while pressing the key you want.");
+
+        var target = LayoutEditor.PositionOfScanCode(surface, scan);
+        if (target is null)
+        {
+            return new RebindResult(false,
+                $"That key is not part of the {surface.Name} block. Choose a different key surface " +
+                "if you want keys outside it.");
+        }
+
+        var outcome = LayoutEditor.Rebind(_layout, new GridPos(row, col), target.Value);
+        if (!outcome.Success) return new RebindResult(false, outcome.Message);
+
+        _layout = outcome.Layout;
+        _engine?.Apply(_layout, _displays);
+        PersistCurrentLayout();
+        StateChanged?.Invoke();
+
+        return new RebindResult(true, outcome.Message);
+    }
+
+    public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) =>
+        MonitorDiagramViewModel.Build(_displays, _layout, onZoneActivated);
+
+    public void ResetLayout()
+    {
+        if (_displays.Count == 0) return;
+
+        var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
+
+        _layout = LayoutBuilder.Build(
+            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+
+        _engine?.Apply(_layout, _displays);
+        PersistCurrentLayout();
+        StateChanged?.Invoke();
+    }
 
     private void Regenerate()
     {

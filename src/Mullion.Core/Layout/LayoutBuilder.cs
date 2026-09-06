@@ -287,7 +287,7 @@ public static class LayoutBuilder
     private static string HorizontalLabel(int index, int count) => count switch
     {
         2 => index == 0 ? "left" : "right",
-        3 => index switch { 0 => "left", 1 => "centre", _ => "right" },
+        3 => index switch { 0 => "left", 1 => "center", _ => "right" },
         _ => $"column {index + 1}",
     };
 

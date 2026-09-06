@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:Mullion.App.Controls"
         xmlns:vm="using:Mullion.App.ViewModels"
         x:Class="Mullion.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
@@ -65,10 +66,10 @@
         </StackPanel>
       </Border>
 
-      <!-- Behaviour -->
+      <!-- Behavior -->
       <Border Classes="card">
         <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="Behaviour" />
+          <TextBlock Classes="h2" Text="Behavior" />
 
           <CheckBox Content="Flash the zone when a window moves"
                     IsChecked="{Binding ShowZoneFlash}" />
@@ -84,23 +85,48 @@
       <!-- Current bindings -->
       <Border Classes="card">
         <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="Current hotkeys" />
+          <TextBlock Classes="h2" Text="Hotkeys" />
           <TextBlock Classes="body"
                      Text="Press a key again while holding Win to widen the window through its cycle." />
 
+          <Border Classes="warning" IsVisible="{Binding RebindMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Classes="body" Text="{Binding RebindMessage}" />
+          </Border>
+
+          <!-- The picture is the control: click a zone to rebind it, rather
+               than hunting for the matching row in a table below. -->
+          <Border Classes="card" Height="230" Padding="10">
+            <ctl:MonitorDiagram DataContext="{Binding Diagram}" />
+          </Border>
+
+          <TextBlock Classes="body"
+                     Text="Click a zone above to give it a different key, or use the list." />
+
           <ItemsControl ItemsSource="{Binding Bindings}">
             <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:BindingRow">
-                <Grid ColumnDefinitions="110,*" Margin="0,3">
+              <DataTemplate x:DataType="vm:BindingRowViewModel">
+                <Grid ColumnDefinitions="110,*,Auto" Margin="0,3">
                   <Border Classes="keyChip" HorizontalAlignment="Left">
                     <TextBlock Text="{Binding Key}" />
                   </Border>
+
                   <TextBlock Grid.Column="1" Classes="body" Text="{Binding Zone}"
                              VerticalAlignment="Center" Margin="10,0,0,0" />
+
+                  <Button Grid.Column="2"
+                          Content="{Binding ButtonLabel}"
+                          MinWidth="100"
+                          Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RebindCommand}"
+                          CommandParameter="{Binding}" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <Button Content="Reset layout to default"
+                  Command="{Binding ResetLayoutCommand}"
+                  HorizontalAlignment="Left"
+                  Margin="0,6,0,0" />
         </StackPanel>
       </Border>
 

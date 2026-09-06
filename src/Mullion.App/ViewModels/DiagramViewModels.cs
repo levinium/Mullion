@@ -1,6 +1,8 @@
 using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Mullion.Core.Geometry;
+using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Model;
 
@@ -22,11 +24,25 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    [ObservableProperty]
+    private bool _isCapturing;
+
     public required string Name { get; init; }
     public required string KeyLabel { get; init; }
     public required Rect Area { get; init; }
     public required string SizeLabel { get; init; }
     public required bool SpansDisplays { get; init; }
+
+    /// <summary>Where this cell sits on the key surface, so a click can rebind it.</summary>
+    public GridPos Position { get; init; }
+
+    /// <summary>Set only when the diagram is interactive; null elsewhere.</summary>
+    public Action<GridPos>? Activated { get; set; }
+
+    public bool IsInteractive => Activated is not null;
+
+    [RelayCommand]
+    private void Activate() => Activated?.Invoke(Position);
 
     public string? UpperKey { get; init; }
     public string? UpperSize { get; init; }
@@ -60,9 +76,15 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<DisplayNodeViewModel> _displays = [];
 
+    /// <param name="onZoneActivated">
+    /// When supplied the diagram becomes clickable and each zone reports its
+    /// grid position - which is how settings turns the picture into the
+    /// rebinding control rather than duplicating it as a list.
+    /// </param>
     public static MonitorDiagramViewModel Build(
         IReadOnlyList<DisplayInfo> displays,
-        LayoutResult? layout = null)
+        LayoutResult? layout = null,
+        Action<GridPos>? onZoneActivated = null)
     {
         var vm = new MonitorDiagramViewModel();
         if (displays.Count == 0) return vm;
@@ -71,7 +93,21 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         vm.VirtualBounds = new Rect(union.X, union.Y, union.Width, union.Height);
 
         vm.Displays = [.. displays.Select(d => BuildNode(d, layout))];
+
+        if (onZoneActivated is not null)
+        {
+            foreach (var cell in vm.Displays.SelectMany(d => d.Cells))
+                cell.Activated = onZoneActivated;
+        }
+
         return vm;
+    }
+
+    /// <summary>Mark one cell as awaiting a keypress, clearing any other.</summary>
+    public void SetCapturing(GridPos? position)
+    {
+        foreach (var cell in Displays.SelectMany(d => d.Cells))
+            cell.IsCapturing = position is not null && cell.Position == position.Value;
     }
 
     private static DisplayNodeViewModel BuildNode(DisplayInfo display, LayoutResult? layout)
@@ -106,7 +142,11 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
 
         var cells = new List<ZoneCellViewModel>();
 
-        foreach (var column in onThisDisplay.GroupBy(z => z.Position.Col).OrderBy(g => g.Key))
+        // Group by GEOMETRY, not by grid column. Rebinding lets a zone's key
+        // move without its rectangle moving, so grid position and physical
+        // position diverge - grouping by column then draws unrelated zones on
+        // top of each other.
+        foreach (var column in GroupByHorizontalSpan(onThisDisplay, display))
         {
             var entries = column
                 .Select(z =>
@@ -138,6 +178,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                         Area = ToDisplayFraction(e.Part.Area, display),
                         SizeLabel = $"{e.Pixels.Width} × {e.Pixels.Height}",
                         SpansDisplays = e.Zone.SpansDisplays,
+                        Position = e.Zone.Position,
                     });
                 }
 
@@ -155,6 +196,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 Area = ToDisplayFraction(primary.Part.Area, display),
                 SizeLabel = $"{primary.Pixels.Width} × {primary.Pixels.Height}",
                 SpansDisplays = primary.Zone.SpansDisplays,
+                Position = primary.Zone.Position,
                 UpperKey = upper.Zone is null ? null : layout.Surface.FallbackLabelAt(upper.Zone.Position),
                 UpperSize = upper.Zone is null ? null : $"{upper.Pixels.Width} × {upper.Pixels.Height}",
                 LowerKey = lower.Zone is null ? null : layout.Surface.FallbackLabelAt(lower.Zone.Position),
@@ -163,6 +205,56 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         }
 
         return cells;
+    }
+
+    /// <summary>
+    /// Cluster zones into visual columns by how much their horizontal spans
+    /// overlap, ordered left to right.
+    /// </summary>
+    private static IEnumerable<IReadOnlyList<Zone>> GroupByHorizontalSpan(
+        IReadOnlyList<Zone> zones, DisplayInfo display)
+    {
+        var remaining = zones
+            .Select(z => (Zone: z, Area: z.Parts.First(p => p.DisplayKey == display.StableKey).Area))
+            .OrderBy(x => x.Area.X)
+            .ToList();
+
+        while (remaining.Count > 0)
+        {
+            var seed = remaining[0];
+            remaining.RemoveAt(0);
+
+            var group = new List<Zone> { seed.Zone };
+            var left = seed.Area.X;
+            var right = seed.Area.Right;
+
+            // Repeat until nothing new joins: a wide zone can pull in others
+            // that did not overlap the original seed.
+            bool added;
+            do
+            {
+                added = false;
+
+                for (var i = remaining.Count - 1; i >= 0; i--)
+                {
+                    var candidate = remaining[i];
+                    var overlap = Math.Min(right, candidate.Area.Right) - Math.Max(left, candidate.Area.X);
+                    var narrower = Math.Min(right - left, candidate.Area.W);
+
+                    if (narrower > 0 && overlap > narrower * 0.5)
+                    {
+                        group.Add(candidate.Zone);
+                        left = Math.Min(left, candidate.Area.X);
+                        right = Math.Max(right, candidate.Area.Right);
+                        remaining.RemoveAt(i);
+                        added = true;
+                    }
+                }
+            }
+            while (added);
+
+            yield return group;
+        }
     }
 
     /// <summary>

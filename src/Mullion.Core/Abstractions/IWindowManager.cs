@@ -10,8 +10,8 @@ public enum MoveOutcome
     /// <summary>Best effort: the window resisted, e.g. a hard minimum size.</summary>
     MovedApproximate,
 
-    /// <summary>Centred at its current size because it cannot be resized.</summary>
-    Centred,
+    /// <summary>Centered at its current size because it cannot be resized.</summary>
+    Centered,
 
     SkippedNoForegroundWindow,
     SkippedShellWindow,
@@ -30,7 +30,7 @@ public readonly record struct MoveResult(
     int Attempts,
     string? Note = null)
 {
-    public bool Success => Outcome is MoveOutcome.Moved or MoveOutcome.MovedApproximate or MoveOutcome.Centred;
+    public bool Success => Outcome is MoveOutcome.Moved or MoveOutcome.MovedApproximate or MoveOutcome.Centered;
 }
 
 public sealed record WindowSnapshot(

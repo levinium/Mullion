@@ -100,7 +100,7 @@ public static class LayoutCandidates
             var ratio = only.Elongation;
 
             return ratio >= 2.9
-                ? $"A {ratio:0.#}:1 display, so a 16:9 centre with side columns and a half above and below each."
+                ? $"A {ratio:0.#}:1 display, so a 16:9 center with side columns and a half above and below each."
                 : ratio >= 2.1
                     ? $"A {ratio:0.#}:1 ultrawide, split into {counts.Preferred} with halves above and below."
                     : $"A single display, split into {counts.Preferred} with halves above and below.";

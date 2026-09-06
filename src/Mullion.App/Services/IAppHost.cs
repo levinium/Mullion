@@ -60,7 +60,7 @@ public sealed class DesignAppHost : IAppHost
                     Cells =
                     [
                         Cell("Left", "A", 0, 0, 0.25, 1, "Q", "Z"),
-                        Cell("Centre", "S", 0.25, 0, 0.5, 1, "W", "X"),
+                        Cell("Center", "S", 0.25, 0, 0.5, 1, "W", "X"),
                         Cell("Right", "D", 0.75, 0, 0.25, 1, "E", "C"),
                     ],
                 },

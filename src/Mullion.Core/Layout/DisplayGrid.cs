@@ -17,7 +17,7 @@ public sealed record DisplayColumn(int Index, IReadOnlyList<DisplayInfo> Display
 /// <para>
 /// Per-column analysis is load-bearing. Clustering bands globally with union-find
 /// over displays cannot represent a desk containing a tall display: two verticals
-/// flanking a stacked pair each overlap vertically with BOTH centre monitors, so
+/// flanking a stacked pair each overlap vertically with BOTH center monitors, so
 /// the transitive merge collapses all four into a single band and the arrangement
 /// becomes unrepresentable. Columns have no such failure, because a column's
 /// stacking is a local property.

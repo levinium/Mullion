@@ -2,10 +2,26 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mullion.App.Services;
 using Mullion.Core.Abstractions;
+using Mullion.Core.Hotkeys;
 
 namespace Mullion.App.ViewModels;
 
-public sealed record BindingRow(string Key, string Zone);
+public sealed partial class BindingRowViewModel : ObservableObject
+{
+    [ObservableProperty]
+    private string _key = string.Empty;
+
+    [ObservableProperty]
+    private bool _isCapturing;
+
+    public required string Zone { get; init; }
+    public required int Row { get; init; }
+    public required int Col { get; init; }
+
+    public string ButtonLabel => IsCapturing ? "Press a key…" : "Change";
+
+    partial void OnIsCapturingChanged(bool value) => OnPropertyChanged(nameof(ButtonLabel));
+}
 
 public sealed record SurfaceOption(string Id, string Name)
 {
@@ -39,7 +55,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     private IReadOnlyList<SurfaceOption> _surfaces = [];
 
     [ObservableProperty]
-    private IReadOnlyList<BindingRow> _bindings = [];
+    private IReadOnlyList<BindingRowViewModel> _bindings = [];
+
+    [ObservableProperty]
+    private string? _rebindMessage;
+
+    /// <summary>
+    /// The same diagram the main window shows, but clickable: picking a zone is
+    /// how you rebind it. Reusing the picture beats listing the same information
+    /// again in a table where the spatial arrangement is invisible.
+    /// </summary>
+    [ObservableProperty]
+    private MonitorDiagramViewModel _diagram = new();
 
     [ObservableProperty]
     private string _configPath = string.Empty;
@@ -83,7 +110,15 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         Surfaces = [.. s.AvailableSurfaces.Select(x => new SurfaceOption(x.Id, x.Name))];
         SelectedSurface = Surfaces.FirstOrDefault(x => x.Id == s.SurfaceId);
-        Bindings = [.. s.Bindings.Select(b => new BindingRow(b.Key, b.Zone))];
+        Bindings = [.. s.Bindings.Select(b => new BindingRowViewModel
+        {
+            Key = b.Key,
+            Zone = b.Zone,
+            Row = b.Row,
+            Col = b.Col,
+        })];
+
+        Diagram = _host.BuildInteractiveDiagram(BeginRebindAt);
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
@@ -138,6 +173,70 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasError));
     }
 
+    private GridPos? _capturing;
+
+    [RelayCommand]
+    private void Rebind(BindingRowViewModel? row)
+    {
+        if (row is not null) BeginRebindAt(new GridPos(row.Row, row.Col));
+    }
+
+    /// <summary>Start capture for a zone, from the diagram or the list alike.</summary>
+    private void BeginRebindAt(GridPos position)
+    {
+        // Clicking the same zone again cancels, so capture is never a trap the
+        // user cannot get out of.
+        if (_capturing == position)
+        {
+            CancelCapture();
+            return;
+        }
+
+        CancelCapture();
+
+        _capturing = position;
+        Diagram.SetCapturing(position);
+        SetRowCapturing(position, true);
+
+        RebindMessage = "Hold Win and press the key you want for this zone. Click it again to cancel.";
+
+        _host.BeginRebind(position.Row, position.Col, result =>
+        {
+            SetRowCapturing(position, false);
+            Diagram.SetCapturing(null);
+            _capturing = null;
+            RebindMessage = result.Message;
+
+            if (result.Success) Reload();
+        });
+    }
+
+    private void SetRowCapturing(GridPos position, bool capturing)
+    {
+        foreach (var row in Bindings)
+            if (row.Row == position.Row && row.Col == position.Col)
+                row.IsCapturing = capturing;
+    }
+
+    private void CancelCapture()
+    {
+        if (_capturing is null) return;
+
+        SetRowCapturing(_capturing.Value, false);
+        Diagram.SetCapturing(null);
+        _capturing = null;
+        _host.CancelRebind();
+        RebindMessage = null;
+    }
+
+    [RelayCommand]
+    private void ResetLayout()
+    {
+        _host.ResetLayout();
+        RebindMessage = "Layout reset to the generated default.";
+        Reload();
+    }
+
     [RelayCommand]
     private void RestartElevated() => _host.RestartElevated();
 
@@ -154,10 +253,18 @@ public sealed class DesignSettingsHost : ISettingsHost
         AutoStartMode.Disabled, false, false, true, true, "DummyKey",
         "left-hand",
         [("left-hand", "Left hand (QWERT / ASDFG / ZXCVB)")],
-        [("Win+A", "Left"), ("Win+S", "Centre"), ("Win+D", "Right")],
+        [
+            new BindingEntry("Win+A", "Left", 1, 0),
+            new BindingEntry("Win+S", "Center", 1, 1),
+            new BindingEntry("Win+D", "Right", 1, 2),
+        ],
         @"%APPDATA%\Mullion\config.json");
 
     public string? SetAutoStart(AutoStartMode mode) => null;
+    public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
+    public void CancelRebind() { }
+    public void ResetLayout() { }
+    public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) => new();
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
     public void SetWinKeySuppression(string value) { }

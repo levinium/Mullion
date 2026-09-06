@@ -12,7 +12,7 @@ public readonly record struct GridPos(int Row, int Col)
 /// Keys are identified by scan code, not virtual key. This is a correctness
 /// requirement, not a preference: QWERT/ASDFG/ZXCVB is only that shape on
 /// QWERTY. On AZERTY the home-row-left physical key emits 'Q'; on Dvorak its
-/// neighbours are entirely different letters. Binding virtual keys would
+/// neighbors are entirely different letters. Binding virtual keys would
 /// scatter the spatial grid on any non-QWERTY layout, so bindings store the
 /// position and the displayed letter is resolved per active layout.
 /// </para>

@@ -54,7 +54,7 @@ public sealed record ShapeTuning
     /// <remarks>
     /// The weights are steeply graded because modern content is overwhelmingly
     /// 16:9. Flatter weights let the 4:3 anchor win on a 32:9 - it produces a
-    /// 1920px centre with 1600px sides that individually score well - which is
+    /// 1920px center with 1600px sides that individually score well - which is
     /// not a layout anyone wants on a 5120-wide display.
     /// </remarks>
     public IReadOnlyList<CanonicalRatio> CanonicalRatios { get; init; } =

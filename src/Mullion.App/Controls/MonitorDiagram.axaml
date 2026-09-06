@@ -54,8 +54,15 @@
 
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ZoneCellViewModel">
-                  <Border Classes.zoneTile="True"
+                  <!-- A Button so the tile is clickable where the diagram is
+                       interactive; templated flat so it reads as a zone, not a
+                       control. Non-interactive diagrams leave the command null. -->
+                  <Button Classes="zoneTileButton"
                           Classes.spanning="{Binding SpansDisplays}"
+                          Classes.capturing="{Binding IsCapturing}"
+                          Classes.interactive="{Binding IsInteractive}"
+                          IsHitTestVisible="{Binding IsInteractive}"
+                          Command="{Binding ActivateCommand}"
                           ToolTip.Tip="{Binding Name}">
 
                     <Grid RowDefinitions="Auto,*,Auto" Margin="6">
@@ -107,7 +114,7 @@
                       </StackPanel>
 
                     </Grid>
-                  </Border>
+                  </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>

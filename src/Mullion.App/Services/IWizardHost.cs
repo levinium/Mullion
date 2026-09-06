@@ -36,7 +36,7 @@ public sealed class DesignWizardHost : IWizardHost
                 {
                     Id = "recommended",
                     Name = "Recommended",
-                    Rationale = "A 3.6:1 display, so a 16:9 centre with side columns.",
+                    Rationale = "A 3.6:1 display, so a 16:9 center with side columns.",
                     ZoneCount = 9,
                     KeySummary = "Q W E / A S D / Z X C",
                     Preview = snapshot.Diagram,

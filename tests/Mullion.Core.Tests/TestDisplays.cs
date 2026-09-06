@@ -61,7 +61,7 @@ public static class TestDisplays
 
     /// <summary>
     /// The arrangement that broke global band clustering: two verticals flanking
-    /// a stacked pair. Each vertical overlaps BOTH centre monitors vertically.
+    /// a stacked pair. Each vertical overlaps BOTH center monitors vertically.
     /// </summary>
     public static List<DisplayInfo> VerticalsFlankingStackedPair() =>
     [
