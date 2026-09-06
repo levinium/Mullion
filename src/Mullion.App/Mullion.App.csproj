@@ -19,7 +19,27 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
+
+    <!-- Symbols go INSIDE the assembly rather than beside it, so a published
+         build is a single file that still produces stack traces with line
+         numbers. Losing those in exchange for a tidy folder would be a bad
+         trade for a background app that fails while nobody is watching. -->
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
+
+  <!--
+    Strip .pdb files from publish output. Ours are embedded by the property
+    above, and the rest are not ours at all: Avalonia's native renderer ships
+    libSkiaSharp.pdb (82 MB) and libHarfBuzzSharp.pdb (20 MB), which roughly
+    double the published size and are of no use without Skia's own sources.
+    DebugType alone does not remove those, because they arrive as package
+    runtime assets rather than as build output.
+  -->
+  <Target Name="RemovePdbsFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
