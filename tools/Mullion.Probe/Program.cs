@@ -103,43 +103,74 @@ if (argv.Contains("--hotkey-test"))
 
     if (!health.Installed) { Console.Error.WriteLine("Hook failed to install."); return 1; }
 
+    // Keys PowerToys Keyboard Manager remaps on this machine (Win+A/S/D ->
+    // Ctrl+Alt+1/2/3). Results for those are confounded: PowerToys would also
+    // be suppressing the Start menu, so they prove nothing about our own
+    // suppression. Marked so the output says so rather than implying a clean pass.
+    var confounded = ReadPowerToysWinRemaps();
+
     var problems = 0;
+
+    Console.WriteLine($"  {"key",-6} {"zone",-28} {"outcome",-9} {"start menu",-12} verdict");
 
     foreach (var (label, vk, scan) in new (string, ushort, ushort)[]
              {
-                 ("A", 0x41, 0x1E),
-                 ("S", 0x53, 0x1F),
-                 ("D", 0x44, 0x20),
-                 ("W", 0x57, 0x11),
+                 ("A", 0x41, 0x1E), ("S", 0x53, 0x1F), ("D", 0x44, 0x20),
+                 ("Q", 0x51, 0x10), ("W", 0x57, 0x11), ("E", 0x45, 0x12),
+                 ("Z", 0x5A, 0x2C), ("X", 0x58, 0x2D), ("C", 0x43, 0x2E),
              })
     {
         scratch.Focus();
-        Thread.Sleep(200);
+        Thread.Sleep(250);
+
+        var before = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
 
         lock (fired) fired.Clear();
         Mullion.Platform.Windows.Testing.KeyInjector.Chord(
             Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, vk, scan);
 
-        Thread.Sleep(600);
+        Thread.Sleep(700);
+
+        // If the Start menu opened it would steal foreground from the scratch
+        // window. This is the only automated signal available for suppression.
+        var after = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
+        var startStoleFocus = after != before && after != scratch.Handle;
 
         Mullion.Platform.Windows.Hotkeys.HotkeyFired? hit;
         lock (fired) hit = fired.LastOrDefault();
 
+        var note = confounded.Contains(label) ? "(PowerToys remaps this)" : "";
+
         if (hit is null)
         {
-            Console.WriteLine($"  Win+{label}: NO FIRE");
+            Console.WriteLine($"  Win+{label,-2} {"-",-28} {"NO FIRE",-9} {"-",-12} FAIL {note}");
             problems++;
             continue;
         }
 
         var expected = layout.Zones.First(z => surface.FallbackLabelAt(z.Position) == label);
         var target = ProjectZone(expected);
-        var ok = hit.Result.Success &&
-                 Math.Abs(hit.Result.Achieved.Left - target.Left) <= 2 &&
-                 Math.Abs(hit.Result.Achieved.Width - target.Width) <= 2;
+        var placed = hit.Result.Success &&
+                     Math.Abs(hit.Result.Achieved.Left - target.Left) <= 2 &&
+                     Math.Abs(hit.Result.Achieved.Width - target.Width) <= 2;
 
-        Console.WriteLine($"  Win+{label}: {hit.ZoneName,-28} {hit.Result.Outcome,-8} {hit.Result.Achieved} {(ok ? "ok" : "MISMATCH")}");
+        var ok = placed && !startStoleFocus;
         if (!ok) problems++;
+
+        Console.WriteLine(
+            $"  Win+{label,-2} {hit.ZoneName,-28} {hit.Result.Outcome,-9} " +
+            $"{(startStoleFocus ? "OPENED" : "suppressed"),-12} {(ok ? "ok" : "FAIL")} {note}");
+    }
+
+    Console.WriteLine();
+    if (confounded.Count > 0)
+    {
+        Console.WriteLine(
+            $"  Note: PowerToys remaps Win+{string.Join("/", confounded)} on this machine. Those rows are");
+        Console.WriteLine(
+            "  not independent evidence - PowerToys suppresses the Start menu for them too.");
+        Console.WriteLine(
+            "  The unremapped keys above are the clean proof that native interception works.");
     }
 
     var final = engine.Health;
@@ -315,6 +346,45 @@ Mullion.Core.Geometry.PxRect ProjectZone(Zone zone)
     });
 
     return Mullion.Core.Geometry.PxRect.Union(rects);
+}
+
+/// <summary>
+/// Which Win+letter combinations PowerToys Keyboard Manager already remaps, so
+/// the test can say which of its own results are confounded rather than
+/// silently claiming credit for PowerToys' interception.
+/// </summary>
+static HashSet<string> ReadPowerToysWinRemaps()
+{
+    var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var path = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Microsoft", "PowerToys", "Keyboard Manager", "default.json");
+
+    if (!File.Exists(path)) return result;
+
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+        if (!doc.RootElement.TryGetProperty("remapShortcuts", out var shortcuts)) return result;
+        if (!shortcuts.TryGetProperty("global", out var global)) return result;
+
+        foreach (var entry in global.EnumerateArray())
+        {
+            if (!entry.TryGetProperty("originalKeys", out var keys)) continue;
+
+            var parts = (keys.GetString() ?? string.Empty).Split(';');
+            // 91/92 are the Windows keys; the remainder is the letter.
+            if (parts.Length < 2 || (parts[0] != "91" && parts[0] != "92")) continue;
+            if (int.TryParse(parts[1], out var vk) && vk is >= 0x41 and <= 0x5A)
+                result.Add(((char)vk).ToString());
+        }
+    }
+    catch (Exception e) when (e is IOException or System.Text.Json.JsonException)
+    {
+        // Not being able to read PowerToys' config is not fatal to the test.
+    }
+
+    return result;
 }
 
 string BoundKeys() => string.Join(" ", layout.Zones

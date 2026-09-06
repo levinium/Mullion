@@ -19,6 +19,13 @@ public static class KeyInjector
 
     public const ushort VkLWin = 0x5B;
 
+    /// <summary>
+    /// Exposed so a test can detect the Start menu opening: it takes foreground
+    /// when it appears, which is the only automated signal that Win-key
+    /// suppression failed.
+    /// </summary>
+    public static nint ForegroundWindow() => Win.GetForegroundWindow();
+
     public static void Press(ushort virtualKey, ushort scanCode)
     {
         Send(virtualKey, scanCode, keyUp: false);
