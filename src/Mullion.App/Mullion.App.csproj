@@ -5,6 +5,12 @@
     <RootNamespace>Mullion.App</RootNamespace>
     <AssemblyName>Mullion</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Embeds the icon into the executable's Win32 resources. This is what
+         Explorer, the taskbar and Alt+Tab read; Window.Icon only affects the
+         window at runtime, so without this the .exe shows a generic icon in
+         Explorer no matter how fresh the build. -->
+    <ApplicationIcon>Assets\mullion.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
 
