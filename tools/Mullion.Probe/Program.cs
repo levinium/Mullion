@@ -269,6 +269,22 @@ if (snapIndex >= 0 && snapIndex + 1 < argv.Length)
 Console.WriteLine($"Detected {displays.Count} display(s)");
 Console.WriteLine();
 
+var conflicts = Mullion.Platform.Windows.Hotkeys.HookConflictDetector.Detect(
+    layout.Zones.Select(z => surface.ScanCodeAt(z.Position)),
+    Mullion.Core.Hotkeys.ChordModifiers.Win);
+
+if (conflicts.Count > 0)
+{
+    Console.WriteLine("Hotkey conflicts:");
+    foreach (var c in conflicts)
+    {
+        Console.WriteLine($"  [{c.Severity}] {c.Source}: {c.Summary}");
+        foreach (var line in Wrap(c.Advice, 76)) Console.WriteLine($"      {line}");
+    }
+
+    Console.WriteLine();
+}
+
 Console.WriteLine("Privileges:");
 Console.WriteLine($"  elevated  : {Mullion.Platform.Windows.Windows.Elevation.IsCurrentProcessElevated}");
 Console.WriteLine($"  integrity : {Mullion.Platform.Windows.Windows.Elevation.CurrentIntegrity}");
@@ -346,6 +362,25 @@ Mullion.Core.Geometry.PxRect ProjectZone(Zone zone)
     });
 
     return Mullion.Core.Geometry.PxRect.Union(rects);
+}
+
+static IEnumerable<string> Wrap(string text, int width)
+{
+    var line = new System.Text.StringBuilder();
+
+    foreach (var word in text.Split(' '))
+    {
+        if (line.Length > 0 && line.Length + word.Length + 1 > width)
+        {
+            yield return line.ToString();
+            line.Clear();
+        }
+
+        if (line.Length > 0) line.Append(' ');
+        line.Append(word);
+    }
+
+    if (line.Length > 0) yield return line.ToString();
 }
 
 /// <summary>
