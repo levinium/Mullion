@@ -23,7 +23,13 @@ param(
 Add-Type -AssemblyName System.Drawing
 
 $Accent = [System.Drawing.Color]::FromArgb(255, 76, 139, 245)
-$AccentDim = [System.Drawing.Color]::FromArgb(255, 138, 180, 250)
+
+# The secondary tone differentiates by SATURATION, not lightness.
+# A lighter blue (the obvious choice) has almost no contrast on a white
+# taskbar, and a darker one out-contrasts the accent there and inverts the
+# hierarchy. A mid-luminance desaturated blue sits between both backgrounds,
+# so it stays visible on either and always reads as subordinate to the accent.
+$AccentDim = [System.Drawing.Color]::FromArgb(255, 108, 129, 164)
 $IcoSizes = @(16, 20, 24, 32, 40, 48, 64, 128, 256)
 
 function New-IconBitmap {
