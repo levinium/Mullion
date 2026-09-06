@@ -1,0 +1,106 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:Mullion.App.Controls"
+        xmlns:vm="using:Mullion.App.ViewModels"
+        x:Class="Mullion.App.Views.WizardWindow"
+        x:DataType="vm:WizardViewModel"
+        Title="Set up Mullion"
+        Width="1080" Height="720"
+        MinWidth="820" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Surface}">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24">
+
+    <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,18">
+      <TextBlock Classes="h1" Text="{Binding StepTitle}" />
+      <TextBlock Classes="body" Text="{Binding StepBlurb}" MaxWidth="820" HorizontalAlignment="Left" />
+    </StackPanel>
+
+    <!-- Step 0: detected displays -->
+    <Grid Grid.Row="1" IsVisible="{Binding IsFirstStep}" RowDefinitions="Auto,*">
+      <TextBlock Grid.Row="0" Classes="h2" Text="{Binding TopologySummary}" Margin="0,0,0,12" />
+      <Border Grid.Row="1" Classes="card">
+        <ctl:MonitorDiagram DataContext="{Binding Detected}" />
+      </Border>
+    </Grid>
+
+    <!-- Step 1: layout choices, each drawn to scale on the real displays -->
+    <Grid Grid.Row="1" RowDefinitions="Auto,*">
+      <Grid.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="!IsFirstStep" />
+          <Binding Path="!IsLastStep" />
+        </MultiBinding>
+      </Grid.IsVisible>
+
+      <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Choices}" Margin="0,0,0,14">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="12" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LayoutChoiceViewModel">
+              <RadioButton GroupName="layout"
+                           Classes="choiceCard"
+                           IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                           Command="{Binding $parent[Window].((vm:WizardViewModel)DataContext).SelectCommand}"
+                           CommandParameter="{Binding}">
+                <StackPanel Width="270" Spacing="8">
+                  <TextBlock Classes="h2" Text="{Binding Name}" />
+                  <Border Height="110" Classes="previewFrame">
+                    <ctl:MonitorDiagram DataContext="{Binding Preview}"
+                                        Compact="True"
+                                        IsHitTestVisible="False" />
+                  </Border>
+                  <TextBlock Classes="body" Text="{Binding Rationale}" />
+                  <TextBlock Classes="zoneSize" Text="{Binding KeySummary}" />
+                </StackPanel>
+              </RadioButton>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <Border Grid.Row="1" Classes="card">
+        <ctl:MonitorDiagram DataContext="{Binding SelectedChoice.Preview}" />
+      </Border>
+    </Grid>
+
+    <!-- Step 2: done -->
+    <Grid Grid.Row="1" IsVisible="{Binding IsLastStep}" RowDefinitions="Auto,*">
+      <ItemsControl Grid.Row="0" ItemsSource="{Binding Conflicts}" IsVisible="{Binding HasConflicts}" Margin="0,0,0,14">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ConflictViewModel">
+            <Border Classes="warning" Margin="0,0,0,8">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="h2" Text="{Binding Source}" />
+                <TextBlock Classes="body" Text="{Binding Summary}" />
+                <TextBlock Classes="body" Text="{Binding Advice}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Grid.Row="1" Classes="card">
+        <ctl:MonitorDiagram DataContext="{Binding SelectedChoice.Preview}" />
+      </Border>
+    </Grid>
+
+    <!-- Footer -->
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,18,0,0">
+      <Button Grid.Column="0" Content="Rescan displays" Command="{Binding RescanCommand}" />
+      <Button Grid.Column="2" Content="Back" Command="{Binding BackCommand}"
+              IsEnabled="{Binding !IsFirstStep}" Margin="0,0,8,0" />
+      <Button Grid.Column="3" Content="Next" Command="{Binding NextCommand}"
+              IsVisible="{Binding !IsLastStep}" Classes="accent" />
+      <Button Grid.Column="3" Content="Finish" Command="{Binding FinishCommand}"
+              IsVisible="{Binding IsLastStep}" Classes="accent" />
+    </Grid>
+
+  </Grid>
+</Window>

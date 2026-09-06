@@ -13,7 +13,7 @@ namespace Mullion.App.Services;
 
 /// <summary>Wires the Windows platform pieces together and exposes them to the UI.</summary>
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-public sealed class WindowsAppHost : IAppHost, IDisposable
+public sealed class WindowsAppHost : IAppHost, IWizardHost, IDisposable
 {
     private readonly WindowsDisplayProvider _displayProvider = new();
     private readonly ConfigStore _configStore = new();
@@ -141,6 +141,107 @@ public sealed class WindowsAppHost : IAppHost, IDisposable
             _lastAction,
             _conflicts);
     }
+
+    // ---- wizard ------------------------------------------------------------
+
+    private IReadOnlyList<LayoutCandidate> _candidates = [];
+
+    /// <summary>Set when the wizard is previewing, so it can be discarded on cancel.</summary>
+    private LayoutResult? _committedLayout;
+
+    public bool NeedsWizard => !_config.WizardCompleted;
+
+    public Action? WizardCloseRequested { get; set; }
+
+    public WizardSnapshot GetWizardSnapshot()
+    {
+        _candidates = LayoutCandidates.Generate(
+            _displays, KeySurface.LeftHandBlock,
+            _config.General.Shape.ToTuning(),
+            _config.General.AllowSpanningUnions);
+
+        var choices = _candidates.Select(c => new LayoutChoiceViewModel
+        {
+            Id = c.Id,
+            Name = c.Name,
+            Rationale = c.Rationale,
+            ZoneCount = c.Layout.Zones.Count,
+            KeySummary = SummariseKeys(c.Layout),
+            Preview = MonitorDiagramViewModel.Build(_displays, c.Layout),
+        }).ToList();
+
+        return new WizardSnapshot(
+            MonitorDiagramViewModel.Build(_displays, null),
+            _displays.Count == 0
+                ? "No displays detected"
+                : $"{_displays.Count} display{(_displays.Count == 1 ? "" : "s")} · " +
+                  string.Join(" · ", _displays.Select(d => $"{d.FriendlyName} {d.Bounds.Width}×{d.Bounds.Height}")),
+            choices,
+            _conflicts);
+    }
+
+    /// <summary>
+    /// Applies the candidate immediately so the choice can be felt, not just
+    /// seen. The previous layout is remembered so cancelling restores it.
+    /// </summary>
+    public void PreviewLayout(string candidateId)
+    {
+        var candidate = _candidates.FirstOrDefault(c => c.Id == candidateId);
+        if (candidate is null) return;
+
+        _committedLayout ??= _layout;
+        _layout = candidate.Layout;
+        _engine?.Apply(_layout, _displays);
+
+        StateChanged?.Invoke();
+    }
+
+    public void CommitLayout(string candidateId)
+    {
+        var candidate = _candidates.FirstOrDefault(c => c.Id == candidateId);
+        if (candidate is null) return;
+
+        _layout = candidate.Layout;
+        _committedLayout = null;
+        _engine?.Apply(_layout, _displays);
+
+        var profile = ProfileResolver.CreateProfile(_displays, _layout);
+
+        // Replace any profile for this exact arrangement rather than piling up
+        // near-duplicates every time the wizard is re-run.
+        _config = _config with
+        {
+            WizardCompleted = true,
+            Profiles = [.. _config.Profiles.Where(p =>
+                p.ArrangementFingerprint != profile.ArrangementFingerprint), profile],
+            ActiveProfileId = profile.Id,
+        };
+
+        try { _configStore.Save(_config); }
+        catch (IOException) { /* a failed save must not take the app down */ }
+
+        StateChanged?.Invoke();
+    }
+
+    public void CloseWizard()
+    {
+        // Restore whatever was live before previewing, if nothing was committed.
+        if (_committedLayout is not null)
+        {
+            _layout = _committedLayout;
+            _committedLayout = null;
+            if (_layout is not null) _engine?.Apply(_layout, _displays);
+        }
+
+        WizardCloseRequested?.Invoke();
+    }
+
+    private static string SummariseKeys(LayoutResult layout) =>
+        string.Join(" / ", Enumerable.Range(0, layout.Surface.Rows)
+            .Select(row => string.Join(" ", Enumerable.Range(0, layout.Surface.Cols)
+                .Where(col => layout.At(row, col) is not null)
+                .Select(col => layout.Surface.FallbackLabelAt(new GridPos(row, col)))))
+            .Where(s => s.Length > 0));
 
     private static WinKeySuppression ParseSuppression(string value) =>
         Enum.TryParse<WinKeySuppression>(value, ignoreCase: true, out var parsed)

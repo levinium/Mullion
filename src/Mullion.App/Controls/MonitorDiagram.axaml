@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ctl="using:Mullion.App.Controls"
              xmlns:vm="using:Mullion.App.ViewModels"
@@ -65,13 +65,14 @@
                       <StackPanel Grid.Row="0"
                                   Orientation="Horizontal"
                                   Spacing="6"
-                                  Margin="0,22,0,0"
+                                  Margin="{Binding $parent[ctl:MonitorDiagram].TierTopMargin}"
                                   HorizontalAlignment="Center"
                                   IsVisible="{Binding HasUpper}">
                         <Border Classes="keyChip tierChip">
                           <TextBlock Text="{Binding UpperKey}" />
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
@@ -84,8 +85,10 @@
                           <TextBlock Text="{Binding KeyLabel}" />
                         </Border>
                         <TextBlock Classes="zoneName" Text="{Binding Name}"
+                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170" />
                         <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    TextAlignment="Center" />
                       </StackPanel>
 
@@ -99,6 +102,7 @@
                           <TextBlock Text="{Binding LowerKey}" />
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
@@ -109,8 +113,10 @@
             </ItemsControl>
 
             <StackPanel Classes="monitorLabel" VerticalAlignment="Top" HorizontalAlignment="Left">
-              <TextBlock Classes="monitorTitle" Text="{Binding Title}" />
-              <TextBlock Classes="monitorDetail" Text="{Binding Detail}" />
+              <TextBlock Classes="monitorTitle" Text="{Binding Title}"
+                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}" />
+              <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
+                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}" />
             </StackPanel>
 
           </Grid>
@@ -121,3 +127,4 @@
   </ItemsControl>
 
 </UserControl>
+
