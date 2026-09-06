@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mullion.Core/Mullion.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mullion.Core.Tests/Mullion.Core.Tests.csproj" />
+  </Folder>
+</Solution>

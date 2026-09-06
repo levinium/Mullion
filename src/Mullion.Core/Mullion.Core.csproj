@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Mullion.Core is deliberately dependency-free apart from logging abstractions.
+    It must never reference Windows or Avalonia assemblies - ArchitectureTests
+    asserts this, because that boundary is what keeps the layout maths testable
+    without hardware and makes a macOS/Linux backend a self-contained job.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Mullion.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>
