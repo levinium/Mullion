@@ -1,0 +1,35 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Mullion.App.ViewModels"
+             x:Class="Mullion.App.App"
+             x:DataType="vm:TrayViewModel"
+             RequestedThemeVariant="Default">
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Mullion/Styles/Theme.axaml" />
+  </Application.Styles>
+
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/mullion.ico"
+                ToolTipText="{Binding Tooltip}"
+                Command="{Binding ShowWindowCommand}">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Open Mullion" Command="{Binding ShowWindowCommand}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Pause hotkeys"
+                            ToggleType="CheckBox"
+                            IsChecked="{Binding IsPaused, Mode=TwoWay}"
+                            Command="{Binding TogglePauseCommand}" />
+            <NativeMenuItem Header="Rescan displays" Command="{Binding RescanCommand}" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Quit Mullion" Command="{Binding QuitCommand}" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
+
+</Application>

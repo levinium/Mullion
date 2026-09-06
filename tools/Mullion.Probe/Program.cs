@@ -76,6 +76,42 @@ if (argv.Contains("--self-test"))
     return failures == 0 ? 0 : 1;
 }
 
+var injectIndex = Array.IndexOf(argv, "--inject");
+if (injectIndex >= 0 && injectIndex + 1 < argv.Length)
+{
+    // Inject a Win+key chord WITHOUT installing a hook of our own, so only an
+    // already-running Mullion can respond. This is how the app itself gets
+    // tested rather than the probe testing its own engine.
+    var key = argv[injectIndex + 1].ToUpperInvariant()[0];
+    if (key is < 'A' or > 'Z') { Console.Error.WriteLine("Expected a letter."); return 1; }
+
+    var vk = (ushort)key;
+    ushort[] scans =
+    [
+        0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32,
+        0x31, 0x18, 0x19, 0x10, 0x13, 0x1F, 0x14, 0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C,
+    ];
+
+    using var target = new Mullion.Platform.Windows.Testing.ScratchWindow($"Mullion target ({key})");
+    target.Focus();
+    Thread.Sleep(500);
+
+    var before = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
+
+    Mullion.Platform.Windows.Testing.KeyInjector.Chord(
+        Mullion.Platform.Windows.Testing.KeyInjector.VkLWin, vk, scans[key - 'A']);
+
+    Thread.Sleep(900);
+
+    var after = Mullion.Platform.Windows.Testing.KeyInjector.ForegroundWindow();
+    Console.WriteLine($"Injected Win+{key} at the running app.");
+    Console.WriteLine(after == before || after == target.Handle
+        ? "Focus stayed with the target window (Start menu did not open)."
+        : "Focus moved elsewhere - something else took it.");
+
+    return 0;
+}
+
 if (argv.Contains("--hotkey-test"))
 {
     // End-to-end proof that Win-modified hotkeys work natively: install the

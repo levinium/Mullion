@@ -1,0 +1,69 @@
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
+using Mullion.App.Services;
+using Mullion.App.ViewModels;
+using Mullion.App.Views;
+
+namespace Mullion.App;
+
+public partial class App : Application
+{
+    private IAppHost? _host;
+    private MainWindow? _window;
+
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
+        // Closing the window hides it; Mullion keeps running in the tray, so the
+        // process must only exit when explicitly asked to.
+        desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
+
+        _host = CreateHost();
+
+        DataContext = new TrayViewModel(_host, ShowWindow, () => desktop.Shutdown());
+
+        _window = new MainWindow { DataContext = new MainWindowViewModel(_host) };
+
+        _host.Start();
+
+        // --tray starts minimised to the tray, which is how the auto-start entry
+        // launches it; a manual launch shows the window.
+        var startHidden = desktop.Args?.Contains("--tray") == true;
+        if (!startHidden) _window.Show();
+
+        desktop.Exit += (_, _) => (_host as IDisposable)?.Dispose();
+
+        base.OnFrameworkInitializationCompleted();
+    }
+
+    private void ShowWindow()
+    {
+        if (_window is null) return;
+
+        _window.Show();
+        _window.WindowState = Avalonia.Controls.WindowState.Normal;
+        _window.Activate();
+    }
+
+    private static IAppHost CreateHost()
+    {
+#if PLATFORM_WINDOWS
+        // The runtime check is what satisfies the platform analyzer; the #if
+        // controls whether the assembly is referenced at all. Both are needed,
+        // and that is the boundary keeping a macOS backend a drop-in job.
+        if (OperatingSystem.IsWindows()) return new WindowsAppHost();
+#endif
+
+        // macOS and Linux backends are not implemented yet; the design host at
+        // least lets the UI run so layout work is not Windows-gated.
+        return new DesignAppHost();
+    }
+}

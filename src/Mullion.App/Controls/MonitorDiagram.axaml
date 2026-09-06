@@ -1,0 +1,123 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:Mullion.App.Controls"
+             xmlns:vm="using:Mullion.App.ViewModels"
+             x:Class="Mullion.App.Controls.MonitorDiagram"
+             x:DataType="vm:MonitorDiagramViewModel">
+
+  <ItemsControl ItemsSource="{Binding Displays}">
+
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate>
+        <ctl:VirtualScreenPanel VirtualBounds="{Binding VirtualBounds}" Gap="10" />
+      </ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+
+    <!-- DataType is required on container-theme setters: a compiled binding here
+         otherwise resolves against the ItemsControl's own DataType, not the item. -->
+    <ItemsControl.ItemContainerTheme>
+      <ControlTheme TargetType="ContentPresenter">
+        <Setter Property="ctl:VirtualScreenPanel.Rect"
+                Value="{Binding Bounds, DataType=vm:DisplayNodeViewModel}" />
+      </ControlTheme>
+    </ItemsControl.ItemContainerTheme>
+
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="vm:DisplayNodeViewModel">
+
+        <Border Classes="monitorBezel">
+          <Grid>
+
+            <!-- Taskbar strip, so the diagram matches what is actually on the desk -->
+            <Canvas IsVisible="{Binding HasTaskbar}">
+              <ctl:NormalizedPanel Width="{Binding $parent[Grid].Bounds.Width}"
+                                   Height="{Binding $parent[Grid].Bounds.Height}"
+                                   Gap="0">
+                <Border Classes="taskbarStrip"
+                        ctl:NormalizedPanel.Area="{Binding TaskbarArea}" />
+              </ctl:NormalizedPanel>
+            </Canvas>
+
+            <ItemsControl ItemsSource="{Binding Cells}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <ctl:NormalizedPanel Gap="5" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+
+              <ItemsControl.ItemContainerTheme>
+                <ControlTheme TargetType="ContentPresenter">
+                  <Setter Property="ctl:NormalizedPanel.Area"
+                          Value="{Binding Area, DataType=vm:ZoneCellViewModel}" />
+                </ControlTheme>
+              </ItemsControl.ItemContainerTheme>
+
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ZoneCellViewModel">
+                  <Border Classes.zoneTile="True"
+                          Classes.spanning="{Binding SpansDisplays}"
+                          ToolTip.Tip="{Binding Name}">
+
+                    <Grid RowDefinitions="Auto,*,Auto" Margin="6">
+
+                      <!-- Upper tier: the top half of this column. Inset from the
+                           top so it clears the display label in the first column. -->
+                      <StackPanel Grid.Row="0"
+                                  Orientation="Horizontal"
+                                  Spacing="6"
+                                  Margin="0,22,0,0"
+                                  HorizontalAlignment="Center"
+                                  IsVisible="{Binding HasUpper}">
+                        <Border Classes="keyChip tierChip">
+                          <TextBlock Text="{Binding UpperKey}" />
+                        </Border>
+                        <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+
+                      <!-- The column itself -->
+                      <StackPanel Grid.Row="1"
+                                  VerticalAlignment="Center"
+                                  HorizontalAlignment="Center"
+                                  Spacing="4">
+                        <Border Classes="keyChip primaryChip" HorizontalAlignment="Center">
+                          <TextBlock Text="{Binding KeyLabel}" />
+                        </Border>
+                        <TextBlock Classes="zoneName" Text="{Binding Name}"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170" />
+                        <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                                   TextAlignment="Center" />
+                      </StackPanel>
+
+                      <!-- Lower tier -->
+                      <StackPanel Grid.Row="2"
+                                  Orientation="Horizontal"
+                                  Spacing="6"
+                                  HorizontalAlignment="Center"
+                                  IsVisible="{Binding HasLower}">
+                        <Border Classes="keyChip tierChip">
+                          <TextBlock Text="{Binding LowerKey}" />
+                        </Border>
+                        <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Classes="monitorLabel" VerticalAlignment="Top" HorizontalAlignment="Left">
+              <TextBlock Classes="monitorTitle" Text="{Binding Title}" />
+              <TextBlock Classes="monitorDetail" Text="{Binding Detail}" />
+            </StackPanel>
+
+          </Grid>
+        </Border>
+
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+
+</UserControl>

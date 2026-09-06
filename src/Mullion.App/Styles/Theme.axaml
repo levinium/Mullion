@@ -1,0 +1,188 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="SurfaceColor">#12151A</Color>
+          <Color x:Key="PanelColor">#1A1E25</Color>
+          <SolidColorBrush x:Key="Surface" Color="#12151A" />
+          <SolidColorBrush x:Key="Panel" Color="#1A1E25" />
+          <SolidColorBrush x:Key="PanelBorder" Color="#333A45" />
+          <SolidColorBrush x:Key="Accent" Color="#4C8BF5" />
+          <SolidColorBrush x:Key="AccentSoft" Color="#204C8BF5" />
+          <SolidColorBrush x:Key="AccentMid" Color="#3D4C8BF5" />
+          <SolidColorBrush x:Key="Ink" Color="#E8ECF3" />
+          <SolidColorBrush x:Key="InkDim" Color="#98A2B3" />
+          <SolidColorBrush x:Key="InkFaint" Color="#5D6675" />
+          <SolidColorBrush x:Key="ChipBack" Color="#2A303B" />
+          <SolidColorBrush x:Key="Taskbar" Color="#0C0E12" />
+          <SolidColorBrush x:Key="SpanTint" Color="#28D9A441" />
+          <SolidColorBrush x:Key="SpanBorder" Color="#D9A441" />
+          <LinearGradientBrush x:Key="BezelFill" StartPoint="0%,0%" EndPoint="0%,100%">
+            <GradientStop Offset="0" Color="#1E232B" />
+            <GradientStop Offset="1" Color="#161A21" />
+          </LinearGradientBrush>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+          <Color x:Key="SurfaceColor">#F4F6FA</Color>
+          <Color x:Key="PanelColor">#FFFFFF</Color>
+          <SolidColorBrush x:Key="Surface" Color="#F4F6FA" />
+          <SolidColorBrush x:Key="Panel" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="PanelBorder" Color="#CFD6E0" />
+          <SolidColorBrush x:Key="Accent" Color="#2563EB" />
+          <SolidColorBrush x:Key="AccentSoft" Color="#1F2563EB" />
+          <SolidColorBrush x:Key="AccentMid" Color="#3A2563EB" />
+          <SolidColorBrush x:Key="Ink" Color="#131720" />
+          <SolidColorBrush x:Key="InkDim" Color="#5A6472" />
+          <SolidColorBrush x:Key="InkFaint" Color="#93A0B2" />
+          <SolidColorBrush x:Key="ChipBack" Color="#E4E9F1" />
+          <SolidColorBrush x:Key="Taskbar" Color="#DDE3EC" />
+          <SolidColorBrush x:Key="SpanTint" Color="#2FB4801F" />
+          <SolidColorBrush x:Key="SpanBorder" Color="#B4801F" />
+          <LinearGradientBrush x:Key="BezelFill" StartPoint="0%,0%" EndPoint="0%,100%">
+            <GradientStop Offset="0" Color="#FFFFFF" />
+            <GradientStop Offset="1" Color="#EEF1F6" />
+          </LinearGradientBrush>
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- Monitor panel -->
+  <Style Selector="Border.monitorBezel">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="Background" Value="{DynamicResource BezelFill}" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BoxShadow" Value="0 6 20 0 #33000000" />
+  </Style>
+
+  <Style Selector="Border.taskbarStrip">
+    <Setter Property="Background" Value="{DynamicResource Taskbar}" />
+  </Style>
+
+  <!-- Zone tiles -->
+  <Style Selector="Border.zoneTile">
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.zoneTile:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentMid}" />
+  </Style>
+
+  <!-- A zone crossing a physical bezel is unusual enough to look different -->
+  <Style Selector="Border.zoneTile.spanning">
+    <Setter Property="Background" Value="{DynamicResource SpanTint}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SpanBorder}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
+  <Style Selector="Border.keyChip">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+
+  <Style Selector="Border.keyChip > TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    <Setter Property="LetterSpacing" Value="0.6" />
+  </Style>
+
+  <!-- The home-row key reads as the column's main target -->
+  <Style Selector="Border.keyChip.primaryChip">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="Padding" Value="10,3" />
+  </Style>
+
+  <Style Selector="Border.keyChip.primaryChip > TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- Tier keys are secondary: same column, half the height -->
+  <Style Selector="Border.keyChip.tierChip">
+    <Setter Property="Padding" Value="7,1" />
+  </Style>
+
+  <Style Selector="Border.keyChip.tierChip > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
+  <Style Selector="TextBlock.zoneName">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
+  <Style Selector="TextBlock.zoneSize">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{DynamicResource InkFaint}" />
+  </Style>
+
+  <Style Selector="StackPanel.monitorLabel">
+    <Setter Property="Margin" Value="10,8" />
+  </Style>
+
+  <Style Selector="TextBlock.monitorTitle">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="TextBlock.monitorDetail">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Foreground" Value="{DynamicResource InkFaint}" />
+  </Style>
+
+  <!-- Page furniture -->
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="22" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <Style Selector="Border.warning">
+    <Setter Property="Background" Value="{DynamicResource SpanTint}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SpanBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
+  </Style>
+
+</Styles>
