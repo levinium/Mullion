@@ -57,8 +57,8 @@
     </ResourceDictionary>
   </Styles.Resources>
 
-  <!-- Monitor panel. The top-left corner is square so the name tab above it
-       meets a straight edge: against a rounded corner the bezel curves away
+  <!-- Monitor panel. The top-left corner is square so the name tab sitting in
+       it meets straight edges: against a rounded corner the bezel curves away
        under the tab and the two read as separate objects. -->
   <Style Selector="Border.monitorBezel">
     <Setter Property="CornerRadius" Value="0,10,10,10" />
@@ -115,6 +115,65 @@
     </Setter>
   </Style>
 
+  <!-- A union drawn as a dimension line rather than a panel: end caps, a rule
+       between them, and the label interrupting it. A filled rectangle here read
+       as another monitor on the desk, which is the one thing it is not. -->
+  <Style Selector="Button.spanMeasure">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Cursor" Value="Arrow" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+
+    <!-- Stretch is load-bearing: without it Arrange clamps to DesiredSize and
+         the measure stops lining up with the monitors it is measuring. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Content="{TemplateBinding Content}"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.spanMeasure Rectangle.measureRule">
+    <Setter Property="Fill" Value="{DynamicResource InkFaint}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+  </Style>
+
+
+  <Style Selector="Button.spanMeasure Rectangle.measureCap">
+    <Setter Property="Fill" Value="{DynamicResource InkFaint}" />
+    <Setter Property="RadiusX" Value="1" />
+    <Setter Property="RadiusY" Value="1" />
+  </Style>
+
+
+  <Style Selector="Button.spanMeasure.interactive">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.spanMeasure.interactive:pointerover Rectangle.measureRule">
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <Style Selector="Button.spanMeasure.interactive:pointerover Rectangle.measureCap">
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <Style Selector="Button.spanMeasure.capturing Rectangle.measureRule">
+    <Setter Property="Fill" Value="{DynamicResource CaptureBorder}" />
+  </Style>
+
+  <Style Selector="Button.spanMeasure.capturing Rectangle.measureCap">
+    <Setter Property="Fill" Value="{DynamicResource CaptureBorder}" />
+  </Style>
   <!-- Only an interactive diagram invites clicking -->
   <Style Selector="Button.zoneTileButton.interactive">
     <Setter Property="Cursor" Value="Hand" />
@@ -176,6 +235,17 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
 
+  <!-- The chip on a span measure stands taller than a zone chip: it has to read
+       as centered on the label block - the text and the rule beneath it - rather
+       than on the rule alone, so it reaches up behind the text. The lift is a
+       RenderTransform so the row it sits in stays centered on the rule. -->
+  <Style Selector="Border.keyChip.spanChip">
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="-6" />
+    </Setter>
+  </Style>
+
   <!-- Tier keys are secondary: same column, half the height -->
   <Style Selector="Border.keyChip.tierChip">
     <Setter Property="Padding" Value="7,1" />
@@ -200,13 +270,18 @@
        along the bottom where it meets the bezel, sharing the bezel's fill and
        border so the two read as one object. Fixed height so the negative margin
        that lifts it can land its bottom edge exactly on the bezel's top. -->
+  <!-- Two lines, not one. Side by side the name and the resolution made a tab
+       far wider than a portrait monitor, and on a row of them each tab ran under
+       its neighbour and was cut off mid-word. Stacked, the tab is only as wide
+       as its longer line, which fits above the monitor it belongs to. -->
   <Style Selector="Border.monitorLabel">
-    <Setter Property="Height" Value="24" />
-    <Setter Property="Padding" Value="9,0" />
-    <Setter Property="CornerRadius" Value="8,8,0,0" />
-    <Setter Property="Background" Value="{DynamicResource BezelFill}" />
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="MaxHeight" Value="46" />
+    <Setter Property="Padding" Value="9,3" />
+    <Setter Property="CornerRadius" Value="0,0,8,0" />
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
     <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-    <Setter Property="BorderThickness" Value="2,2,2,0" />
+    <Setter Property="BorderThickness" Value="0,0,1,1" />
   </Style>
 
   <Style Selector="Border.monitorLabel > StackPanel">
@@ -222,6 +297,7 @@
   <Style Selector="TextBlock.monitorDetail">
     <Setter Property="FontSize" Value="10" />
     <Setter Property="Foreground" Value="{DynamicResource InkFaint}" />
+    <Setter Property="Margin" Value="0,-2,0,0" />
   </Style>
 
   <!-- Page furniture -->
@@ -287,11 +363,46 @@
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
+  <!-- A square, quiet icon button. No border or fill until hovered, so it sits
+       beside labelled buttons without competing with them. -->
+  <Style Selector="Button.iconButton">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.iconButton > Path">
+    <Setter Property="Fill" Value="{DynamicResource InkDim}" />
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+
+  <Style Selector="Button.iconButton:pointerover > Path">
+    <Setter Property="Fill" Value="{DynamicResource Ink}" />
+  </Style>
+
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="Foreground" Value="#FFFFFF" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Padding" Value="18,6" />
+  </Style>
+
+  <!-- Distinct from a warning: nothing is wrong, but everything shown is
+       fictional and must not be mistaken for the real machine. -->
+  <Style Selector="Border.simulation">
+    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12" />
   </Style>
 
   <Style Selector="Border.warning">

@@ -1,16 +1,15 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ctl="using:Mullion.App.Controls"
              xmlns:vm="using:Mullion.App.ViewModels"
              x:Class="Mullion.App.Controls.MonitorDiagram"
              x:DataType="vm:MonitorDiagramViewModel">
 
-  <!-- Headroom for the labels, which float above each monitor. -->
-  <ItemsControl ItemsSource="{Binding Displays}" Margin="0,26,0,0">
+  <ItemsControl ItemsSource="{Binding Nodes}">
 
     <ItemsControl.ItemsPanel>
       <ItemsPanelTemplate>
-        <ctl:VirtualScreenPanel VirtualBounds="{Binding VirtualBounds}" Gap="10" />
+        <ctl:VirtualScreenPanel VirtualBounds="{Binding VirtualBounds}" Gap="10" TopHeadroom="46" />
       </ItemsPanelTemplate>
     </ItemsControl.ItemsPanel>
 
@@ -19,29 +18,275 @@
     <ItemsControl.ItemContainerTheme>
       <ControlTheme TargetType="ContentPresenter">
         <Setter Property="ctl:VirtualScreenPanel.Rect"
-                Value="{Binding Bounds, DataType=vm:DisplayNodeViewModel}" />
+                Value="{Binding Bounds, DataType=vm:DiagramNodeViewModel}" />
+
+        <!-- Monitors scale freely; a measure's label does not shrink, so its
+             gutter is reserved in device pixels instead. -->
+        <Setter Property="ctl:VirtualScreenPanel.Lane"
+                Value="{Binding Lane, DataType=vm:DiagramNodeViewModel}" />
+        <Setter Property="ctl:VirtualScreenPanel.LaneAnchor"
+                Value="{Binding LaneAnchor, DataType=vm:DiagramNodeViewModel}" />
+        <Setter Property="ctl:VirtualScreenPanel.LaneSlot"
+                Value="{Binding LaneSlot, DataType=vm:DiagramNodeViewModel}" />
+        <Setter Property="ctl:VirtualScreenPanel.LaneThickness"
+                Value="{Binding LaneThickness, DataType=vm:DiagramNodeViewModel}" />
+
+        <!-- The name tab deliberately overflows above its display, into the
+             headroom the panel reserves, so the container must not crop it. -->
+        <Setter Property="ClipToBounds" Value="False" />
       </ControlTheme>
     </ItemsControl.ItemContainerTheme>
 
-    <ItemsControl.ItemTemplate>
+    <!-- Two node kinds share the panel, so both templates go in DataTemplates
+         and are selected by type. ItemTemplate cannot be used for either: when
+         set it applies to every item regardless of its type. -->
+    <ItemsControl.DataTemplates>
+
+      <!-- A union is drawn the way a drawing dimensions something: end caps and
+           a rule reaching exactly as far as the span does, the key chip riding
+           the rule, and the description tucked just off it. Not a filled panel -
+           that read as another monitor sitting on the desk. The vertical form
+           below is the same arrangement turned on its side.
+
+           Chip and text are placed either side of the boundary between two star
+           tracks rather than at fixed points on the rule. Star tracks grow to
+           fit their content, so a label too long for its half pushes the
+           boundary back and carries the chip with it: the two stay joined, the
+           text stays inside the rule, and with a short label the boundary is
+           simply the midpoint. That is what keeps every length working without
+           a measured width anywhere. -->
+      <DataTemplate x:DataType="vm:HorizontalSpanViewModel">
+        <Button Classes="spanMeasure"
+                Classes.capturing="{Binding IsCapturing}"
+                Classes.interactive="{Binding IsInteractive}"
+                IsHitTestVisible="{Binding IsInteractive}"
+                Command="{Binding ActivateCommand}"
+                ToolTip.Tip="{Binding Name}">
+          <Grid RowDefinitions="Auto,Auto,Auto" VerticalAlignment="Center">
+
+            <!-- The halves of the span, above and below the rule: the same
+                 "upper / whole / lower" the key rows mean, in the same vertical
+                 order. Three separate rules stacked under the desk would all
+                 look alike and say nothing about which was which. -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6"
+                        HorizontalAlignment="Center" Margin="0,0,0,10"
+                        IsVisible="{Binding HasUpper}">
+              <Border Classes="keyChip tierChip">
+                <TextBlock Text="{Binding UpperKey}" />
+              </Border>
+              <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+                         IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+
+            <Panel Grid.Row="1">
+
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+              <Rectangle Grid.Column="0" Classes="measureCap" Width="2" Height="10" />
+              <Rectangle Grid.Column="1" Classes="measureRule" Height="1" />
+              <Rectangle Grid.Column="2" Classes="measureCap" Width="2" Height="10" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,*">
+
+              <!-- Tall enough to span the label block, not just the rule: it
+                   reaches from the top of the text down past the line, and is
+                   raised so it is centered on the two together. -->
+              <Border Grid.Column="0" Classes="keyChip primaryChip spanChip"
+                      HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock Text="{Binding KeyLabel}" />
+              </Border>
+
+              <!-- Beside the chip, not stacked over it, and lifted so it rests
+                   just above the rule. A RenderTransform rather than a margin
+                   precisely because it does NOT affect layout: the row stays
+                   centered on the rule, so the chip goes on carrying the line
+                   while the text clears it. -->
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                          HorizontalAlignment="Left" VerticalAlignment="Center"
+                          Margin="6,0,0,0">
+                <StackPanel.RenderTransform>
+                  <TranslateTransform Y="-11" />
+                </StackPanel.RenderTransform>
+                <TextBlock Classes="zoneName" Text="{Binding Name}" VerticalAlignment="Center" />
+                <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                           IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+
+            </Grid>
+            </Panel>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6"
+                        HorizontalAlignment="Center" Margin="0,-3,0,0"
+                        IsVisible="{Binding HasLower}">
+              <Border Classes="keyChip tierChip">
+                <TextBlock Text="{Binding LowerKey}" />
+              </Border>
+              <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+                         IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+
+          </Grid>
+        </Button>
+      </DataTemplate>
+
+      <!-- The same measure stood on end. A span up a stack of monitors belongs
+           beside them, not underneath: underneath it would appear to measure
+           their combined width, which is not what the key does.
+
+           Turning the label puts its underline edge to one side, and the rule
+           goes on exactly that side - so a measure on the left reads
+           bottom-to-top with its rule on the right, and one on the right reads
+           top-to-bottom with its rule on the left. Both then read outward from
+           the desk.
+
+           The text BEGINS at the chip and runs outward from it, as it does when
+           the measure is horizontal; centered on the rule instead, it ran past
+           the chip on both sides and the chip appeared to float in the middle of
+           the words rather than introduce them. Both sit against the boundary
+           between the two star rows, so a label too long for its half moves the
+           boundary and the chip together instead of running off the end.
+
+           LayoutTransformControl, not RenderTransform: the gutter has to size to
+           the turned label, and a render transform would leave the layout still
+           thinking it is horizontal. Two fixed rotations rather than one bound
+           angle, because a transform is not in the logical tree and the
+           DataContext a compiled binding needs does not reach it. -->
+      <DataTemplate x:DataType="vm:VerticalSpanViewModel">
+        <Button Classes="spanMeasure"
+                Classes.capturing="{Binding IsCapturing}"
+                Classes.interactive="{Binding IsInteractive}"
+                IsHitTestVisible="{Binding IsInteractive}"
+                Command="{Binding ActivateCommand}"
+                ToolTip.Tip="{Binding Name}">
+          <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="*,*"
+                HorizontalAlignment="Center">
+
+            <Grid Grid.Column="{Binding RuleColumn}" Grid.Row="0" Grid.RowSpan="2"
+                  RowDefinitions="Auto,*,Auto">
+              <Rectangle Grid.Row="0" Classes="measureCap" Height="2" Width="10" />
+              <Rectangle Grid.Row="1" Classes="measureRule" Width="1" />
+              <Rectangle Grid.Row="2" Classes="measureCap" Height="2" Width="10" />
+            </Grid>
+
+            <!-- Reading bottom-to-top: the text hangs above the boundary and the
+                 chip sits just below it, so the eye meets the chip first. -->
+            <LayoutTransformControl Grid.Column="{Binding LabelColumn}" Grid.Row="0"
+                                    VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                    Margin="0,0,0,4"
+                                    IsVisible="{Binding ReadsUpward}">
+              <LayoutTransformControl.LayoutTransform>
+                <RotateTransform Angle="-90" />
+              </LayoutTransformControl.LayoutTransform>
+              <!-- Slid toward the rule after layout. A margin cannot do this:
+                   the column is Auto, so it simply shrinks to match and the text
+                   never moves. -->
+              <LayoutTransformControl.RenderTransform>
+                <TranslateTransform X="12" />
+              </LayoutTransformControl.RenderTransform>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="zoneName" Text="{Binding Name}" VerticalAlignment="Center" />
+                <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                           IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </LayoutTransformControl>
+
+            <Border Grid.Column="{Binding RuleColumn}" Grid.Row="1"
+                    Classes="keyChip primaryChip"
+                    VerticalAlignment="Top" HorizontalAlignment="Center"
+                    IsVisible="{Binding ReadsUpward}">
+              <TextBlock Text="{Binding KeyLabel}" />
+            </Border>
+
+            <!-- Reading top-to-bottom: the mirror image. -->
+            <Border Grid.Column="{Binding RuleColumn}" Grid.Row="0"
+                    Classes="keyChip primaryChip"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                    IsVisible="{Binding ReadsDownward}">
+              <TextBlock Text="{Binding KeyLabel}" />
+            </Border>
+
+            <LayoutTransformControl Grid.Column="{Binding LabelColumn}" Grid.Row="1"
+                                    VerticalAlignment="Top" HorizontalAlignment="Left"
+                                    Margin="0,4,0,0"
+                                    IsVisible="{Binding ReadsDownward}">
+              <LayoutTransformControl.LayoutTransform>
+                <RotateTransform Angle="90" />
+              </LayoutTransformControl.LayoutTransform>
+              <LayoutTransformControl.RenderTransform>
+                <TranslateTransform X="-12" />
+              </LayoutTransformControl.RenderTransform>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="zoneName" Text="{Binding Name}" VerticalAlignment="Center" />
+                <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                           IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </LayoutTransformControl>
+
+          </Grid>
+        </Button>
+      </DataTemplate>
       <DataTemplate x:DataType="vm:DisplayNodeViewModel">
 
         <Panel>
 
-          <!-- The label sits ABOVE the monitor, outside it. A negative margin
-               floats it clear of the bezel without shrinking the bezel, so the
-               diagram stays exactly to scale while the zone area is left
-               entirely to zones. -->
-          <Border Classes="monitorLabel"
-                  VerticalAlignment="Top" HorizontalAlignment="Left"
-                  Margin="0,-24,0,0"
-                  IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Classes="monitorTitle" Text="{Binding Title}" />
-              <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
-                         VerticalAlignment="Center" />
-            </StackPanel>
-          </Border>
+          <!-- A tab on top of the monitor, meeting its square top-left corner.
+               A negative margin floats it clear without shrinking the bezel, so
+               the diagram stays exactly to scale and the zone area is left
+               entirely to zones. It drops into the corner INSIDE the monitor
+               only where a display sits directly above and there is no room. -->
+          <!-- In a Canvas, not the Panel directly: a Panel offers its children
+               only the display's own width, and a tab on a narrow monitor was
+               then clamped to it while its text carried on past the box. A
+               Canvas measures unconstrained, so the box grows with the text and
+               simply overhangs the monitor, which is what a tab should do. -->
+          <Canvas ZIndex="10" IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}">
+            <!-- Never wider than the monitor it names: the Canvas would happily
+                 let it run on, which on a narrow display left the tab hanging
+                 far out to the right of everything - and on a row of displays,
+                 straight over the next monitor's tab. Capped to the display and
+                 wrapped instead, with the full text on hover.
+
+                 Anchored by its BOTTOM edge to the top of the display, so a tab
+                 that wraps onto more lines grows upward into the headroom rather
+                 than downward over the zones. Canvas.Bottom is measured from the
+                 canvas's own bottom, and the canvas is the display, so binding
+                 it to the canvas height puts the tab's foot on the display's
+                 head whatever the tab's height turns out to be. -->
+            <Border Classes="monitorLabel" IsVisible="{Binding LabelAbove}"
+                    Canvas.Left="0"
+                    Canvas.Bottom="{Binding $parent[Canvas].Bounds.Height}"
+                    MaxWidth="{Binding $parent[Canvas].Bounds.Width}"
+                    CornerRadius="8,8,0,0" BorderThickness="1,1,1,0"
+                    ToolTip.Tip="{Binding TitleAndDetail}">
+              <StackPanel Orientation="Vertical">
+                <TextBlock Classes="monitorTitle" Text="{Binding Title}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+
+            <!-- Inside the top-left corner, for a display with another directly
+                 above it: there is no room over it, and a tab drawn there would
+                 appear to label the display above. -->
+            <Border Classes="monitorLabel" IsVisible="{Binding LabelInside}"
+                    Canvas.Left="0" Canvas.Top="0"
+                    MaxWidth="{Binding $parent[Canvas].Bounds.Width}"
+                    CornerRadius="0,0,8,0" BorderThickness="0,0,1,1"
+                    ToolTip.Tip="{Binding TitleAndDetail}">
+              <StackPanel Orientation="Vertical">
+                <TextBlock Classes="monitorTitle" Text="{Binding Title}"
+                           TextWrapping="Wrap" />
+                <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+          </Canvas>
 
           <Border Classes="monitorBezel">
           <Grid>
@@ -154,7 +399,8 @@
         </Panel>
 
       </DataTemplate>
-    </ItemsControl.ItemTemplate>
+
+    </ItemsControl.DataTemplates>
   </ItemsControl>
 
 </UserControl>
