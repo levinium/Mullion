@@ -63,6 +63,29 @@ Win held, A tapped 3x    1280 -> 2560 -> 5120 wide
 Win released between     1280 each time
 ```
 
+## Simulated arrangements
+
+Most of the arrangements the layout engine is built for cannot be produced on
+one desk. `--simulate` swaps in a synthetic display provider and shows exactly
+what a first launch would make of one:
+
+```
+dotnet run --project src/Mullion.App -- --simulate two-across
+dotnet run --project src/Mullion.App -- --simulate verticals-flanking-stacked
+```
+
+The presets live in `Mullion.Core/Simulation/SimulatedTopologies.cs` — a lone
+32:9, a rotated one, three portraits, an L-shape, a mixed-DPI laptop and dock,
+a 5:4 beside a 16:9, and others.
+
+Simulating is read-only and says so on screen: no hook is installed, nothing is
+saved, the watchers stay down, and the layout is always generated fresh rather
+than matched to a stored profile. The zones describe monitors that are not
+there, so a live hotkey would throw a real window off-screen.
+
+`tools/Capture-Simulations.ps1` screenshots every preset into `screenshots/`,
+which is how the defaults get reviewed side by side.
+
 ## The probe
 
 `tools/Mullion.Probe` exercises the engine without any UI in the way, which is
@@ -93,7 +116,7 @@ src/Mullion.Core/               no OS calls; all the layout maths and hotkey mat
 src/Mullion.Platform.Windows/   every P/Invoke, and nothing else
 src/Mullion.App/                Avalonia UI, tray, wizard
 tools/Mullion.Probe/            diagnostic CLI
-tests/Mullion.Core.Tests/       102 tests, run on any OS
+tests/Mullion.Core.Tests/       125 tests, run on any OS
 ```
 
 `Mullion.Core` references no Windows or Avalonia assemblies. That boundary is
@@ -123,6 +146,4 @@ a self-contained job rather than a rewrite.
 
 ## Not yet built
 
-Per-zone key rebinding in the UI (the key surface can be switched and the
-layout regenerated, but individual keys still need `config.json`), named layout
-snapshots, per-app rules, and drag-to-snap.
+Named layout snapshots, per-app rules, and drag-to-snap.
