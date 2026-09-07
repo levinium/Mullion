@@ -1,3 +1,5 @@
+using Avalonia.Media;
+using Mullion.App.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mullion.App.Services;
@@ -129,6 +131,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void Rescan() => _host.Rescan();
 
+    /// <summary>
+    /// What pressing the button will DO - a play triangle while paused, a pause
+    /// bar while running. Showing the current state instead means the two look
+    /// nearly identical and neither says which way round it is.
+    /// </summary>
+    public Geometry PauseIcon => IsPaused ? Icons.Play : Icons.Pause;
+
+    public string PauseTooltip => IsPaused ? "Resume hotkeys" : "Pause hotkeys";
+
     [RelayCommand]
     private void TogglePause()
     {
@@ -145,6 +156,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         HookStatus = snapshot.HookStatus;
         PrivilegeStatus = snapshot.PrivilegeStatus;
         IsPaused = snapshot.Paused;
+        OnPropertyChanged(nameof(PauseIcon));
+        OnPropertyChanged(nameof(PauseTooltip));
         LastAction = snapshot.LastAction;
         Conflicts = snapshot.Conflicts;
         ShowDragConflictBanner = snapshot.DragConflict;

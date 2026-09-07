@@ -394,19 +394,21 @@
   <!-- A square, quiet icon button. No border or fill until hovered, so it sits
        beside labelled buttons without competing with them. -->
   <!-- Icon buttons
-       One treatment for every one of them: dim at rest, bright with a soft
-       backing under the pointer, faint when there is nothing to press, and
-       tinted while it is holding a state on. Meaning is carried by the shape and
-       the tooltip, never by a colour one button has and its neighbour does not -
-       a tick that is always blue beside a cross that turns orange only on hover
-       reads as two unrelated controls that happen to sit together. -->
+       No chrome at all: the icon IS the button. A backing plate behind every one
+       of them made the row read as a strip of tiles rather than as a set of
+       actions, and gave "pressable" two competing signals - the plate and the
+       icon's own brightness. One signal is clearer, so brightness carries it:
+       dim at rest, bright under the pointer, faint when there is nothing to
+       press, accent while a toggle is holding its state on.
+
+       Meaning is left to the shape and the tooltip, never to a colour one button
+       has and its neighbour does not. -->
   <Style Selector="Button.iconButton">
-    <Setter Property="Width" Value="34" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="6" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Cursor" Value="Hand" />
@@ -422,8 +424,16 @@
     <Setter Property="Stretch" Value="None" />
   </Style>
 
+  <Style Selector="Button.iconButton /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.iconButton:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.iconButton:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="Button.iconButton:pointerover > Path">
@@ -441,12 +451,8 @@
   </Style>
 
   <!-- Holding something on, which is a different thing from being hovered. -->
-  <Style Selector="Button.iconButton.active /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AccentMid}" />
-  </Style>
-
   <Style Selector="Button.iconButton.active > Path">
-    <Setter Property="Fill" Value="{DynamicResource Ink}" />
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
   </Style>
 
   <Style Selector="Button.accent">

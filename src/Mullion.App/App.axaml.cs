@@ -1,8 +1,9 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
+using Mullion.App.Controls;
 using Mullion.App.Services;
 using Mullion.App.ViewModels;
 using Mullion.App.Views;
@@ -91,6 +92,10 @@ public partial class App : Application
         // controls live only there, and until this flag the only picture that
         // could be taken automatically was of the main window, which has neither.
         if (desktop.Args?.Contains("--settings") == true) ShowSettings();
+        // --icons opens the icon sheet. Choosing a glyph inside the app is slow
+        // and partial: you see one state of one icon at a time, and the question
+        // is always how it sits beside the others.
+        if (desktop.Args?.Contains("--icons") == true) IconGallery.Create().Show();
 
         desktop.Exit += (_, _) =>
         {
@@ -242,3 +247,5 @@ public partial class App : Application
         return Core.Simulation.SimulatedTopologies.Find(args[index + 1]);
     }
 }
+
+

@@ -47,6 +47,15 @@ public static class Icons
     /// <summary>The same arrow mirrored, so the pair reads as one action and its reverse.</summary>
     public static StreamGeometry Redo { get; } = BuildCurvedArrow(pointsLeft: false);
 
+    /// <summary>A ring arrow, for rescanning the displays.</summary>
+    public static StreamGeometry Refresh { get; } = BuildRefresh();
+
+    /// <summary>Two bars, for pausing.</summary>
+    public static StreamGeometry Pause { get; } = BuildPause();
+
+    /// <summary>A triangle, for resuming.</summary>
+    public static StreamGeometry Play { get; } = BuildPlay();
+
     /// <summary>A horseshoe magnet, for snapping.</summary>
     public static StreamGeometry Magnet { get; } = BuildMagnet();
 
@@ -62,9 +71,12 @@ public static class Icons
 
         using (var ctx = geometry.Open())
         {
-            // EvenOdd is what turns the hub figure into a hole rather than
-            // filling over it.
-            ctx.SetFillRule(FillRule.EvenOdd);
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
 
             var step = 360.0 / teeth;
 
@@ -101,6 +113,13 @@ public static class Icons
 
         using (var ctx = geometry.Open())
         {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
             // The body: a bar from the lower left to the upper right, drawn as
             // its four corners rather than a stroked line so it takes a fill
             // like every other icon here.
@@ -137,6 +156,13 @@ public static class Icons
         // the elbow, up to the tip, and back.
         using (var ctx = geometry.Open())
         {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
             ctx.BeginFigure(new Point(5.0, 12.2), isFilled: true);
             ctx.LineTo(new Point(7.1, 10.1));
             ctx.LineTo(new Point(10.0, 13.0));
@@ -159,6 +185,13 @@ public static class Icons
         // exactly how it looked beside the tick.
         using (var ctx = geometry.Open())
         {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
             ctx.BeginFigure(new Point(7.4, 6.0), isFilled: true);
             ctx.LineTo(new Point(12.0, 10.6));
             ctx.LineTo(new Point(16.6, 6.0));
@@ -194,6 +227,13 @@ public static class Icons
 
         using (var ctx = geometry.Open())
         {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
             ctx.BeginFigure(new Point(X(Center - Outer), Middle), isFilled: true);
 
             ctx.ArcTo(
@@ -238,6 +278,13 @@ public static class Icons
 
         using (var ctx = geometry.Open())
         {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
             // A horseshoe: round over the top, square-cut legs pointing down.
             ctx.BeginFigure(new Point(Center - Outer, Top), isFilled: true);
 
@@ -268,15 +315,118 @@ public static class Icons
         return geometry;
     }
 
+    /// <summary>
+    /// A ring most of the way round with an arrowhead on the open end. A ring
+    /// rather than the half-arc the undo icon uses: the two sit in the same
+    /// window and have to be tellable apart at a glance.
+    /// </summary>
+    private static StreamGeometry BuildRefresh()
+    {
+        const double Outer = 8.2;
+        const double Inner = 5.6;
+
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
+            var start = Polar(Outer, -55);
+            var end = Polar(Outer, 195);
+            var innerStart = Polar(Inner, 195);
+            var innerEnd = Polar(Inner, -55);
+
+            ctx.BeginFigure(start, isFilled: true);
+            ctx.ArcTo(end, new Size(Outer, Outer), 0, isLargeArc: true, SweepDirection.Clockwise);
+            ctx.LineTo(innerStart);
+            ctx.ArcTo(innerEnd, new Size(Inner, Inner), 0, isLargeArc: true, SweepDirection.CounterClockwise);
+            ctx.EndFigure(isClosed: true);
+
+            // The head sits across the open end and overhangs the band on both
+            // sides, so the ring reads as going somewhere.
+            var tip = Polar((Outer + Inner) / 2, -55);
+
+            ctx.BeginFigure(new Point(tip.X - 3.4, tip.Y - 1.6), isFilled: true);
+            ctx.LineTo(new Point(tip.X + 3.4, tip.Y - 1.6));
+            ctx.LineTo(new Point(tip.X, tip.Y + 4.4));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildPause()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
+            Bar(ctx, 7.2, 5.4, 10.2, 18.6);
+            Bar(ctx, 13.8, 5.4, 16.8, 18.6);
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildPlay()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            // NonZero, not the default EvenOdd: these glyphs are built from
+            // overlapping pieces, and under EvenOdd every overlap cancels to a
+            // hole - which is why an arrowhead had a bite out of it exactly
+            // where it met its own shaft. A hole is asked for by winding it the
+            // other way round instead.
+            ctx.SetFillRule(FillRule.NonZero);
+
+            // Set slightly right of centre: a triangle balances on its area, not
+            // its bounding box, and centred by the box it looks to be leaning back.
+            ctx.BeginFigure(new Point(7.8, 5.0), isFilled: true);
+            ctx.LineTo(new Point(18.4, 12.0));
+            ctx.LineTo(new Point(7.8, 19.0));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static void Bar(
+        StreamGeometryContext ctx, double left, double top, double right, double bottom)
+    {
+        ctx.BeginFigure(new Point(left, top), isFilled: true);
+        ctx.LineTo(new Point(right, top));
+        ctx.LineTo(new Point(right, bottom));
+        ctx.LineTo(new Point(left, bottom));
+        ctx.EndFigure(isClosed: true);
+    }
+
+    /// <summary>
+    /// Wound the opposite way from everything around it, which under NonZero is
+    /// how a hole is asked for.
+    /// </summary>
     private static void Circle(StreamGeometryContext ctx, double radius)
     {
         ctx.BeginFigure(new Point(Center - radius, Center), isFilled: true);
 
         ctx.ArcTo(new Point(Center + radius, Center), new Size(radius, radius),
-            0, isLargeArc: false, SweepDirection.Clockwise);
+            0, isLargeArc: false, SweepDirection.CounterClockwise);
 
         ctx.ArcTo(new Point(Center - radius, Center), new Size(radius, radius),
-            0, isLargeArc: false, SweepDirection.Clockwise);
+            0, isLargeArc: false, SweepDirection.CounterClockwise);
 
         ctx.EndFigure(isClosed: true);
     }

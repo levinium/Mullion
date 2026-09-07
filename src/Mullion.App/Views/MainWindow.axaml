@@ -20,10 +20,21 @@
       </StackPanel>
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <Button Content="Rescan" Command="{Binding RescanCommand}" />
-        <ToggleButton Content="Pause hotkeys"
-                      IsChecked="{Binding IsPaused}"
-                      Command="{Binding TogglePauseCommand}" />
+        <Button Classes="iconButton"
+                Command="{Binding RescanCommand}"
+                ToolTip.Tip="Rescan the displays">
+          <Path Data="{x:Static ctl:Icons.Refresh}" />
+        </Button>
+
+        <!-- One button showing what pressing it will do, rather than a toggle
+             showing what is already the case: at a glance a pressed-in "pause"
+             and an unpressed one look far too alike to tell whether the hotkeys
+             are live. -->
+        <Button Classes="iconButton"
+                Command="{Binding TogglePauseCommand}"
+                ToolTip.Tip="{Binding PauseTooltip}">
+          <Path Data="{Binding PauseIcon}" />
+        </Button>
 
         <!-- Furthest right, where a settings control is conventionally looked
              for. Unlabelled, so it carries a tooltip. -->
