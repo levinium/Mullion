@@ -52,6 +52,23 @@ public sealed partial class ZoneCellViewModel : ObservableObject
 
     public bool HasUpper => UpperKey is not null;
     public bool HasLower => LowerKey is not null;
+
+    private bool HasTiers => HasUpper || HasLower;
+
+    /// <summary>
+    /// How tall this zone must be drawn before its name will fit, in device
+    /// pixels.
+    /// <para>
+    /// Tier chips sit at the quarter marks, so a zone carrying them has only
+    /// the middle band free; the key chip alone fits there but the key plus a
+    /// name does not until the zone is much taller. Without tiers the whole
+    /// height is available and the name fits almost immediately.
+    /// </para>
+    /// </summary>
+    public double NameNeedsHeight => HasTiers ? 112 : 44;
+
+    /// <summary>As <see cref="NameNeedsHeight"/>, with a line for the size too.</summary>
+    public double SizeNeedsHeight => HasTiers ? 142 : 62;
 }
 
 /// <summary>Anything the diagram places at a real position on the virtual desktop.</summary>

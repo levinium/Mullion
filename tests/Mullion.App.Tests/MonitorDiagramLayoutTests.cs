@@ -149,6 +149,68 @@ public class MonitorDiagramLayoutTests
     }
 
     /// <summary>
+    /// Nothing inside a tile may sit on top of anything else in it. A short
+    /// display is the case that breaks: the tier chips sit at the quarter marks
+    /// while the zone's own chip, name and size sit in the middle, and on a tile
+    /// too short to hold both they land on each other.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void NothingInATileOverlapsAnythingElse(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
+        {
+            // Chips and their labels: the things that carry text, and so the
+            // things whose overlapping is unreadable rather than merely untidy.
+            var parts = Descendants<Border>(tile)
+                .Where(b => b.Classes.Contains("keyChip") && b.IsVisible && b.Bounds.Width > 0)
+                .Select(b => (Kind: "chip", Box: BoundsIn(b, diagram)))
+                .Concat(Descendants<TextBlock>(tile)
+                    .Where(t => t.IsVisible && t.Bounds.Width > 0 && !string.IsNullOrEmpty(t.Text))
+                    .Where(t => t.GetVisualAncestors().OfType<Border>().All(b => !b.Classes.Contains("keyChip")))
+                    .Select(t => (Kind: $"text '{t.Text}'", Box: BoundsIn(t, diagram))))
+                .ToList();
+
+            for (var i = 0; i < parts.Count; i++)
+            for (var j = i + 1; j < parts.Count; j++)
+            {
+                parts[i].Box.Intersects(parts[j].Box).ShouldBeFalse(
+                    $"{topologyId}: {parts[i].Kind} overlaps {parts[j].Kind}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A chip must sit inside its tile with room to spare, not flush against the
+    /// zone's own border - which reads as the chip having burst out of it.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void ChipsKeepClearOfTheirTileEdges(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
+        {
+            var frame = BoundsIn(tile, diagram).Deflate(2);
+
+            foreach (var chip in Descendants<Border>(tile).Where(b => b.Classes.Contains("keyChip")))
+            {
+                if (!chip.IsVisible || chip.Bounds.Width <= 0) continue;
+
+                var box = BoundsIn(chip, diagram);
+
+                box.Left.ShouldBeGreaterThanOrEqualTo(frame.Left,
+                    $"{topologyId}: a chip is flush with the left of its zone");
+                box.Right.ShouldBeLessThanOrEqualTo(frame.Right,
+                    $"{topologyId}: a chip is flush with the right of its zone");
+            }
+        }
+    }
+
+    /// <summary>
     /// A span measure's chip must fit the gutter opened for it. The gutter is
     /// sized from what the measure reports, so a chip wider than that is a
     /// measurement that did not reach the panel.

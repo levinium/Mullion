@@ -376,7 +376,9 @@
                         <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
                                  HorizontalAlignment="Stretch"
                                  MaxHeight="20" IsVisible="{Binding HasUpper}"
-                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                            Converter={x:Static ctl:InsetConverter.Instance},
+                                            ConverterParameter=18}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip">
                               <StackPanel Orientation="Horizontal">
@@ -396,7 +398,9 @@
                         <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly"
                                  HorizontalAlignment="Stretch"
                                  MaxHeight="20" IsVisible="{Binding HasLower}"
-                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                            Converter={x:Static ctl:InsetConverter.Instance},
+                                            ConverterParameter=18}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip">
                               <StackPanel Orientation="Horizontal">
@@ -445,7 +449,9 @@
                              it. -->
                         <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
                                  MaxHeight="24"
-                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                            Converter={x:Static ctl:InsetConverter.Instance},
+                                            ConverterParameter=18}">
                           <Border Classes="keyChip primaryChip">
                             <StackPanel Orientation="Horizontal">
                               <TextBlock Classes="chipModifier"
@@ -455,19 +461,40 @@
                           </Border>
                         </Viewbox>
 
+                        <!-- Dropped when the zone is too short to hold it as well
+                             as the tier chips at its quarter marks - otherwise
+                             they land on each other and neither can be read.
+                             How short that is depends on whether there are tiers,
+                             hence a threshold from the zone rather than a
+                             constant. -->
                         <TextBlock Grid.Row="1" Classes="zoneName" Text="{Binding Name}"
-                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    Margin="0,4,0,0"
-                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170" />
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170">
+                          <TextBlock.IsVisible>
+                            <MultiBinding Converter="{x:Static ctl:AtLeastConverter.Instance}">
+                              <Binding Path="$parent[Button].Bounds.Height" />
+                              <Binding Path="NameNeedsHeight" />
+                            </MultiBinding>
+                          </TextBlock.IsVisible>
+                        </TextBlock>
 
-                        <!-- The bezel clips, so a size that does not fit would be
-                             cut mid-word. Dropped instead, and still on hover. -->
-                        <TextBlock Grid.Row="2" Classes="zoneSize" Text="{Binding SizeLabel}"
-                                   IsVisible="{Binding $parent[Button].Bounds.Width,
-                                               Converter={x:Static ctl:WiderThanConverter.Instance},
-                                               ConverterParameter=95}"
-                                   Margin="0,4,0,0"
-                                   TextAlignment="Center" />
+                        <!-- Needs both: room down the zone for another line, and
+                             room across it so the bezel does not cut the text
+                             mid-word. Still on hover either way. -->
+                        <Panel Grid.Row="2">
+                          <Panel.IsVisible>
+                            <MultiBinding Converter="{x:Static ctl:AtLeastConverter.Instance}">
+                              <Binding Path="$parent[Button].Bounds.Height" />
+                              <Binding Path="SizeNeedsHeight" />
+                            </MultiBinding>
+                          </Panel.IsVisible>
+                          <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                                     IsVisible="{Binding $parent[Button].Bounds.Width,
+                                                 Converter={x:Static ctl:WiderThanConverter.Instance},
+                                                 ConverterParameter=95}"
+                                     Margin="0,4,0,0"
+                                     TextAlignment="Center" />
+                        </Panel>
                       </Grid>
                     </Grid>
                   </Button>
