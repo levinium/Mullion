@@ -49,6 +49,9 @@ public sealed record GeneralSettings
     public bool IgnoreInjectedInput { get; init; }
     public bool AllowSpanningUnions { get; init; } = true;
     public bool DragToSnap { get; init; } = true;
+
+    /// <summary>Go straight to the tray even when launched by hand, not just at sign-in.</summary>
+    public bool StartInTray { get; init; }
     public string DragModifier { get; init; } = nameof(Model.DragModifier.Shift);
     public int UndoDepth { get; init; } = 20;
     public string Theme { get; init; } = "system";

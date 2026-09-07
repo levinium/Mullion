@@ -51,6 +51,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _allowSpanningUnions;
 
     [ObservableProperty]
+    private bool _startInTray;
+
+    [ObservableProperty]
     private bool _dragToSnap;
 
     /// <summary>"None" means always armed; the rest name a modifier to hold.</summary>
@@ -149,6 +152,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         StartElevated = s.AutoStart is AutoStartMode.Elevated;
         ShowZoneFlash = s.ShowZoneFlash;
         AllowSpanningUnions = s.AllowSpanningUnions;
+        StartInTray = s.StartInTray;
         DragToSnap = s.DragToSnap;
         SelectedDragModifier = DragModifiers.FirstOrDefault(
             x => string.Equals(x, s.DragModifier, StringComparison.OrdinalIgnoreCase)) ?? "Shift";
@@ -182,6 +186,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowZoneFlashChanged(bool value)
     {
         if (!_loading) _host.SetShowZoneFlash(value);
+    }
+
+    partial void OnStartInTrayChanged(bool value)
+    {
+        if (!_loading) _host.SetStartInTray(value);
     }
 
     partial void OnDragToSnapChanged(bool value)
@@ -335,7 +344,8 @@ public sealed class DesignSettingsHost : ISettingsHost
         @"%APPDATA%\Mullion\config.json",
         @"%LOCALAPPDATA%\Mullion\logs\mullion.log",
         true,
-        "Shift");
+        "Shift",
+        false);
 
     public string? SetAutoStart(AutoStartMode mode) => null;
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
@@ -346,6 +356,8 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void SetAllowSpanningUnions(bool value) { }
 
     public void SetDragToSnap(bool enabled, string modifier) { }
+
+    public void SetStartInTray(bool value) { }
     public void SetWinKeySuppression(string value) { }
     public void SetKeySurface(string surfaceId) { }
     public void RestartElevated() { }

@@ -53,6 +53,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         set { if (_engine is not null) _engine.Paused = value; }
     }
 
+    public bool StartInTray => _config.General.StartInTray;
+
     private DisplayChangeWatcher? _watcher;
     private ForegroundWatcher? _foreground;
     private string _lastFingerprint = string.Empty;
@@ -546,7 +548,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _configStore.Path_,
             _log.Path_,
             _config.General.DragToSnap,
-            _config.General.DragModifier);
+            _config.General.DragModifier,
+            _config.General.StartInTray);
     }
 
     public void OpenLogFolder() => OpenFolder(Path.GetDirectoryName(_log.Path_));
@@ -568,6 +571,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // This changes which zones exist, so the layout has to be rebuilt.
         Regenerate();
     }
+
+    public void SetStartInTray(bool value) => UpdateGeneral(g => g with { StartInTray = value });
 
     public void SetDragToSnap(bool enabled, string modifier)
     {

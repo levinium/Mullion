@@ -24,7 +24,8 @@ public sealed record SettingsSnapshot(
     string ConfigPath,
     string LogPath,
     bool DragToSnap,
-    string DragModifier);
+    string DragModifier,
+    bool StartInTray);
 
 public interface ISettingsHost
 {
@@ -39,6 +40,9 @@ public interface ISettingsHost
 
     /// <summary>Enable drag-to-snap and choose which modifier arms it.</summary>
     void SetDragToSnap(bool enabled, string modifier);
+
+    /// <summary>Open straight to the tray even when launched by hand.</summary>
+    void SetStartInTray(bool value);
 
     void SetWinKeySuppression(string value);
 

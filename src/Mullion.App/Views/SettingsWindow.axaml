@@ -35,6 +35,12 @@
           <TextBlock Classes="body" Margin="20,0,0,0"
                      Text="Registers a scheduled task so there is no UAC prompt at each sign-in. Setting this up requires running Mullion as administrator once." />
 
+          <CheckBox Content="Always start in the tray"
+                    IsChecked="{Binding StartInTray}" />
+
+          <TextBlock Classes="body" Margin="20,0,0,0"
+                     Text="Starting at sign-in always goes to the tray. Turn this on to do the same when Mullion is launched by hand, instead of opening this window." />
+
           <TextBlock Classes="body" Text="{Binding ElevationBlurb}" Margin="0,6,0,0" />
 
           <Button Content="Restart as administrator"

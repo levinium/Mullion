@@ -38,6 +38,12 @@ public interface IAppHost
 
     bool Paused { get; set; }
 
+    /// <summary>
+    /// Whether to open straight to the tray. Read before the window is shown,
+    /// so it cannot come from the UI snapshot.
+    /// </summary>
+    bool StartInTray { get; }
+
     void RestartElevated();
 
     /// <summary>Turn off the other zone manager competing for the drag gesture.</summary>
@@ -56,6 +62,8 @@ public sealed class DesignAppHost : IAppHost
     public event Action? StateChanged;
 
     public bool Paused { get; set; }
+
+    public bool StartInTray => false;
 
     public void Start() => StateChanged?.Invoke();
 

@@ -71,7 +71,11 @@ public partial class App : Application
 
         _host.Start();
 
-        var startHidden = desktop.Args?.Contains("--tray") == true && hasTray;
+        // --tray is what auto-start passes; the setting is for people who want a
+        // hand-launch to behave the same way. Both need somewhere to go: with no
+        // tray icon, hiding the window would leave the app unreachable.
+        var wantsTray = desktop.Args?.Contains("--tray") == true || _host.StartInTray;
+        var startHidden = wantsTray && hasTray;
 
         if (ShouldRunWizard() && !IsSimulating())
         {
