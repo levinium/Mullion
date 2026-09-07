@@ -30,6 +30,58 @@ public static class Icons
     /// </summary>
     public static StreamGeometry Pencil { get; } = BuildPencil();
 
+    /// <summary>A tick on the same 24x24 canvas, for confirming an edit.</summary>
+    public static StreamGeometry Check { get; } = BuildCheck();
+
+    /// <summary>A cross on the same canvas, for abandoning one.</summary>
+    public static StreamGeometry Cross { get; } = BuildCross();
+
+    private static StreamGeometry BuildCheck()
+    {
+        var geometry = new StreamGeometry();
+
+        // A stroked polyline would need a pen; every icon here is a filled
+        // path so they all take the same brush, so the tick is drawn as its
+        // own outline - down to the elbow, up to the tip, and back.
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(new Point(4.2, 12.4), isFilled: true);
+            ctx.LineTo(new Point(6.6, 10.0));
+            ctx.LineTo(new Point(9.8, 13.2));
+            ctx.LineTo(new Point(17.4, 5.6));
+            ctx.LineTo(new Point(19.8, 8.0));
+            ctx.LineTo(new Point(9.8, 18.0));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildCross()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            // Twelve corners of two crossed bars, walked as one outline.
+            ctx.BeginFigure(new Point(6.4, 4.6), isFilled: true);
+            ctx.LineTo(new Point(12.0, 10.2));
+            ctx.LineTo(new Point(17.6, 4.6));
+            ctx.LineTo(new Point(19.4, 6.4));
+            ctx.LineTo(new Point(13.8, 12.0));
+            ctx.LineTo(new Point(19.4, 17.6));
+            ctx.LineTo(new Point(17.6, 19.4));
+            ctx.LineTo(new Point(12.0, 13.8));
+            ctx.LineTo(new Point(6.4, 19.4));
+            ctx.LineTo(new Point(4.6, 17.6));
+            ctx.LineTo(new Point(10.2, 12.0));
+            ctx.LineTo(new Point(4.6, 6.4));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
     private static StreamGeometry BuildPencil()
     {
         var geometry = new StreamGeometry();

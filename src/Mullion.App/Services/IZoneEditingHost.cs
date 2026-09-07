@@ -30,6 +30,18 @@ public interface IZoneEditingHost
     /// <summary>Set the relative sizes of a display's zones.</summary>
     void SetDisplayWeights(string slot, IReadOnlyList<double> weights);
 
+    /// <summary>
+    /// Open an edit session. Changes apply at once but are not written until it
+    /// is committed, so cancelling can put everything back.
+    /// </summary>
+    void BeginZoneEdit();
+
+    /// <summary>Keep the changes and write them.</summary>
+    void CommitZoneEdit();
+
+    /// <summary>Put everything back to where the session started.</summary>
+    void CancelZoneEdit();
+
     /// <summary>Whether anything has been customised, so a reset has a job to do.</summary>
     bool HasCustomZones { get; }
 

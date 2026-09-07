@@ -316,7 +316,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         // The states that were undoable describe monitors that may no longer
         // be attached, and undoing onto them would apply a layout for a desk
-        // that is not there.
+        // that is not there. An open edit session goes the same way, and is
+        // kept rather than dropped: its baseline describes the old desk too.
+        CommitZoneEdit();
         _history.Reset(_config.Overrides);
         if (_displays.Count == 0) return;
 
@@ -702,6 +704,72 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         UpdateOverride(slot, o => new DisplayOverride(slot, columns, null));
     }
 
+    // ---- Edit sessions ------------------------------------------------------
+
+    /// <summary>
+    /// An open edit session: what to go back to, and whether anything is waiting
+    /// to be written.
+    /// <para>
+    /// Edits apply immediately - the diagram has to show what a drag did, and
+    /// the hotkeys may as well work on it while it is open - but they are not
+    /// WRITTEN until the session is confirmed. That is what makes cancelling
+    /// mean something rather than being a second undo stack.
+    /// </para>
+    /// </summary>
+    private AppConfig? _editBaseline;
+
+    private LayoutResult? _editBaselineLayout;
+    private bool _editing;
+    private bool _writePending;
+
+    public void BeginZoneEdit()
+    {
+        _editBaseline = _config;
+        _editBaselineLayout = _layout;
+        _editing = true;
+        _writePending = false;
+    }
+
+    public void CommitZoneEdit()
+    {
+        _editing = false;
+        _editBaseline = null;
+        _editBaselineLayout = null;
+
+        if (!_writePending) return;
+
+        _writePending = false;
+        Save();
+    }
+
+    public void CancelZoneEdit()
+    {
+        if (_editBaseline is null)
+        {
+            _editing = false;
+            return;
+        }
+
+        _config = _editBaseline;
+        _layout = _editBaselineLayout;
+
+        // The undone states describe a layout that is being thrown away, so
+        // undo after a cancel would walk back into edits the user just
+        // discarded.
+        _history.Reset(_config.Overrides);
+
+        _editing = false;
+        _writePending = false;
+        _editBaseline = null;
+        _editBaselineLayout = null;
+
+        // Nothing to write: not writing during the session is exactly what
+        // leaves the file already holding this.
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
+
+        StateChanged?.Invoke();
+    }
+
     public bool HasCustomZones => _config.Overrides.Count > 0;
 
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights)
@@ -951,6 +1019,14 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // A simulated arrangement must never reach the real config: its
         // profiles describe monitors that do not exist.
         if (Simulated is not null) return;
+
+        // Held back until the edit session is confirmed. Cancelling then needs
+        // to restore nothing on disk, because nothing reached it.
+        if (_editing)
+        {
+            _writePending = true;
+            return;
+        }
 
         try { _configStore.Save(_config); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

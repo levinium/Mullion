@@ -438,6 +438,9 @@ public sealed class DesignSettingsHost : ISettingsHost
         Action<string, int>? onZoneCountChanged) => new();
 
     public bool HasCustomZones => false;
+    public void BeginZoneEdit() { }
+    public void CommitZoneEdit() { }
+    public void CancelZoneEdit() { }
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
 

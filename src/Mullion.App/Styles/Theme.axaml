@@ -426,6 +426,16 @@
     <Setter Property="Fill" Value="{DynamicResource Ink}" />
   </Style>
 
+  <!-- Confirm and cancel carry their meaning in colour as well as shape: at
+       18px a tick and a cross are not that different in silhouette. -->
+  <Style Selector="Button.iconButton.confirm > Path">
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <Style Selector="Button.iconButton.cancel:pointerover > Path">
+    <Setter Property="Fill" Value="{DynamicResource SpanBorder}" />
+  </Style>
+
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="Foreground" Value="#FFFFFF" />

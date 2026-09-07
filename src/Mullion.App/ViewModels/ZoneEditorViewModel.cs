@@ -66,16 +66,62 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
 
     public bool CanResetZones => IsEditing && _host.HasCustomZones;
 
+    /// <summary>
+    /// The pencil, shown where editing is on offer and not already under way.
+    /// </summary>
+    public bool ShowEditButton => CanEdit && !IsEditing;
+
+    /// <summary>The tick and the cross, which replace it for the session.</summary>
+    public bool ShowSessionButtons => CanEdit && IsEditing;
+
+    /// <summary>
+    /// Whether ending the session has anything to end.
+    /// <para>
+    /// Only the window offering the pencil runs a session. Settings is always
+    /// editing and has no way to confirm or cancel, so its changes are written
+    /// as they are made - a provisional state nothing can resolve would just be
+    /// changes that never got saved.
+    /// </para>
+    /// </summary>
+    private bool InSession => CanEdit;
+
     [RelayCommand]
-    private void ToggleEdit()
+    private void BeginEdit()
     {
-        IsEditing = !IsEditing;
+        if (IsEditing) return;
 
-        // A rebind left listening would swallow the next key pressed anywhere.
-        if (!IsEditing) CancelCapture();
+        if (InSession) _host.BeginZoneEdit();
 
+        IsEditing = true;
+        Message = null;
         Refresh();
     }
+
+    [RelayCommand]
+    private void ConfirmEdit() => EndEdit(keep: true);
+
+    [RelayCommand]
+    private void CancelEdit() => EndEdit(keep: false);
+
+    private void EndEdit(bool keep)
+    {
+        if (!IsEditing) return;
+
+        // Before anything else: a capture left armed takes the next key pressed
+        // anywhere, and it must not outlive the session that started it.
+        CancelCapture();
+
+        if (InSession)
+        {
+            if (keep) _host.CommitZoneEdit();
+            else _host.CancelZoneEdit();
+        }
+
+        IsEditing = false;
+        Message = keep ? null : "Changes discarded.";
+        Refresh();
+    }
+
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
     private void Undo()
@@ -124,6 +170,8 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         if (Capturing is not null) Diagram.SetCapturing(Capturing);
 
         OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(ShowEditButton));
+        OnPropertyChanged(nameof(ShowSessionButtons));
         OnPropertyChanged(nameof(CanRedo));
         OnPropertyChanged(nameof(CanResetZones));
         OnPropertyChanged(nameof(SnapSplits));
