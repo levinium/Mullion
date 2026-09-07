@@ -202,3 +202,21 @@ public sealed class ReserveWhenWideConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }
+
+/// <summary>
+/// "Edit zones" or "Done", for the button that toggles editing.
+/// <para>
+/// The label has to say what pressing it will do, and both halves of that are
+/// one word apart, so a converter beats two buttons swapping visibility.
+/// </para>
+/// </summary>
+public sealed class EditLabelConverter : IValueConverter
+{
+    public static readonly EditLabelConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? "Done editing zones" : "Edit zones";
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}

@@ -44,7 +44,7 @@ public sealed record SettingsSnapshot(
     bool StartInTray,
     string HotkeyModifier);
 
-public interface ISettingsHost
+public interface ISettingsHost : IZoneEditingHost
 {
     SettingsSnapshot GetSettings();
 
@@ -67,16 +67,8 @@ public interface ISettingsHost
     /// <summary>The displays and their splits, for the customisation UI.</summary>
     IReadOnlyList<DisplayCustomization> GetCustomizations();
 
-    /// <summary>Set how many zones a display splits into, by hand.</summary>
-    void SetDisplayColumns(string slot, int columns);
-
-    /// <summary>Set the relative sizes of a display's zones.</summary>
-    void SetDisplayWeights(string slot, IReadOnlyList<double> weights);
-
     /// <summary>Forget one display's customisation, or all of them.</summary>
     void ResetDisplayOverride(string slot);
-
-    void ResetAllOverrides();
 
     /// <summary>The current customisations as a portable document.</summary>
     string ExportLayout(string name);
@@ -96,55 +88,6 @@ public interface ISettingsHost
 
     void RerunWizard();
 
-    /// <summary>
-    /// Listen for the next chord and move the zone at <paramref name="row"/>,
-    /// <paramref name="col"/> onto that key.
-    /// <para>
-    /// Capture runs through the keyboard hook because the UI framework never
-    /// sees Win-modified keys, so this cannot be a plain KeyDown handler.
-    /// </para>
-    /// </summary>
-    void BeginRebind(int row, int col, Action<RebindResult> completed);
 
-    void CancelRebind();
 
-    /// <summary>
-    /// Undo and redo for zone shape edits - seam drags, zone counts, and the
-    /// resets that clear them. Not key rebinds: those live in the layout rather
-    /// than in the overrides, so "Reset keys to default" is the way back.
-    /// </summary>
-    /// <summary>
-    /// Snap dragged splits to a 5% grid, to simple divisions, and to the
-    /// positions where a pane comes out at an exact 16:9 or 3:2 on that
-    /// display. Hold Alt while dragging to place a seam freely.
-    /// </summary>
-    bool SnapSplits { get; }
-
-    void SetSnapSplits(bool value);
-
-    bool CanUndoZones { get; }
-
-    bool CanRedoZones { get; }
-
-    void UndoZones();
-
-    void RedoZones();
-
-    /// <summary>
-    /// Put the keys back where the allocator would have put them, discarding
-    /// rebinds. Zone shapes are left alone - the two are separate answers to
-    /// "put it back", and a user who has spent time on one should not lose it
-    /// undoing the other.
-    /// </summary>
-    void ResetLayout();
-
-    /// <summary>
-    /// The monitor diagram, wired so clicking a zone starts a rebind and
-    /// dragging a seam reshapes the split. Built by the host because only it
-    /// holds the current displays and layout.
-    /// </summary>
-    MonitorDiagramViewModel BuildInteractiveDiagram(
-        Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged,
-        Action<string, int> onZoneCountChanged);
 }

@@ -702,6 +702,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         UpdateOverride(slot, o => new DisplayOverride(slot, columns, null));
     }
 
+    public bool HasCustomZones => _config.Overrides.Count > 0;
+
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights)
     {
         UpdateOverride(slot, o => new DisplayOverride(slot, weights.Count, [.. weights]));
@@ -883,9 +885,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     }
 
     public MonitorDiagramViewModel BuildInteractiveDiagram(
-        Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged,
-        Action<string, int> onZoneCountChanged) =>
+        Action<GridPos>? onZoneActivated,
+        Action<string, IReadOnlyList<double>>? onSplitChanged,
+        Action<string, int>? onZoneCountChanged) =>
         MonitorDiagramViewModel.Build(
             _displays, _layout, onZoneActivated, ModifierPrefix,
             onSplitChanged, onZoneCountChanged,

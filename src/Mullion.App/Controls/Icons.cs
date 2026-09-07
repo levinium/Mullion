@@ -19,6 +19,51 @@ public static class Icons
         teeth: 8, outerRadius: 11.0, rootRadius: 8.0, hubRadius: 3.7,
         toothTopHalfDegrees: 11.0, toothRootHalfDegrees: 21.0);
 
+
+    /// <summary>
+    /// A pencil on the same 24x24 canvas as the gear, lying at 45 degrees.
+    /// <para>
+    /// Built from the same primitives for the same reason: it sits directly
+    /// beside the gear, and a glyph from a font that may not be installed would
+    /// be the one icon of the pair that did not match.
+    /// </para>
+    /// </summary>
+    public static StreamGeometry Pencil { get; } = BuildPencil();
+
+    private static StreamGeometry BuildPencil()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            // The body: a bar from the lower left to the upper right, drawn as
+            // its four corners rather than a stroked line so it takes a fill
+            // like every other icon here.
+            ctx.BeginFigure(new Point(4.6, 17.0), isFilled: true);
+            ctx.LineTo(new Point(15.1, 6.5));
+            ctx.LineTo(new Point(17.5, 8.9));
+            ctx.LineTo(new Point(7.0, 19.4));
+            ctx.LineTo(new Point(4.6, 21.8));
+            ctx.EndFigure(isClosed: true);
+
+            // The tip, as a separate wedge running to a point: the whole reason
+            // the shape reads as a pencil and not as a ruler.
+            ctx.BeginFigure(new Point(3.2, 20.8), isFilled: true);
+            ctx.LineTo(new Point(4.2, 17.8));
+            ctx.LineTo(new Point(6.2, 19.8));
+            ctx.EndFigure(isClosed: true);
+
+            // The ferrule end, squared off across the top corner.
+            ctx.BeginFigure(new Point(16.2, 5.4), isFilled: true);
+            ctx.LineTo(new Point(18.0, 3.6));
+            ctx.LineTo(new Point(20.4, 6.0));
+            ctx.LineTo(new Point(18.6, 7.8));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        return geometry;
+    }
+
     private static StreamGeometry BuildGear(
         int teeth,
         double outerRadius,

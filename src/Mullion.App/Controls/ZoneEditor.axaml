@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:Mullion.App.Controls"
+             xmlns:vm="clr-namespace:Mullion.App.ViewModels"
+             x:DataType="vm:ZoneEditorViewModel"
+             x:Class="Mullion.App.Controls.ZoneEditor">
+
+  <!-- A Grid, not a StackPanel: the diagram has to take the room that is left
+       after the toolbar, and a StackPanel hands every child its own desired
+       height and lets the last one run off the bottom - which is exactly what
+       the diagram did once a toolbar appeared above it. MinHeight is for the
+       settings page, where the card sizes to its content and a star row would
+       otherwise resolve to nothing. -->
+  <Grid RowDefinitions="Auto,*,Auto" MinHeight="240">
+
+    <!-- The controls sit with the picture they change, not on another card or
+         another window. Undo a page away from the thing it undoes reads as
+         belonging to something else.
+
+         Shown whenever there is something on it: the settings page is always
+         editing and offers no pencil, so keying the whole row off the pencil
+         took its Undo away with it. -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+      <Grid.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.Or}">
+          <Binding Path="CanEdit" />
+          <Binding Path="IsEditing" />
+        </MultiBinding>
+      </Grid.IsVisible>
+
+      <TextBlock Grid.Column="0" Classes="body"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis"
+                 Text="{Binding Message}" />
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding IsEditing}">
+        <Button Content="Undo" Command="{Binding UndoCommand}"
+                ToolTip.Tip="Undo the last zone change" />
+        <Button Content="Redo" Command="{Binding RedoCommand}"
+                ToolTip.Tip="Redo the zone change just undone" />
+        <Button Content="Reset zones" Command="{Binding ResetZonesCommand}"
+                ToolTip.Tip="Discard every custom split and zone count. Keys are left alone." />
+        <Button Content="Reset keys" Command="{Binding ResetKeysCommand}"
+                ToolTip.Tip="Put every key back where Mullion would have put it. Zone shapes are left alone." />
+      </StackPanel>
+
+      <!-- Furthest right, matching the settings gear it sits under: the two are
+           the same kind of control, so they belong in the same column. -->
+      <Button Grid.Column="2" Classes="iconButton" Margin="6,0,0,0"
+              Classes.active="{Binding IsEditing}"
+              IsVisible="{Binding CanEdit}"
+              Command="{Binding ToggleEditCommand}"
+              ToolTip.Tip="{Binding IsEditing, Converter={x:Static ctl:EditLabelConverter.Instance}}">
+        <Path Data="{x:Static ctl:Icons.Pencil}" />
+      </Button>
+    </Grid>
+
+    <ctl:MonitorDiagram Grid.Row="1" DataContext="{Binding Diagram}"
+                        ModifierPrefix="{Binding ModifierPrefix}"
+                        x:CompileBindings="False" />
+
+    <!-- Only while editing: it describes what a drag does, and there are no
+         drags to describe otherwise. -->
+    <StackPanel Grid.Row="2" Spacing="2" Margin="0,8,0,0" IsVisible="{Binding IsEditing}">
+      <CheckBox Content="Snap splits while dragging"
+                IsChecked="{Binding SnapSplits}" />
+      <TextBlock Classes="body" Margin="24,0,0,0" TextWrapping="Wrap"
+                 Text="Seams settle on a 5% grid, on halves and thirds, and on the positions where a zone comes out at an exact 16:9 or 3:2 for that monitor. Hold Alt while dragging to place one freely." />
+    </StackPanel>
+  </Grid>
+</UserControl>

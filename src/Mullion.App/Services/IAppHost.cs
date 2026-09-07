@@ -1,4 +1,5 @@
 using Avalonia;
+using Mullion.Core.Hotkeys;
 using Mullion.App.ViewModels;
 
 namespace Mullion.App.Services;
@@ -32,7 +33,7 @@ public sealed record AppSnapshot(
 /// views and view models never reference Mullion.Platform.Windows directly.
 /// That boundary is what keeps a macOS backend a self-contained job.
 /// </summary>
-public interface IAppHost
+public interface IAppHost : IZoneEditingHost
 {
     event Action? StateChanged;
 
@@ -72,6 +73,29 @@ public sealed class DesignAppHost : IAppHost
     public void ResolveDragConflict() { }
 
     public void Rescan() => StateChanged?.Invoke();
+
+    // Editing does nothing here: this host exists so the XAML previewer and
+    // non-Windows builds have something to draw, and there is no config behind
+    // it to change.
+    public MonitorDiagramViewModel BuildInteractiveDiagram(
+        Action<GridPos>? onZoneActivated,
+        Action<string, IReadOnlyList<double>>? onSplitChanged,
+        Action<string, int>? onZoneCountChanged) => GetSnapshot().Diagram;
+
+    public void SetDisplayColumns(string slot, int columns) { }
+    public void SetDisplayWeights(string slot, IReadOnlyList<double> weights) { }
+    public bool HasCustomZones => false;
+    public void ResetAllOverrides() { }
+    public void ResetLayout() { }
+    public bool CanUndoZones => false;
+    public bool CanRedoZones => false;
+    public void UndoZones() { }
+    public void RedoZones() { }
+    public bool SnapSplits => true;
+    public void SetSnapSplits(bool value) { }
+    public void BeginRebind(int row, int col, Action<RebindResult> completed) =>
+        completed(new RebindResult(false, "Not available here."));
+    public void CancelRebind() { }
 
     public AppSnapshot GetSnapshot()
     {

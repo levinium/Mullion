@@ -416,6 +416,16 @@
     <Setter Property="Fill" Value="{DynamicResource Ink}" />
   </Style>
 
+  <!-- A toggle, not a launcher: while editing, the pencil has to look pressed
+       or "Done" is a state with nothing showing it. -->
+  <Style Selector="Button.iconButton.active">
+    <Setter Property="Background" Value="{DynamicResource AccentMid}" />
+  </Style>
+
+  <Style Selector="Button.iconButton.active > Path">
+    <Setter Property="Fill" Value="{DynamicResource Ink}" />
+  </Style>
+
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="Foreground" Value="#FFFFFF" />

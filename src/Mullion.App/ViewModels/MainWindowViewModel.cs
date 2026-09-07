@@ -16,8 +16,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 {
     private readonly IAppHost _host;
 
-    [ObservableProperty]
-    private MonitorDiagramViewModel _diagram = new();
+
+    /// <summary>
+    /// The diagram and the controls that reshape it. Here rather than only in
+    /// settings because this is the window the layout is already on: going to
+    /// another one to change what you are looking at is a detour, not a step.
+    /// </summary>
+    public ZoneEditorViewModel Editor { get; }
 
     [ObservableProperty]
     private string _topologySummary = "Detecting displays…";
@@ -78,6 +83,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(IAppHost host)
     {
         _host = host;
+
+        // Before the first Refresh, which asks it to rebuild.
+        Editor = new ZoneEditorViewModel(host);
+
         _host.StateChanged += Refresh;
         Refresh();
     }
@@ -131,7 +140,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         var snapshot = _host.GetSnapshot();
 
-        Diagram = snapshot.Diagram;
+        Editor.Refresh();
         TopologySummary = snapshot.TopologySummary;
         HookStatus = snapshot.HookStatus;
         PrivilegeStatus = snapshot.PrivilegeStatus;

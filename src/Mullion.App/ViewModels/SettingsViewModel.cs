@@ -80,7 +80,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<DisplaySplitViewModel> _splits = [];
 
-    public bool HasCustomSplits => Splits.Any(s => s.IsCustom);
+    /// <summary>
+    /// The diagram and its editing controls, shared with the main window so
+    /// there is one editor to learn rather than two that drift apart. Always in
+    /// editing mode here: this page is where someone came TO change things.
+    /// </summary>
+    public ZoneEditorViewModel Editor { get; }
 
     [ObservableProperty]
     private string? _layoutMessage;
@@ -96,9 +101,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _showZoneFlash;
-
-    [ObservableProperty]
-    private bool _snapSplits;
 
     [ObservableProperty]
     private bool _allowSpanningUnions;
@@ -146,9 +148,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// again in a table where the spatial arrangement is invisible.
     /// </summary>
     [ObservableProperty]
-    private MonitorDiagramViewModel _diagram = new();
-
-    [ObservableProperty]
     private string _configPath = string.Empty;
 
     [ObservableProperty]
@@ -168,6 +167,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(ISettingsHost host)
     {
         _host = host;
+
+        // Always editing: this page is where someone came TO change things, so
+        // an Edit button to press first would only be in the way.
+        Editor = new ZoneEditorViewModel(host) { IsEditing = true, CanEdit = false };
+
+        // The list and the diagram show the same zones, so a zone waiting for a
+        // key has to look like it in both. The editor is where that state lives.
+        Editor.CapturingChanged += (was, now) =>
+        {
+            if (was is not null) SetRowCapturing(was.Value, false);
+            if (now is not null) SetRowCapturing(now.Value, true);
+        };
+
         Reload();
     }
 
@@ -210,7 +222,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         StartWithWindows = s.AutoStart is AutoStartMode.Standard or AutoStartMode.Elevated;
         StartElevated = s.AutoStart is AutoStartMode.Elevated;
         ShowZoneFlash = s.ShowZoneFlash;
-        SnapSplits = _host.SnapSplits;
         AllowSpanningUnions = s.AllowSpanningUnions;
         StartInTray = s.StartInTray;
         SelectedHotkeyModifier = HotkeyModifiers.FirstOrDefault(
@@ -252,56 +263,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             }),
         ];
 
-        Diagram = _host.BuildInteractiveDiagram(
-            BeginRebindAt, ApplySplitWeights,
-            (slot, count) => { _host.SetDisplayColumns(slot, count); Reload(); });
-        OnPropertyChanged(nameof(HasCustomSplits));
-
-        // The buttons grey out at the ends of the history.
-        OnPropertyChanged(nameof(CanUndoZones));
-        OnPropertyChanged(nameof(CanRedoZones));
-        UndoZonesCommand.NotifyCanExecuteChanged();
-        RedoZonesCommand.NotifyCanExecuteChanged();
+        Editor.Refresh();
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
-    }
-
-    /// <summary>
-    /// Undo and redo for zone shapes. Exposed as commands so the buttons grey
-    /// out at the ends of the history rather than being pressable and inert.
-    /// </summary>
-    public bool CanUndoZones => _host.CanUndoZones;
-
-    public bool CanRedoZones => _host.CanRedoZones;
-
-    [RelayCommand(CanExecute = nameof(CanUndoZones))]
-    private void UndoZones()
-    {
-        _host.UndoZones();
-        Reload();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRedoZones))]
-    private void RedoZones()
-    {
-        _host.RedoZones();
-        Reload();
-    }
-
-    /// <summary>
-    /// Save a split the user has just dragged, then reload.
-    /// <para>
-    /// The reload redraws from the regenerated layout rather than leaving the
-    /// dragged picture in place, so what stays on screen is what was actually
-    /// saved. If the two ever disagree the zones visibly move when the seam is
-    /// released, which is the right way to find out.
-    /// </para>
-    /// </summary>
-    private void ApplySplitWeights(string slot, IReadOnlyList<double> weights)
-    {
-        _host.SetDisplayWeights(slot, weights);
-        Reload();
     }
 
     partial void OnStartWithWindowsChanged(bool value) => ApplyAutoStart();
@@ -311,17 +276,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowZoneFlashChanged(bool value)
     {
         if (!_loading) _host.SetShowZoneFlash(value);
-    }
-
-    partial void OnSnapSplitsChanged(bool value)
-    {
-        if (_loading) return;
-
-        _host.SetSnapSplits(value);
-
-        // The diagram builds its snap positions once, when it is built, so it
-        // has to be rebuilt for the change to reach a drag.
-        Reload();
     }
 
     partial void OnSelectedHotkeyModifierChanged(string value)
@@ -359,14 +313,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SuppressionIsDefault));
         OnPropertyChanged(nameof(SuppressionWarning));
-    }
-
-    [RelayCommand]
-    private void ResetAllSplits()
-    {
-        _host.ResetAllOverrides();
-        LayoutMessage = "Custom splits cleared.";
-        Reload();
     }
 
     /// <summary>
@@ -431,42 +377,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasError));
     }
 
-    private GridPos? _capturing;
-
     [RelayCommand]
     private void Rebind(BindingRowViewModel? row)
     {
-        if (row is not null) BeginRebindAt(new GridPos(row.Row, row.Col));
-    }
-
-    /// <summary>Start capture for a zone, from the diagram or the list alike.</summary>
-    private void BeginRebindAt(GridPos position)
-    {
-        // Clicking the same zone again cancels, so capture is never a trap the
-        // user cannot get out of.
-        if (_capturing == position)
-        {
-            CancelCapture();
-            return;
-        }
-
-        CancelCapture();
-
-        _capturing = position;
-        Diagram.SetCapturing(position);
-        SetRowCapturing(position, true);
-
-        RebindMessage = "Hold Win and press the key you want for this zone. Click it again to cancel.";
-
-        _host.BeginRebind(position.Row, position.Col, result =>
-        {
-            SetRowCapturing(position, false);
-            Diagram.SetCapturing(null);
-            _capturing = null;
-            RebindMessage = result.Message;
-
-            if (result.Success) Reload();
-        });
+        if (row is not null) Editor.BeginRebindAt(new GridPos(row.Row, row.Col));
     }
 
     private void SetRowCapturing(GridPos position, bool capturing)
@@ -474,25 +388,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var row in Bindings)
             if (row.Row == position.Row && row.Col == position.Col)
                 row.IsCapturing = capturing;
-    }
-
-    private void CancelCapture()
-    {
-        if (_capturing is null) return;
-
-        SetRowCapturing(_capturing.Value, false);
-        Diagram.SetCapturing(null);
-        _capturing = null;
-        _host.CancelRebind();
-        RebindMessage = null;
-    }
-
-    [RelayCommand]
-    private void ResetLayout()
-    {
-        _host.ResetLayout();
-        RebindMessage = "Layout reset to the generated default.";
-        Reload();
     }
 
     [RelayCommand]
@@ -538,9 +433,11 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void RedoZones() { }
 
     public MonitorDiagramViewModel BuildInteractiveDiagram(
-        Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged,
-        Action<string, int> onZoneCountChanged) => new();
+        Action<GridPos>? onZoneActivated,
+        Action<string, IReadOnlyList<double>>? onSplitChanged,
+        Action<string, int>? onZoneCountChanged) => new();
+
+    public bool HasCustomZones => false;
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
 
