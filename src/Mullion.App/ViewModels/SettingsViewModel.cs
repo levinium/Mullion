@@ -33,8 +33,58 @@ public sealed record SuppressionOption(string Id, string Name)
     public override string ToString() => Name;
 }
 
+/// <summary>One display in the customisation list.</summary>
+public sealed partial class DisplaySplitViewModel : ObservableObject
+{
+    public required string Slot { get; init; }
+    public required string Name { get; init; }
+    public required string Detail { get; init; }
+    public required int Min { get; init; }
+    public required int Max { get; init; }
+
+    [ObservableProperty]
+    private int _columns;
+
+    [ObservableProperty]
+    private bool _isCustom;
+
+    /// <summary>Set by the view model; a row does not know about the host.</summary>
+    public Action<string, int>? ColumnsChanged { get; set; }
+
+    public Action<string>? ResetRequested { get; set; }
+
+    public bool CanAdd => Columns < Max;
+
+    public bool CanRemove => Columns > Min;
+
+    public string Summary => Columns == 1 ? "1 zone" : $"{Columns} zones";
+
+    [RelayCommand]
+    private void Add()
+    {
+        if (CanAdd) ColumnsChanged?.Invoke(Slot, Columns + 1);
+    }
+
+    [RelayCommand]
+    private void Remove()
+    {
+        if (CanRemove) ColumnsChanged?.Invoke(Slot, Columns - 1);
+    }
+
+    [RelayCommand]
+    private void Reset() => ResetRequested?.Invoke(Slot);
+}
+
 public sealed partial class SettingsViewModel : ObservableObject
 {
+    [ObservableProperty]
+    private IReadOnlyList<DisplaySplitViewModel> _splits = [];
+
+    public bool HasCustomSplits => Splits.Any(s => s.IsCustom);
+
+    [ObservableProperty]
+    private string? _layoutMessage;
+
     private readonly ISettingsHost _host;
     private bool _loading;
 
@@ -182,7 +232,24 @@ public sealed partial class SettingsViewModel : ObservableObject
             Col = b.Col,
         })];
 
+        Splits =
+        [
+            .. _host.GetCustomizations().Select(c => new DisplaySplitViewModel
+            {
+                Slot = c.Slot,
+                Name = c.Name,
+                Detail = c.Detail,
+                Columns = c.Columns,
+                Min = c.Min,
+                Max = c.Max,
+                IsCustom = c.IsCustom,
+                ColumnsChanged = (slot, n) => { _host.SetDisplayColumns(slot, n); Reload(); },
+                ResetRequested = slot => { _host.ResetDisplayOverride(slot); Reload(); },
+            }),
+        ];
+
         Diagram = _host.BuildInteractiveDiagram(BeginRebindAt);
+        OnPropertyChanged(nameof(HasCustomSplits));
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
@@ -232,6 +299,43 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SuppressionIsDefault));
         OnPropertyChanged(nameof(SuppressionWarning));
+    }
+
+    [RelayCommand]
+    private void ResetAllSplits()
+    {
+        _host.ResetAllOverrides();
+        LayoutMessage = "Custom splits cleared.";
+        Reload();
+    }
+
+    /// <summary>
+    /// Set by the window, which owns the file dialogs: a view model that reached
+    /// for the file system directly could not be run headless.
+    /// </summary>
+    public Func<string, string, Task>? SaveFileRequested { get; set; }
+
+    public Func<Task<string?>>? OpenFileRequested { get; set; }
+
+    [RelayCommand]
+    private async Task ExportLayout()
+    {
+        if (SaveFileRequested is null) return;
+
+        await SaveFileRequested("mullion-layout.json", _host.ExportLayout("Mullion layout"));
+        LayoutMessage = "Layout exported.";
+    }
+
+    [RelayCommand]
+    private async Task ImportLayout()
+    {
+        if (OpenFileRequested is null) return;
+
+        var json = await OpenFileRequested();
+        if (json is null) return;
+
+        LayoutMessage = _host.ImportLayout(json) ?? "Layout imported.";
+        Reload();
     }
 
     [RelayCommand]
@@ -375,6 +479,16 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void SetStartInTray(bool value) { }
 
     public void SetHotkeyModifier(string value) { }
+
+    public IReadOnlyList<DisplayCustomization> GetCustomizations() =>
+        [new DisplayCustomization("5120x1440@0,0", "Sample display", "5120 × 1440", 3, 1, 5, false, [0.25, 0.5, 0.25])];
+
+    public void SetDisplayColumns(string slot, int columns) { }
+    public void SetDisplayWeights(string slot, IReadOnlyList<double> weights) { }
+    public void ResetDisplayOverride(string slot) { }
+    public void ResetAllOverrides() { }
+    public string ExportLayout(string name) => "{}";
+    public string? ImportLayout(string json) => null;
     public void SetWinKeySuppression(string value) { }
     public void SetKeySurface(string surfaceId) { }
     public void RestartElevated() { }

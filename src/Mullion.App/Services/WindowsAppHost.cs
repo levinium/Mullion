@@ -330,7 +330,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
                 when resolution.Profile is not null
                 => ProfileResolver.ToLayout(resolution.Profile, _displays),
             _ => LayoutBuilder.Build(_displays, KeySurface.LeftHandBlock,
-                    _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions),
+                    _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions,
+                    _config.Overrides),
         };
 
         if (resolution.Match == ProfileMatch.None && Simulated is null)
@@ -590,6 +591,134 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         Regenerate();
     }
 
+    // ---- Hand-made splits --------------------------------------------------
+
+    public IReadOnlyList<DisplayCustomization> GetCustomizations()
+    {
+        if (_layout is null) return [];
+
+        var hasOthers = _displays.Count > 1;
+        var tuning = _config.General.Shape.ToTuning();
+        var bySlot = _config.Overrides.ToDictionary(o => o.Slot, StringComparer.Ordinal);
+
+        return
+        [
+            .. _displays.Select(d =>
+            {
+                var slot = DisplaySlot.Of(d);
+                var counts = ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, tuning);
+                var zones = ZonesAcross(d);
+
+                return new DisplayCustomization(
+                    slot,
+                    d.FriendlyName,
+                    $"{d.Bounds.Width} × {d.Bounds.Height}",
+                    zones.Count,
+
+                    // The analyzer's own bounds, so stepping cannot produce a
+                    // split it would itself have rejected as unusable. One is
+                    // always allowed: "leave this display whole" is a legitimate
+                    // answer even where the analyzer would rather split it.
+                    Math.Min(1, counts.Min),
+                    Math.Max(counts.Max, zones.Count),
+                    bySlot.ContainsKey(slot),
+                    zones.Weights);
+            }),
+        ];
+    }
+
+    /// <summary>
+    /// The zones actually drawn across this display, and their relative sizes.
+    /// Read from the layout rather than recomputed, so what the UI shows is what
+    /// is on screen even when the two could differ.
+    /// </summary>
+    private (int Count, IReadOnlyList<double> Weights) ZonesAcross(DisplayInfo display)
+    {
+        if (_layout is null) return (1, [1]);
+
+        var home = _layout.Surface.HomeRow;
+
+        var areas = _layout.Zones
+            .Where(z => z.Position.Row == home && z.Kind != ZoneKind.Union)
+            .SelectMany(z => z.Parts.Where(p => p.DisplayKey == display.StableKey).Select(p => p.Area))
+            .OrderBy(a => a.X)
+            .ToList();
+
+        if (areas.Count == 0) return (1, [1]);
+
+        return (areas.Count, [.. areas.Select(a => a.W)]);
+    }
+
+    public void SetDisplayColumns(string slot, int columns)
+    {
+        // Changing the count invalidates weights meant for the old one, so they
+        // are dropped rather than left to be silently ignored later.
+        UpdateOverride(slot, o => new DisplayOverride(slot, columns, null));
+    }
+
+    public void SetDisplayWeights(string slot, IReadOnlyList<double> weights)
+    {
+        UpdateOverride(slot, o => new DisplayOverride(slot, weights.Count, [.. weights]));
+    }
+
+    public void ResetDisplayOverride(string slot)
+    {
+        _config = _config with { Overrides = [.. _config.Overrides.Where(o => o.Slot != slot)] };
+        Save();
+        Regenerate();
+    }
+
+    public void ResetAllOverrides()
+    {
+        _config = _config with { Overrides = [] };
+        Save();
+        Regenerate();
+    }
+
+    private void UpdateOverride(string slot, Func<DisplayOverride?, DisplayOverride> change)
+    {
+        var existing = _config.Overrides.FirstOrDefault(o => o.Slot == slot);
+        var replaced = _config.Overrides.Where(o => o.Slot != slot).ToList();
+
+        replaced.Add(change(existing));
+
+        _config = _config with { Overrides = replaced };
+        Save();
+        Regenerate();
+    }
+
+    public string ExportLayout(string name) => LayoutPackageIo.Serialize(
+        LayoutPackageIo.Export(
+            _config.Overrides,
+            [.. _displays.Select(DisplaySlot.Of)],
+            _layout?.Surface.Id ?? KeySurface.LeftHandBlock.Id,
+            name));
+
+    public string? ImportLayout(string json)
+    {
+        var package = LayoutPackageIo.Deserialize(json, out var error);
+        if (package is null) return error;
+
+        var preview = LayoutPackageIo.Preview(package, [.. _displays.Select(DisplaySlot.Of)]);
+
+        _config = _config with
+        {
+            Overrides = LayoutPackageIo.Merge(_config.Overrides, package.Overrides),
+        };
+
+        Save();
+
+        if (KeySurface.All.Any(s => s.Id == package.SurfaceId)) SetKeySurface(package.SurfaceId);
+        else Regenerate();
+
+        // Importing a layout for a desk you do not currently have is allowed -
+        // it will apply when that display appears - but saying nothing would
+        // look exactly like a failed import.
+        return preview.AnythingApplies
+            ? null
+            : "Imported, but none of it applies to the displays attached right now. " +
+              $"It was made for: {string.Join(", ", preview.Missing)}.";
+    }
     public void SetStartInTray(bool value) => UpdateGeneral(g => g with { StartInTray = value });
 
     public void SetDragToSnap(bool enabled, string modifier)
@@ -628,7 +757,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         if (surface is null || _displays.Count == 0) return;
 
         _layout = LayoutBuilder.Build(
-            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+            _displays, surface, _config.General.Shape.ToTuning(),
+            _config.General.AllowSpanningUnions, _config.Overrides);
 
         _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
@@ -713,7 +843,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
 
         _layout = LayoutBuilder.Build(
-            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+            _displays, surface, _config.General.Shape.ToTuning(),
+            _config.General.AllowSpanningUnions, _config.Overrides);
 
         _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
@@ -727,7 +858,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
 
         _layout = LayoutBuilder.Build(
-            _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
+            _displays, surface, _config.General.Shape.ToTuning(),
+            _config.General.AllowSpanningUnions, _config.Overrides);
 
         _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();

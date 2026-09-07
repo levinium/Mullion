@@ -11,6 +11,22 @@ public sealed record BindingEntry(string Key, string Zone, int Row, int Col);
 
 public sealed record RebindResult(bool Success, string Message);
 
+/// <summary>One display's split, as the settings UI needs to show and change it.</summary>
+/// <param name="Slot">Identifies the place on the desk; see DisplaySlot.</param>
+/// <param name="Columns">Zones across, or down on a portrait display.</param>
+/// <param name="Min">Fewest that stay usable at this size, from the shape analyzer.</param>
+/// <param name="Max">Most that stay usable, likewise.</param>
+/// <param name="IsCustom">Set by hand rather than derived, so it can be reverted.</param>
+public sealed record DisplayCustomization(
+    string Slot,
+    string Name,
+    string Detail,
+    int Columns,
+    int Min,
+    int Max,
+    bool IsCustom,
+    IReadOnlyList<double> Weights);
+
 public sealed record SettingsSnapshot(
     AutoStartMode AutoStart,
     bool CanConfigureElevatedAutoStart,
@@ -47,6 +63,26 @@ public interface ISettingsHost
 
     /// <summary>Which modifier every zone hotkey is taken with.</summary>
     void SetHotkeyModifier(string value);
+
+    /// <summary>The displays and their splits, for the customisation UI.</summary>
+    IReadOnlyList<DisplayCustomization> GetCustomizations();
+
+    /// <summary>Set how many zones a display splits into, by hand.</summary>
+    void SetDisplayColumns(string slot, int columns);
+
+    /// <summary>Set the relative sizes of a display's zones.</summary>
+    void SetDisplayWeights(string slot, IReadOnlyList<double> weights);
+
+    /// <summary>Forget one display's customisation, or all of them.</summary>
+    void ResetDisplayOverride(string slot);
+
+    void ResetAllOverrides();
+
+    /// <summary>The current customisations as a portable document.</summary>
+    string ExportLayout(string name);
+
+    /// <summary>Apply a document. Returns an error to show, or null on success.</summary>
+    string? ImportLayout(string json);
 
     void SetWinKeySuppression(string value);
 
