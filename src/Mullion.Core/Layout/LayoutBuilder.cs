@@ -34,11 +34,19 @@ public static class LayoutBuilder
         IReadOnlyList<DisplayInfo> displays,
         KeySurface? surface = null,
         ShapeTuning? tuning = null,
-        bool allowSpanningUnions = true)
+        bool allowSpanningUnions = true,
+        IReadOnlyList<DisplayOverride>? overrides = null)
     {
         var s = surface ?? KeySurface.LeftHandBlock;
         var t = tuning ?? ShapeTuning.Default;
         var notes = new List<string>();
+
+        // Keyed by slot, so an override follows the place on the desk rather
+        // than the monitor that happened to be there when it was made.
+        var custom = (overrides ?? [])
+            .Where(o => !o.IsEmpty)
+            .GroupBy(o => o.Slot)
+            .ToDictionary(g => g.Key, g => g.Last());
 
         if (displays.Count == 0) return new LayoutResult([], s, ["No displays detected."]);
 
@@ -49,11 +57,14 @@ public static class LayoutBuilder
         // A landscape display subdivides into columns; a portrait one subdivides
         // into rows and therefore asks for a single column.
         var demand = columns
-            .Select(c => c.Displays.Max(d => HorizontalSplits(d, hasOthers, t)))
+            .Select(c => c.Displays.Max(d => HorizontalSplits(d, hasOthers, t, custom)))
             .ToArray();
 
+        // A hand-set count is a floor as well as a demand: coarsening exists to
+        // fit the key surface, and silently undoing what somebody chose is not
+        // the way to find the room.
         var floor = columns
-            .Select(c => c.Displays.Max(d => HorizontalFloor(d, hasOthers, t)))
+            .Select(c => c.Displays.Max(d => HorizontalFloor(d, hasOthers, t, custom)))
             .ToArray();
 
         // --- Step 2: coarsen if over budget ---------------------------------
@@ -104,7 +115,8 @@ public static class LayoutBuilder
             for (var slice = 0; slice < splits; slice++, surfaceCol++)
             {
                 var target = spread && surfaceCol == 1 ? 2 : surfaceCol;
-                zones.AddRange(BuildSubColumn(column, slice, splits, target, s, t, hasOthers, allowSpanningUnions, notes));
+                zones.AddRange(BuildSubColumn(
+                    column, slice, splits, target, s, t, hasOthers, allowSpanningUnions, custom, notes));
             }
         }
 
@@ -224,6 +236,7 @@ public static class LayoutBuilder
         ShapeTuning t,
         bool hasOthers,
         bool allowSpanningUnions,
+        IReadOnlyDictionary<string, DisplayOverride> custom,
         List<string> notes)
     {
         var depth = column.Depth;
@@ -231,7 +244,7 @@ public static class LayoutBuilder
 
         // Each display's horizontal slice, top to bottom.
         var slices = column.Displays
-            .Select(d => (Display: d, Area: HorizontalSlice(d, slice, sliceCount, hasOthers, t)))
+            .Select(d => (Display: d, Area: HorizontalSlice(d, slice, sliceCount, hasOthers, t, custom)))
             .ToList();
 
         // ---- One display in this column: spend spare rows on tiers ---------
@@ -373,23 +386,54 @@ public static class LayoutBuilder
     }
 
     private static NormRect HorizontalSlice(
-        DisplayInfo display, int slice, int sliceCount, bool hasOthers, ShapeTuning t)
+        DisplayInfo display, int slice, int sliceCount, bool hasOthers, ShapeTuning t,
+        IReadOnlyDictionary<string, DisplayOverride> custom)
     {
         if (sliceCount <= 1) return NormRect.Full;
 
-        var weights = SplitGenerator.Best(display.Bounds, sliceCount, t).Weights;
+        var weights = CustomWeights(display, sliceCount, custom)
+                      ?? SplitGenerator.Best(display.Bounds, sliceCount, t).Weights;
+
         return NormRect.Full.Split(Axis.Horizontal, weights)[slice];
     }
 
-    private static int HorizontalSplits(DisplayInfo d, bool hasOthers, ShapeTuning t) =>
-        d.SplitAxis == Axis.Horizontal
-            ? ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, t).Preferred
-            : 1;
+    /// <summary>
+    /// Hand-set weights, but only when they still describe this many zones: a
+    /// count changed since they were saved leaves them meaningless, and half a
+    /// remembered split is worse than a freshly derived one.
+    /// </summary>
+    private static IReadOnlyList<double>? CustomWeights(
+        DisplayInfo display, int count, IReadOnlyDictionary<string, DisplayOverride> custom)
+    {
+        if (!custom.TryGetValue(DisplaySlot.Of(display), out var o)) return null;
+        if (o.Weights is null || o.Weights.Count != count) return null;
 
-    private static int HorizontalFloor(DisplayInfo d, bool hasOthers, ShapeTuning t) =>
-        d.SplitAxis == Axis.Horizontal
-            ? ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, t).Min
-            : 1;
+        return o.Weights.All(w => w > 0) ? o.Weights : null;
+    }
+
+    private static int HorizontalSplits(
+        DisplayInfo d, bool hasOthers, ShapeTuning t,
+        IReadOnlyDictionary<string, DisplayOverride> custom)
+    {
+        if (d.SplitAxis != Axis.Horizontal) return 1;
+
+        if (custom.TryGetValue(DisplaySlot.Of(d), out var o) && o.Columns is > 0)
+            return o.Columns.Value;
+
+        return ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, t).Preferred;
+    }
+
+    private static int HorizontalFloor(
+        DisplayInfo d, bool hasOthers, ShapeTuning t,
+        IReadOnlyDictionary<string, DisplayOverride> custom)
+    {
+        if (d.SplitAxis != Axis.Horizontal) return 1;
+
+        if (custom.TryGetValue(DisplaySlot.Of(d), out var o) && o.Columns is > 0)
+            return o.Columns.Value;
+
+        return ShapeAnalyzer.ZoneCounts(d.Bounds, d.Dpi, hasOthers, t).Min;
+    }
 
     private static int VerticalSplits(DisplayInfo d, bool hasOthers, ShapeTuning t) =>
         d.SplitAxis == Axis.Vertical

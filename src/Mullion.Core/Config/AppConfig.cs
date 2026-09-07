@@ -92,6 +92,14 @@ public sealed record AppConfig
     public GeneralSettings General { get; init; } = new();
     public IReadOnlyList<ProfileRecord> Profiles { get; init; } = [];
     public Guid? ActiveProfileId { get; init; }
+
+    /// <summary>
+    /// Hand-made splits, keyed by the place a display occupies rather than by
+    /// which monitor it is. Kept outside Profiles on purpose: a profile is a
+    /// generated answer for one arrangement, while these are the parts the user
+    /// decided for themselves and expects to survive.
+    /// </summary>
+    public IReadOnlyList<DisplayOverride> Overrides { get; init; } = [];
 }
 
 [JsonSourceGenerationOptions(
