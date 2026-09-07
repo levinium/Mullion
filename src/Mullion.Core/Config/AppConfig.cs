@@ -48,6 +48,8 @@ public sealed record GeneralSettings
     public string WinKeySuppression { get; init; } = nameof(Hotkeys.WinKeySuppression.DummyKey);
     public bool IgnoreInjectedInput { get; init; }
     public bool AllowSpanningUnions { get; init; } = true;
+    public bool DragToSnap { get; init; } = true;
+    public string DragModifier { get; init; } = nameof(Model.DragModifier.Shift);
     public int UndoDepth { get; init; } = 20;
     public string Theme { get; init; } = "system";
     public ShapeTuningRecord Shape { get; init; } = new();

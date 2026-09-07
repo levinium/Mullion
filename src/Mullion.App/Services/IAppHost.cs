@@ -17,7 +17,15 @@ public sealed record AppSnapshot(
     string? BlockedByWindow,
 
     /// <summary>Name of the simulated arrangement, or null when using real hardware.</summary>
-    string? SimulationName);
+    string? SimulationName,
+
+    /// <summary>Another zone manager is reacting to the same drag gesture.</summary>
+    bool DragConflict,
+
+    string? DragConflictDetail,
+
+    /// <summary>Label for the conflict banner's button; what is left to do changes.</summary>
+    string DragConflictAction);
 
 /// <summary>
 /// Everything the UI needs from the platform, behind one interface so the
@@ -31,6 +39,9 @@ public interface IAppHost
     bool Paused { get; set; }
 
     void RestartElevated();
+
+    /// <summary>Turn off the other zone manager competing for the drag gesture.</summary>
+    void ResolveDragConflict();
 
     AppSnapshot GetSnapshot();
 
@@ -49,6 +60,8 @@ public sealed class DesignAppHost : IAppHost
     public void Start() => StateChanged?.Invoke();
 
     public void RestartElevated() { }
+
+    public void ResolveDragConflict() { }
 
     public void Rescan() => StateChanged?.Invoke();
 
@@ -89,7 +102,10 @@ public sealed class DesignAppHost : IAppHost
             [],
             false,
             null,
-            null);
+            null,
+            false,
+            null,
+            "Turn off FancyZones");
     }
 
     private static ZoneCellViewModel Cell(

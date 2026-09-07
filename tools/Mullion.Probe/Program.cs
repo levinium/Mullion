@@ -217,6 +217,66 @@ if (argv.Contains("--elevation-check"))
     return consistent ? 0 : 1;
 }
 
+if (argv.Contains("--drag-test"))
+{
+    // The open question drag-to-snap rests on: EVENT_SYSTEM_MOVESIZESTART only
+    // fires for windows that use the standard modal move loop, and an app that
+    // drags its own title bar never enters it. This says which of YOUR apps
+    // report a drag, which is the only way to know whether the plain hook is
+    // enough or a mouse hook is needed as well.
+    var targets = DropTargets.Build(layout, displays);
+
+    Console.WriteLine($"{targets.Count} drop targets:");
+    foreach (var t in targets) Console.WriteLine($"  {t.Zone.Name,-16} {t.Bounds}");
+    Console.WriteLine();
+    Console.WriteLine("Drag some windows around. Hold SHIFT while dragging to see the");
+    Console.WriteLine("target that would be used. Ctrl+C to stop.");
+    Console.WriteLine();
+
+    using var watcher = new DragWatcher();
+    var lastZone = string.Empty;
+
+    watcher.DragStarted += d =>
+        Console.WriteLine($"START  {Describe(d.Hwnd)}  {d.Width}x{d.Height} at {d.X},{d.Y}");
+
+    watcher.DragMoved += d =>
+    {
+        var shift = Modifiers.IsShiftDown;
+        var hit = DropTargets.HitTest(targets, d.X, d.Y);
+        var name = $"{shift}|{hit?.Zone.Name ?? "-"}";
+
+        // Location changes arrive continuously; only report what changed.
+        if (name == lastZone) return;
+        lastZone = name;
+
+        Console.WriteLine($"  over {hit?.Zone.Name ?? "(no zone)",-16} shift={shift}");
+    };
+
+    watcher.DragEnded += d =>
+    {
+        var shift = Modifiers.IsShiftDown;
+        var hit = DropTargets.HitTest(targets, d.X, d.Y);
+        lastZone = string.Empty;
+
+        Console.WriteLine(
+            $"END    {d.Width}x{d.Height} at {d.X},{d.Y}  shift={shift}  " +
+            $"would snap to: {(shift ? hit?.Zone.Name ?? "(no zone)" : "(shift not held)")}");
+        Console.WriteLine();
+    };
+
+    Thread.Sleep(Timeout.Infinite);
+    return 0;
+
+    // Naming the process is the whole point of this mode: the question is which
+    // APPS report a drag, and an hwnd alone does not answer it.
+    static string Describe(nint hwnd)
+    {
+        DragProbe.GetWindowThreadProcessId(hwnd, out var pid);
+        try { return $"{System.Diagnostics.Process.GetProcessById((int)pid).ProcessName,-16} 0x{hwnd:X}"; }
+        catch { return $"{"?",-16} 0x{hwnd:X}"; }
+    }
+}
+
 if (argv.Contains("--fullscreen-check"))
 {
     var active = Mullion.Platform.Windows.Windows.FullscreenDetector.IsFullscreenActive(out var why);
@@ -631,3 +691,11 @@ static HashSet<string> ReadPowerToysWinRemaps()
 string BoundKeys() => string.Join(" ", layout.Zones
     .OrderBy(z => z.Position.Row).ThenBy(z => z.Position.Col)
     .Select(z => surface.FallbackLabelAt(z.Position)));
+
+// DllImport, not LibraryImport: the generator that backs LibraryImport emits
+// unsafe code, and this project does not allow it for one P/Invoke.
+internal static class DragProbe
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    internal static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+}

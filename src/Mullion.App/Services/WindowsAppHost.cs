@@ -120,9 +120,167 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _foreground.ReachChanged += OnReachChanged;
         }
 
+        StartDragToSnap();
+
         // Rescan raised StateChanged before the hook existed, so the UI would
         // otherwise sit showing "Not installed" until something else changed.
         StateChanged?.Invoke();
+    }
+
+    // ---- Drag to snap -----------------------------------------------------
+
+    private DragWatcher? _drag;
+    private readonly DragZoneOverlay _dragOverlay = new();
+    private IReadOnlyList<DropTarget> _dropTargets = [];
+    private DropTarget? _dropHover;
+    private int _dragStartWidth;
+    private int _dragStartHeight;
+    private bool _dragArmed;
+
+    private FancyZonesState _fancyZones = new(false, false, false, false);
+
+    /// <summary>
+    /// Why the drag gesture is contested, in the user's terms rather than ours.
+    /// </summary>
+    private string? DescribeDragConflict()
+    {
+        if (!_fancyZones.Collides) return null;
+
+        var gesture = _fancyZones.ShiftDrag
+            ? $"{DragArmingModifier}+drag"
+            : "every window drag";
+
+        // Already switched off, but still running: PowerToys reads its enabled
+        // flags at startup only. Saying "turned off" here while the module goes
+        // on claiming the drag would be worse than saying nothing.
+        if (_fancyZones.DisabledInSettings)
+        {
+            return $"FancyZones is switched off in PowerToys settings, but it is still " +
+                   $"running and still claims {gesture}: PowerToys applies that setting " +
+                   "only when it restarts. Quit PowerToys from its tray icon and reopen " +
+                   "it, then press Check again.";
+        }
+
+        return $"PowerToys FancyZones is running and claims {gesture} as well. " +
+               "Both will move the window and whichever finishes last wins, so the " +
+               "result changes from drag to drag. Mullion replaces it.";
+    }
+
+    /// <summary>Label for the banner's button, which changes with what is left to do.</summary>
+    private string DragConflictActionText =>
+        _fancyZones.DisabledInSettings ? "Check again" : "Turn off FancyZones";
+
+    public void ResolveDragConflict()
+    {
+        // Once it is already off in settings there is nothing left to write, and
+        // the button is only a re-check after the user has restarted PowerToys.
+        if (_fancyZones.DisabledInSettings)
+        {
+            _fancyZones = FancyZones.Detect(DragArmingModifier);
+
+            _lastAction = _fancyZones.Collides
+                ? "FancyZones is still running. Quit and reopen PowerToys to apply it."
+                : "FancyZones is no longer running.";
+
+            _log.Info(_lastAction);
+            StateChanged?.Invoke();
+            return;
+        }
+
+        if (FancyZones.Disable(out var error, out var stopped))
+        {
+            _lastAction = stopped
+                ? "Turned off PowerToys FancyZones."
+                : "FancyZones switched off in PowerToys settings — restart PowerToys to apply it.";
+
+            _log.Info(_lastAction);
+        }
+        else
+        {
+            _lastAction = $"Could not turn off FancyZones: {error}";
+            _log.Warn(_lastAction);
+        }
+
+        _fancyZones = FancyZones.Detect(DragArmingModifier);
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>Config stores the modifier by name, as it does every other enum.</summary>
+    private DragModifier DragArmingModifier =>
+        Enum.TryParse<DragModifier>(_config.General.DragModifier, ignoreCase: true, out var m)
+            ? m
+            : DragModifier.Shift;
+
+    private void StartDragToSnap()
+    {
+        if (!_config.General.DragToSnap) return;
+
+        _fancyZones = FancyZones.Detect(DragArmingModifier);
+
+        _drag = new DragWatcher();
+        _drag.DragStarted += OnDragStarted;
+        _drag.DragMoved += OnDragMoved;
+        _drag.DragEnded += OnDragEnded;
+    }
+
+    private void OnDragStarted(DragState state)
+    {
+        _dragStartWidth = state.Width;
+        _dragStartHeight = state.Height;
+        _dragArmed = false;
+        _dropHover = null;
+    }
+
+    private void OnDragMoved(DragState state)
+    {
+        // Read the modifier now rather than at the drop: it is what tells a
+        // deliberate snap from an ordinary window move, and the overlay has to
+        // appear while the pointer is still moving to be of any use.
+        if (!Modifiers.IsDown(DragArmingModifier))
+        {
+            if (_dragArmed) { _dragArmed = false; _dragOverlay.Hide(); }
+            return;
+        }
+
+        if (!_dragArmed)
+        {
+            _dragArmed = true;
+            _dropTargets = _layout is null ? [] : DropTargets.Build(_layout, _displays);
+        }
+
+        var hit = DropTargets.HitTest(_dropTargets, state.X, state.Y);
+        if (ReferenceEquals(hit, _dropHover)) return;
+
+        _dropHover = hit;
+        _dragOverlay.Show(_dropTargets, hit);
+    }
+
+    private void OnDragEnded(DragState state)
+    {
+        _dragOverlay.Hide();
+
+        var armed = _dragArmed && Modifiers.IsDown(DragArmingModifier);
+        _dragArmed = false;
+
+        if (!armed) return;
+
+        // A resize raises the same events as a move. Dropping a resize into a
+        // zone would undo the resize the user just made, which is the opposite
+        // of what they asked for.
+        if (state.Width != _dragStartWidth || state.Height != _dragStartHeight) return;
+
+        var hit = DropTargets.HitTest(_dropTargets, state.X, state.Y);
+        if (hit is null) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var result = Windows.MoveWindowTo(state.Hwnd, hit.Bounds);
+            _lastAction = $"Dropped into {hit.Zone.Name}: {result.Outcome} {result.Achieved}";
+            _log.Info(_lastAction);
+
+            if (result.Outcome == MoveOutcome.Moved) _flash.Flash(result.Achieved);
+            StateChanged?.Invoke();
+        });
     }
 
     private void OnDisplaysChanged()
@@ -267,7 +425,10 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _conflicts,
             Elevation.IsCurrentProcessElevated,
             _reach.Reachable ? null : _reach.WindowTitle,
-            Simulated?.Name);
+            Simulated?.Name,
+            _fancyZones.Collides,
+            DescribeDragConflict(),
+            DragConflictActionText);
     }
 
     // ---- wizard ------------------------------------------------------------
@@ -593,6 +754,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _foreground?.Dispose();
         _watcher?.Dispose();
+        _drag?.Dispose();
+        _dragOverlay.Dispose();
         _engine?.Dispose();
         _flash.Dispose();
         _log.Info("Mullion stopping.");
