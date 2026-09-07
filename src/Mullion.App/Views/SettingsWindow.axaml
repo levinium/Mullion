@@ -113,10 +113,26 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+          <CheckBox Content="Snap splits while dragging"
+                    IsChecked="{Binding SnapSplits}" Margin="0,6,0,0" />
+          <TextBlock Classes="body" Margin="24,0,0,0"
+                     Text="Seams settle on a 5% grid, on halves and thirds, and on the positions where a zone comes out at an exact 16:9 or 3:2 for that monitor. Hold Alt while dragging to place one freely." />
+
+          <!-- Undo covers zone shapes only - seam drags, the steppers, and
+               these resets. Key rebinds live in the layout rather than the
+               overrides, and have their own way back under Hotkeys. -->
           <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
-            <Button Content="Reset all splits"
+            <Button Content="Undo" Command="{Binding UndoZonesCommand}"
+                    ToolTip.Tip="Undo the last zone change" />
+            <Button Content="Redo" Command="{Binding RedoZonesCommand}"
+                    ToolTip.Tip="Redo the zone change just undone" />
+            <Button Content="Reset zones to default"
                     Command="{Binding ResetAllSplitsCommand}"
-                    IsEnabled="{Binding HasCustomSplits}" />
+                    IsEnabled="{Binding HasCustomSplits}"
+                    ToolTip.Tip="Discard every custom split and zone count. Keys are left alone." />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
             <Button Content="Export layout…" Command="{Binding ExportLayoutCommand}" />
             <Button Content="Import layout…" Command="{Binding ImportLayoutCommand}" />
           </StackPanel>
@@ -208,10 +224,11 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <Button Content="Reset layout to default"
+          <Button Content="Reset keys to default"
                   Command="{Binding ResetLayoutCommand}"
                   HorizontalAlignment="Left"
-                  Margin="0,6,0,0" />
+                  Margin="0,6,0,0"
+                  ToolTip.Tip="Put every key back where Mullion would have put it. Zone shapes are left alone." />
         </StackPanel>
       </Border>
 

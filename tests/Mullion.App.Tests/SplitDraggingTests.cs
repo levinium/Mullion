@@ -21,6 +21,13 @@ namespace Mullion.App.Tests;
 /// </summary>
 public class SplitDraggingTests
 {
+    public static TheoryData<string> EveryArrangement()
+    {
+        var data = new TheoryData<string>();
+        foreach (var t in SimulatedTopologies.All) data.Add(t.Id);
+        return data;
+    }
+
     private static MonitorDiagramViewModel Build(
         string topologyId, out List<(string Slot, IReadOnlyList<double> Weights)> saved)
     {
@@ -90,7 +97,7 @@ public class SplitDraggingTests
         var third = display.Cells.OrderBy(c => c.Area.X).ToList()[2];
         var untouchedWidth = third.Area.Width;
 
-        display.Handles[0].Dragged!(0, 0.2);
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.2, false));
 
         var cells = display.Cells.OrderBy(c => c.Area.X).ToList();
 
@@ -112,7 +119,7 @@ public class SplitDraggingTests
 
         foreach (var target in new[] { 0.15, 0.3, 0.45, 0.6 })
         {
-            display.Handles[0].Dragged!(0, target);
+            display.Handles[0].Dragged!(new SeamDrag(0, target, false));
 
             var cells = display.Cells.OrderBy(c => c.Area.X).ToList();
 
@@ -132,13 +139,157 @@ public class SplitDraggingTests
 
         var display = diagram.Displays.Single();
 
-        display.Handles[0].Dragged!(0, -5);
+        display.Handles[0].Dragged!(new SeamDrag(0, -5, false));
 
         var narrowest = display.Cells.Min(c => c.Area.Width) * display.Bounds.Width;
 
         narrowest.ShouldBe(ShapeTuning.Default.MinZoneLogicalPx, 1.0);
     }
 
+
+    [Fact]
+    public void StepperButtonsAppearOnlyOnAnEditableDiagram()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var plain = MonitorDiagramViewModel.Build(topology.Displays, layout);
+        plain.Displays.ShouldAllBe(d => !d.CanEditZoneCount);
+
+        var editable = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onZoneCountChanged: (_, _) => { });
+
+        editable.Displays.ShouldAllBe(d => d.CanEditZoneCount);
+    }
+
+    [Fact]
+    public void SteppingStopsAtTheAnalyzersOwnBounds()
+    {
+        // The same bounds the Splits list uses, so a step here cannot produce a
+        // split the generator would itself have rejected as unusable.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onZoneCountChanged: (_, _) => { });
+
+        var display = diagram.Displays.Single();
+        var counts = ShapeAnalyzer.ZoneCounts(
+            topology.Displays[0].Bounds, topology.Displays[0].Dpi, false, ShapeTuning.Default);
+
+        display.MaxZones.ShouldBe(Math.Max(counts.Max, display.ZoneCount));
+
+        // "Leave this display whole" is always a legitimate answer, even on a
+        // 32:9 the analyzer would rather split.
+        display.MinZones.ShouldBe(1);
+        display.CanRemoveZone.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void SteppingReportsTheSlotAndTheNewCount()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var steps = new List<(string Slot, int Count)>();
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onZoneCountChanged: (slot, n) => steps.Add((slot, n)));
+
+        var display = diagram.Displays.Single();
+        display.ZoneCount.ShouldBe(3);
+
+        display.AddZoneCommand.Execute(null);
+        display.RemoveZoneCommand.Execute(null);
+
+        steps.ShouldBe([(display.Slot, 4), (display.Slot, 2)]);
+    }
+
+    [Fact]
+    public void ADraggedSeamSettlesOnASnapPosition()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onSplitChanged: (_, _) => { }, snapSplits: true);
+
+        var display = diagram.Displays.Single();
+
+        var work = topology.Displays[0].WorkArea;
+
+        // Deliberately between two stops.
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.2731, false));
+
+        var landed = display.Cells.OrderBy(c => c.Area.X).First().Area.Right;
+
+        var expected = SplitSnapping.Snap(
+            0.2731, SplitSnapping.Candidates(0, 1, work.Width, work.Height));
+
+        landed.ShouldBe(expected, 1e-6);
+
+        // And it genuinely moved: a snap that happened to be a no-op would pass
+        // the line above while proving nothing.
+        Math.Abs(landed - 0.2731).ShouldBeGreaterThan(1e-4);
+    }
+
+    [Fact]
+    public void HoldingAltPlacesASeamExactly()
+    {
+        // A grid that cannot be escaped is worse than no grid: the one position
+        // someone wants is always the one between two stops.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onSplitChanged: (_, _) => { }, snapSplits: true);
+
+        var display = diagram.Displays.Single();
+
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.2731, Fine: true));
+
+        display.Cells.OrderBy(c => c.Area.X).First().Area.Right.ShouldBe(0.2731, 1e-6);
+    }
+
+    [Fact]
+    public void WithSnappingOffASeamGoesWhereItIsPut()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onSplitChanged: (_, _) => { }, snapSplits: false);
+
+        var display = diagram.Displays.Single();
+
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.2731, false));
+
+        display.Cells.OrderBy(c => c.Area.X).First().Area.Right.ShouldBe(0.2731, 1e-6);
+    }
+
+    [Fact]
+    public void AStackedDisplaySnapsAgainstItsOwnAxis()
+    {
+        // A rotated 32:9 is 1440 across and 5120 down, so an exact-aspect stop
+        // is nowhere near where it would be on the same panel unrotated. Getting
+        // the axes the wrong way round would still snap, just to nonsense.
+        var topology = SimulatedTopologies.Find("rotated-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onSplitChanged: (_, _) => { }, snapSplits: true);
+
+        var display = diagram.Displays.Single();
+        var work = topology.Displays[0].WorkArea;
+
+        var expected = SplitSnapping.Snap(
+            0.31,
+            SplitSnapping.Candidates(0, 1, work.Height, work.Width));
+
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.31, false));
+
+        display.Cells.OrderBy(c => c.Area.Y).First().Area.Bottom.ShouldBe(expected, 1e-6);
+    }
     [Fact]
     public void ReleasingSavesAgainstTheGeometrySlotNotTheMonitor()
     {
@@ -148,7 +299,7 @@ public class SplitDraggingTests
 
         var display = diagram.Displays.Single();
 
-        display.Handles[0].Dragged!(0, 0.3);
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.3, false));
         display.Handles[0].Released!();
 
         var (slot, weights) = saved.ShouldHaveSingleItem();
@@ -174,7 +325,7 @@ public class SplitDraggingTests
         var cells = display.Cells.OrderBy(c => c.Area.Y).ToList();
         display.Handles[0].Position.ShouldBe(cells[0].Area.Bottom, 1e-6);
 
-        display.Handles[0].Dragged!(0, 0.2);
+        display.Handles[0].Dragged!(new SeamDrag(0, 0.2, false));
         display.Cells.OrderBy(c => c.Area.Y).First().Area.Bottom.ShouldBe(0.2, 1e-6);
     }
 
@@ -324,6 +475,120 @@ public class SeamRenderingTests
         var (_, weights) = saved.ShouldHaveSingleItem();
         weights[0].ShouldBe(first.Area.Width / (1 - 0), 1e-6);
         weights.Sum().ShouldBe(1.0, 1e-6);
+    }
+
+    [AvaloniaFact]
+    public void TheZonesRedrawWhileTheSeamIsStillHeld()
+    {
+        // Asserted on the rendered tile, not the view model. The view model was
+        // already correct mid-drag and the diagram still did not move: the
+        // property that positions a tile invalidated nothing, so the picture
+        // only caught up when the drag ended and something else forced a
+        // layout. A test that reads the view model cannot see that at all.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, onSplitChanged: (_, _) => { }),
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Rect FirstTile() =>
+            diagram.GetVisualDescendants().OfType<Button>()
+                .Where(b => b.Classes.Contains("zoneTileButton"))
+                .Select(b => b.Bounds.TransformToAABB(
+                    b.GetVisualParent()!.TransformToVisual(window)!.Value))
+                .OrderBy(r => r.X)
+                .First();
+
+        var before = FirstTile();
+
+        var handle = diagram.GetVisualDescendants().OfType<SplitHandle>()
+            .OrderBy(h => h.Bounds.X)
+            .First();
+
+        var grab = handle.Bounds
+            .TransformToAABB(handle.GetVisualParent()!.TransformToVisual(window)!.Value)
+            .Center;
+
+        window.MouseMove(grab);
+        window.MouseDown(grab, MouseButton.Left);
+        window.MouseMove(grab.WithX(grab.X - 40));
+
+        // Only what the app itself does between pointer events - no arrange
+        // forced by the test, or it would be proving its own handiwork.
+        Dispatcher.UIThread.RunJobs();
+
+        var during = FirstTile();
+
+        window.MouseUp(grab.WithX(grab.X - 40), MouseButton.Left);
+
+        during.Width.ShouldBeLessThan(before.Width - 10,
+            "the zone did not redraw until the drag was released");
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(SplitDraggingTests.EveryArrangement), MemberType = typeof(SplitDraggingTests))]
+    public void TheStepperNeverCoversTheDisplaysName(string topologyId)
+    {
+        // Deliberately cramped - near what the settings window actually gives
+        // the diagram. At the roomy size the other tests use a name and a
+        // stepper fit side by side on any display, and the collision this is
+        // about cannot happen at all.
+        var canvas = new Size(430, 150);
+
+        // Both live in the band above the display, the name on the left and the
+        // stepper on the right. On a portrait panel drawn 55px across they
+        // simply cannot both be there, and the stepper was landing on the name.
+        var topology = SimulatedTopologies.Find(topologyId)!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout,
+                onSplitChanged: (_, _) => { },
+                onZoneCountChanged: (_, _) => { }),
+        };
+
+        var window = new Window { Width = canvas.Width, Height = canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(canvas);
+            window.Arrange(new Rect(canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Rect Box(Visual v) =>
+            v.Bounds.TransformToAABB(v.GetVisualParent()!.TransformToVisual(diagram)!.Value);
+
+        var names = diagram.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.Classes.Contains("monitorLabel") && b.IsVisible && b.Bounds.Width > 0)
+            .Select(Box)
+            .ToList();
+
+        var steppers = diagram.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.Classes.Contains("zoneStepper") && b.IsVisible && b.Bounds.Width > 0)
+            .Select(Box)
+            .ToList();
+
+        foreach (var stepper in steppers)
+        foreach (var name in names)
+            stepper.Intersects(name).ShouldBeFalse(
+                $"{topologyId}: the zone stepper at {stepper} lands on a display name at {name}");
     }
 
     [AvaloniaFact]

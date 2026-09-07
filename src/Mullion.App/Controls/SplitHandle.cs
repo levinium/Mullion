@@ -37,8 +37,8 @@ public sealed class SplitHandle : TemplatedControl
     /// carry two arguments without a converter for the pair.
     /// </para>
     /// </summary>
-    public static readonly StyledProperty<Action<int, double>?> DraggedProperty =
-        AvaloniaProperty.Register<SplitHandle, Action<int, double>?>(nameof(Dragged));
+    public static readonly StyledProperty<Action<SeamDrag>?> DraggedProperty =
+        AvaloniaProperty.Register<SplitHandle, Action<SeamDrag>?>(nameof(Dragged));
 
     /// <summary>Called on release. What the layout is actually saved on.</summary>
     public static readonly StyledProperty<Action?> ReleasedProperty =
@@ -62,7 +62,7 @@ public sealed class SplitHandle : TemplatedControl
         set => SetValue(IndexProperty, value);
     }
 
-    public Action<int, double>? Dragged
+    public Action<SeamDrag>? Dragged
     {
         get => GetValue(DraggedProperty);
         set => SetValue(DraggedProperty, value);
@@ -102,7 +102,12 @@ public sealed class SplitHandle : TemplatedControl
         if (!IsDragging) return;
 
         var fraction = FractionAt(e);
-        if (fraction is not null) Dragged?.Invoke(Index, fraction.Value);
+
+        // Alt suspends snapping for as long as it is held, checked per move so
+        // it can be pressed and released mid-drag.
+        if (fraction is not null)
+            Dragged?.Invoke(new SeamDrag(
+                Index, fraction.Value, e.KeyModifiers.HasFlag(KeyModifiers.Alt)));
 
         e.Handled = true;
     }

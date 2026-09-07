@@ -94,6 +94,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _config = _configStore.Load();
 
+        // Seeded so the first edit has somewhere to go back to.
+        _history = new LayoutHistory(_config.Overrides);
+
         _log.Info($"Mullion {BuildInfo.Full} starting. Config: {_configStore.Path_}");
         foreach (var note in _configStore.LoadNotes) _log.Warn(note);
 
@@ -310,6 +313,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     public void Rescan()
     {
         _displays = _displayProvider.GetDisplays();
+
+        // The states that were undoable describe monitors that may no longer
+        // be attached, and undoing onto them would apply a layout for a desk
+        // that is not there.
+        _history.Reset(_config.Overrides);
         if (_displays.Count == 0) return;
 
         _lastFingerprint = TopologyFingerprint.GeometrySignature(_displays);
@@ -649,6 +657,44 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         return (areas.Count, [.. areas.Select(a => a.W)]);
     }
 
+    /// <summary>
+    /// Undo and redo for zone shape edits - seam drags and zone counts.
+    /// <para>
+    /// Deliberately not key rebinds. Those live in the layout rather than the
+    /// overrides, and a stack mixing the two would have to undo onto zones that
+    /// regenerating the layout has already replaced. "Reset keys to default" is
+    /// the way back from a rebind.
+    /// </para>
+    /// </summary>
+    private LayoutHistory _history = new();
+
+    /// <summary>Snap dragged splits to the grid and to exact-aspect positions.</summary>
+    public bool SnapSplits => _config.General.SnapSplits;
+
+    public void SetSnapSplits(bool value)
+    {
+        _config = _config with { General = _config.General with { SnapSplits = value } };
+        Save();
+        StateChanged?.Invoke();
+    }
+
+    public bool CanUndoZones => _history.CanUndo;
+
+    public bool CanRedoZones => _history.CanRedo;
+
+    public void UndoZones() => ApplyOverrides(_history.Undo());
+
+    public void RedoZones() => ApplyOverrides(_history.Redo());
+
+    private void ApplyOverrides(IReadOnlyList<DisplayOverride>? overrides)
+    {
+        if (overrides is null) return;
+
+        _config = _config with { Overrides = [.. overrides] };
+        Save();
+        Regenerate();
+    }
+
     public void SetDisplayColumns(string slot, int columns)
     {
         // Changing the count invalidates weights meant for the old one, so they
@@ -664,6 +710,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     public void ResetDisplayOverride(string slot)
     {
         _config = _config with { Overrides = [.. _config.Overrides.Where(o => o.Slot != slot)] };
+        _history.Record(_config.Overrides);
         Save();
         Regenerate();
     }
@@ -671,6 +718,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     public void ResetAllOverrides()
     {
         _config = _config with { Overrides = [] };
+        _history.Record(_config.Overrides);
         Save();
         Regenerate();
     }
@@ -683,6 +731,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         replaced.Add(change(existing));
 
         _config = _config with { Overrides = replaced };
+        _history.Record(_config.Overrides);
         Save();
         Regenerate();
     }
@@ -835,9 +884,12 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     public MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged) =>
+        Action<string, IReadOnlyList<double>> onSplitChanged,
+        Action<string, int> onZoneCountChanged) =>
         MonitorDiagramViewModel.Build(
-            _displays, _layout, onZoneActivated, ModifierPrefix, onSplitChanged);
+            _displays, _layout, onZoneActivated, ModifierPrefix,
+            onSplitChanged, onZoneCountChanged,
+            _config.General.Shape.ToTuning(), _config.General.SnapSplits);
 
     public void ResetLayout()
     {

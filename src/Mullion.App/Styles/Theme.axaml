@@ -492,4 +492,44 @@
       </Transitions>
     </Setter>
   </Style>
+
+  <!-- Zone stepper
+       Same tab treatment as the monitor's name, so the two read as a pair of
+       tags on the display rather than as a control that has landed on it. -->
+  <Style Selector="Border.zoneStepper">
+    <Setter Property="Background" Value="{DynamicResource Panel}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="Padding" Value="4,2" />
+  </Style>
+
+  <Style Selector="Border.zoneStepper Button.stepperButton">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.zoneStepper Button.stepperButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <!-- Disabled at a bound rather than hidden: a stepper that loses a button at
+       the limit shifts the other one under the cursor. -->
+  <Style Selector="Border.zoneStepper Button.stepperButton:disabled">
+    <Setter Property="Opacity" Value="0.35" />
+  </Style>
+
+  <Style Selector="Border.zoneStepper TextBlock.stepperCount">
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="MinWidth" Value="14" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
 </Styles>

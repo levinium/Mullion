@@ -123,6 +123,16 @@ public sealed class AtLeastConverter : IMultiValueConverter
     }
 }
 
+/// <summary>One step of a seam drag.</summary>
+/// <param name="Index">Which seam.</param>
+/// <param name="Position">Where it has been dragged to, as a fraction of the display.</param>
+/// <param name="Fine">
+/// Snapping suspended for this move, because a modifier is held. A grid that
+/// cannot be escaped is worse than no grid: the one position someone wants is
+/// always the one between two stops.
+/// </param>
+public readonly record struct SeamDrag(int Index, double Position, bool Fine);
+
 /// <summary>One run of a chord, and whether it is a modifier or the key itself.</summary>
 public sealed record ChordPart(string Text, bool IsModifier);
 
@@ -152,4 +162,43 @@ public sealed class ChordPartsConverter : IMultiValueConverter
 
         return parts;
     }
+}
+
+/// <summary>
+/// A measured length, less a reservation, but only once it is wide enough to be
+/// worth reserving from.
+/// <para>
+/// Two things share the band above a display: its name on the left and the zone
+/// stepper on the right. On a wide monitor both fit and the name simply has to
+/// stop short of the stepper. On a narrow one - a portrait panel drawn 55px
+/// across - nothing fits beside anything, so the stepper is not drawn there at
+/// all and the name gets the whole width back rather than being trimmed to
+/// nothing to leave room for something absent.
+/// </para>
+/// <para>
+/// Parameter is "threshold;reserve".
+/// </para>
+/// </summary>
+public sealed class ReserveWhenWideConverter : IValueConverter
+{
+    public static readonly ReserveWhenWideConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not double actual || double.IsNaN(actual)) return 0d;
+
+        var parts = (parameter as string ?? string.Empty).Split(';', StringSplitOptions.TrimEntries);
+
+        var threshold = Read(parts, 0);
+        var reserve = Read(parts, 1);
+
+        return actual >= threshold ? Math.Max(0, actual - reserve) : actual;
+    }
+
+    private static double Read(string[] parts, int index) =>
+        parts.Length > index && double.TryParse(
+            parts[index], NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }

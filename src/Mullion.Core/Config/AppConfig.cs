@@ -53,6 +53,9 @@ public sealed record GeneralSettings
 
     public bool DragToSnap { get; init; } = true;
 
+    /// <summary>Snap a dragged split to the grid and to exact-aspect positions.</summary>
+    public bool SnapSplits { get; init; } = true;
+
     /// <summary>Go straight to the tray even when launched by hand, not just at sign-in.</summary>
     public bool StartInTray { get; init; }
     public string DragModifier { get; init; } = nameof(Model.DragModifier.Shift);

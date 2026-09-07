@@ -108,7 +108,34 @@ public interface ISettingsHost
 
     void CancelRebind();
 
-    /// <summary>Discard customizations and regenerate from the current displays.</summary>
+    /// <summary>
+    /// Undo and redo for zone shape edits - seam drags, zone counts, and the
+    /// resets that clear them. Not key rebinds: those live in the layout rather
+    /// than in the overrides, so "Reset keys to default" is the way back.
+    /// </summary>
+    /// <summary>
+    /// Snap dragged splits to a 5% grid, to simple divisions, and to the
+    /// positions where a pane comes out at an exact 16:9 or 3:2 on that
+    /// display. Hold Alt while dragging to place a seam freely.
+    /// </summary>
+    bool SnapSplits { get; }
+
+    void SetSnapSplits(bool value);
+
+    bool CanUndoZones { get; }
+
+    bool CanRedoZones { get; }
+
+    void UndoZones();
+
+    void RedoZones();
+
+    /// <summary>
+    /// Put the keys back where the allocator would have put them, discarding
+    /// rebinds. Zone shapes are left alone - the two are separate answers to
+    /// "put it back", and a user who has spent time on one should not lose it
+    /// undoing the other.
+    /// </summary>
     void ResetLayout();
 
     /// <summary>
@@ -118,5 +145,6 @@ public interface ISettingsHost
     /// </summary>
     MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged);
+        Action<string, IReadOnlyList<double>> onSplitChanged,
+        Action<string, int> onZoneCountChanged);
 }

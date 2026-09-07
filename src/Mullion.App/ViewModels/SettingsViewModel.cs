@@ -98,6 +98,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _showZoneFlash;
 
     [ObservableProperty]
+    private bool _snapSplits;
+
+    [ObservableProperty]
     private bool _allowSpanningUnions;
 
     [ObservableProperty]
@@ -207,6 +210,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         StartWithWindows = s.AutoStart is AutoStartMode.Standard or AutoStartMode.Elevated;
         StartElevated = s.AutoStart is AutoStartMode.Elevated;
         ShowZoneFlash = s.ShowZoneFlash;
+        SnapSplits = _host.SnapSplits;
         AllowSpanningUnions = s.AllowSpanningUnions;
         StartInTray = s.StartInTray;
         SelectedHotkeyModifier = HotkeyModifiers.FirstOrDefault(
@@ -248,11 +252,41 @@ public sealed partial class SettingsViewModel : ObservableObject
             }),
         ];
 
-        Diagram = _host.BuildInteractiveDiagram(BeginRebindAt, ApplySplitWeights);
+        Diagram = _host.BuildInteractiveDiagram(
+            BeginRebindAt, ApplySplitWeights,
+            (slot, count) => { _host.SetDisplayColumns(slot, count); Reload(); });
         OnPropertyChanged(nameof(HasCustomSplits));
+
+        // The buttons grey out at the ends of the history.
+        OnPropertyChanged(nameof(CanUndoZones));
+        OnPropertyChanged(nameof(CanRedoZones));
+        UndoZonesCommand.NotifyCanExecuteChanged();
+        RedoZonesCommand.NotifyCanExecuteChanged();
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
+    }
+
+    /// <summary>
+    /// Undo and redo for zone shapes. Exposed as commands so the buttons grey
+    /// out at the ends of the history rather than being pressable and inert.
+    /// </summary>
+    public bool CanUndoZones => _host.CanUndoZones;
+
+    public bool CanRedoZones => _host.CanRedoZones;
+
+    [RelayCommand(CanExecute = nameof(CanUndoZones))]
+    private void UndoZones()
+    {
+        _host.UndoZones();
+        Reload();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRedoZones))]
+    private void RedoZones()
+    {
+        _host.RedoZones();
+        Reload();
     }
 
     /// <summary>
@@ -277,6 +311,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowZoneFlashChanged(bool value)
     {
         if (!_loading) _host.SetShowZoneFlash(value);
+    }
+
+    partial void OnSnapSplitsChanged(bool value)
+    {
+        if (_loading) return;
+
+        _host.SetSnapSplits(value);
+
+        // The diagram builds its snap positions once, when it is built, so it
+        // has to be rebuilt for the change to reach a drag.
+        Reload();
     }
 
     partial void OnSelectedHotkeyModifierChanged(string value)
@@ -485,9 +530,17 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
     public void CancelRebind() { }
     public void ResetLayout() { }
+    public bool SnapSplits => true;
+    public void SetSnapSplits(bool value) { }
+    public bool CanUndoZones => false;
+    public bool CanRedoZones => false;
+    public void UndoZones() { }
+    public void RedoZones() { }
+
     public MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos> onZoneActivated,
-        Action<string, IReadOnlyList<double>> onSplitChanged) => new();
+        Action<string, IReadOnlyList<double>> onSplitChanged,
+        Action<string, int> onZoneCountChanged) => new();
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
 

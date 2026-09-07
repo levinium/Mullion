@@ -244,7 +244,7 @@ public sealed partial class SplitHandleViewModel : ObservableObject
 
     public required double To { get; init; }
 
-    public Action<int, double>? Dragged { get; set; }
+    public Action<SeamDrag>? Dragged { get; set; }
     public Action? Released { get; set; }
 }
 
@@ -293,6 +293,44 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
 
     public bool LabelInside => !LabelAbove;
 
+    // ---- Zone count ---------------------------------------------------------
+
+    /// <summary>
+    /// Add or drop a zone on this display, from the diagram itself.
+    /// <para>
+    /// Beside the display it applies to, rather than only in a list further up
+    /// the page: with more than one monitor a bare pair of buttons cannot say
+    /// which one it would change, and the picture is where the answer is
+    /// obvious.
+    /// </para>
+    /// </summary>
+    public Action<string, int>? ZoneCountChanged { get; set; }
+
+    public bool CanEditZoneCount => ZoneCountChanged is not null;
+
+    /// <summary>Bounds from the shape analyzer, so a step cannot make a split it would reject.</summary>
+    public int MinZones { get; set; } = 1;
+
+    public int MaxZones { get; set; } = 1;
+
+    public int ZoneCount => Cells.Count;
+
+    public bool CanAddZone => CanEditZoneCount && ZoneCount < MaxZones;
+
+    public bool CanRemoveZone => CanEditZoneCount && ZoneCount > MinZones;
+
+    [RelayCommand]
+    private void AddZone()
+    {
+        if (CanAddZone) ZoneCountChanged?.Invoke(Slot, ZoneCount + 1);
+    }
+
+    [RelayCommand]
+    private void RemoveZone()
+    {
+        if (CanRemoveZone) ZoneCountChanged?.Invoke(Slot, ZoneCount - 1);
+    }
+
     // ---- Draggable splits ---------------------------------------------------
 
     /// <summary>
@@ -313,6 +351,9 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
     private double _minFraction = 0.05;
     private Action<string, IReadOnlyList<double>>? _commit;
 
+    /// <summary>Positions a drag prefers to land on; empty when snapping is off.</summary>
+    private IReadOnlyList<double> _snapTo = [];
+
     /// <summary>
     /// Turn this display's zones into something draggable.
     /// <para>
@@ -327,7 +368,11 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
     /// dragging should not be a way around it.
     /// </param>
     public void EnableSplitDragging(
-        double minFraction, Action<string, IReadOnlyList<double>> commit)
+        double minFraction,
+        Action<string, IReadOnlyList<double>> commit,
+        PxRect workArea = default,
+        ShapeTuning? tuning = null,
+        bool snap = false)
     {
         if (Cells.Count < 2) return;
 
@@ -335,6 +380,11 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
         SeamOrientation = horizontal ? Orientation.Horizontal : Orientation.Vertical;
         _commit = commit;
         _minFraction = minFraction;
+
+        // After the axis is known, not before: the exact-aspect positions are
+        // measured across the OTHER axis, so a candidate list built ahead of
+        // this would be the right numbers for the wrong direction.
+        _snapTo = snap ? SnapPositions(workArea, horizontal, tuning) : [];
 
         var ordered = Ordered(horizontal);
 
@@ -381,15 +431,19 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
     private List<ZoneCellViewModel> Ordered(bool horizontal) =>
         [.. horizontal ? Cells.OrderBy(c => c.Area.X) : Cells.OrderBy(c => c.Area.Y)];
 
-    private void DragSeam(int index, double position)
+    private void DragSeam(SeamDrag drag)
     {
         if (_spanLength <= 0) return;
+
+        // Snapped before the conversion, because the candidates are positions
+        // on the display and that is what the cursor reports.
+        var position = drag.Fine ? drag.Position : SplitSnapping.Snap(drag.Position, _snapTo);
 
         // The handle speaks in fractions of the display; the weights are
         // fractions of the split, which starts wherever the zones start.
         var local = (position - _spanStart) / _spanLength;
 
-        _weights = [.. SplitBoundaries.Move(_weights, index, local, _minFraction)];
+        _weights = [.. SplitBoundaries.Move(_weights, drag.Index, local, _minFraction)];
 
         Redraw();
     }
@@ -423,6 +477,27 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
     }
 
     private void CommitSeams() => _commit?.Invoke(Slot, _weights);
+
+    /// <summary>
+    /// Where a seam on this display prefers to land.
+    /// <para>
+    /// Per display rather than one shared grid: the exact-aspect positions
+    /// depend on the monitor's own proportions, so a 32:9 and a portrait panel
+    /// do not offer the same stops even at the same percentage.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<double> SnapPositions(
+        PxRect workArea, bool horizontal, ShapeTuning? tuning)
+    {
+        if (workArea.Width <= 0 || workArea.Height <= 0) return [];
+
+        var (along, across) = SplitSnapping.Extents(workArea, horizontal);
+
+        // Over the whole display: a seam is clamped to its own pair anyway, so
+        // candidates outside that range simply never win.
+        return SplitSnapping.Candidates(0, 1, along, across, tuning: tuning);
+    }
+
 }
 
 public sealed partial class MonitorDiagramViewModel : ObservableObject
@@ -464,7 +539,10 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         LayoutResult? layout = null,
         Action<GridPos>? onZoneActivated = null,
         string modifierPrefix = "Win+",
-        Action<string, IReadOnlyList<double>>? onSplitChanged = null)
+        Action<string, IReadOnlyList<double>>? onSplitChanged = null,
+        Action<string, int>? onZoneCountChanged = null,
+        ShapeTuning? tuning = null,
+        bool snapSplits = true)
     {
         var vm = new MonitorDiagramViewModel { ModifierPrefix = modifierPrefix };
         if (displays.Count == 0) return vm;
@@ -487,13 +565,36 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 span.Activated = onZoneActivated;
         }
 
-        if (onSplitChanged is not null)
+        if (onSplitChanged is not null || onZoneCountChanged is not null)
         {
             var byKey = displays.ToDictionary(d => d.StableKey);
+            var shape = tuning ?? ShapeTuning.Default;
+            var hasOthers = displays.Count > 1;
 
             foreach (var node in vm.Displays)
-                if (byKey.TryGetValue(node.Key, out var display))
-                    node.EnableSplitDragging(MinSplitFraction(display, node), onSplitChanged);
+            {
+                if (!byKey.TryGetValue(node.Key, out var display)) continue;
+
+                if (onSplitChanged is not null)
+                    node.EnableSplitDragging(
+                        MinSplitFraction(display, node, shape),
+                        onSplitChanged,
+                        display.WorkArea,
+                        shape,
+                        snapSplits);
+
+                if (onZoneCountChanged is null) continue;
+
+                var counts = ShapeAnalyzer.ZoneCounts(display.Bounds, display.Dpi, hasOthers, shape);
+
+                // The analyzer's own bounds, matched to the Splits list above:
+                // stepping must not produce a split it would itself reject.
+                // One is always allowed - "leave this display whole" is a
+                // legitimate answer even where the analyzer would rather split.
+                node.MinZones = Math.Min(1, counts.Min);
+                node.MaxZones = Math.Max(counts.Max, node.Cells.Count);
+                node.ZoneCountChanged = onZoneCountChanged;
+            }
         }
 
         return vm;
@@ -508,10 +609,9 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     /// against the work area's long axis because that is what the weights divide.
     /// </para>
     /// </summary>
-    private static double MinSplitFraction(DisplayInfo display, DisplayNodeViewModel node)
+    private static double MinSplitFraction(
+        DisplayInfo display, DisplayNodeViewModel node, ShapeTuning tuning)
     {
-        var tuning = ShapeTuning.Default;
-
         var axisPixels = node.Cells.Select(c => Math.Round(c.Area.X, 4)).Distinct().Count() > 1
             ? display.WorkArea.Width
             : display.WorkArea.Height;

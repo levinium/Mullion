@@ -284,7 +284,9 @@
             <Border Classes="monitorLabel" IsVisible="{Binding LabelAbove}"
                     Canvas.Left="0"
                     Canvas.Bottom="{Binding $parent[Canvas].Bounds.Height}"
-                    MaxWidth="{Binding $parent[Canvas].Bounds.Width}"
+                    MaxWidth="{Binding $parent[Canvas].Bounds.Width,
+                              Converter={x:Static ctl:ReserveWhenWideConverter.Instance},
+                              ConverterParameter=150;76}"
                     CornerRadius="8,8,0,0" BorderThickness="1,1,1,0"
                     ToolTip.Tip="{Binding TitleAndDetail}">
               <StackPanel Orientation="Vertical">
@@ -300,7 +302,9 @@
                  appear to label the display above. -->
             <Border Classes="monitorLabel" IsVisible="{Binding LabelInside}"
                     Canvas.Left="0" Canvas.Top="0"
-                    MaxWidth="{Binding $parent[Canvas].Bounds.Width}"
+                    MaxWidth="{Binding $parent[Canvas].Bounds.Width,
+                              Converter={x:Static ctl:ReserveWhenWideConverter.Instance},
+                              ConverterParameter=150;76}"
                     CornerRadius="0,0,8,0" BorderThickness="0,0,1,1"
                     ToolTip.Tip="{Binding TitleAndDetail}">
               <StackPanel Orientation="Vertical">
@@ -308,6 +312,65 @@
                            TextWrapping="Wrap" />
                 <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
                            TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+
+            <!-- Zone stepper, opposite the name tab.
+                 On the display it changes rather than in a lone pair of buttons
+                 somewhere on the page: with more than one monitor, a bare + and
+                 - cannot say which display they would split, and here the answer
+                 is the thing it is sitting on. Follows the tab's own rule about
+                 where there is room - above when the display has clearance,
+                 tucked inside its corner when another display is stacked over
+                 it. -->
+            <Border Classes="zoneStepper"
+                    Canvas.Right="0"
+                    Canvas.Bottom="{Binding $parent[Canvas].Bounds.Height}"
+                    CornerRadius="8,8,0,0" BorderThickness="1,1,1,0">
+              <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="CanEditZoneCount" />
+                  <Binding Path="$parent[Canvas].Bounds.Width"
+                           Converter="{x:Static ctl:WiderThanConverter.Instance}"
+                           ConverterParameter="150" />
+                  <Binding Path="LabelAbove" />
+                </MultiBinding>
+              </Border.IsVisible>
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Button Classes="stepperButton" Content="&#x2212;"
+                        Command="{Binding RemoveZoneCommand}"
+                        IsEnabled="{Binding CanRemoveZone}"
+                        ToolTip.Tip="One fewer zone on this display" />
+                <TextBlock Classes="stepperCount" Text="{Binding ZoneCount}" />
+                <Button Classes="stepperButton" Content="+"
+                        Command="{Binding AddZoneCommand}"
+                        IsEnabled="{Binding CanAddZone}"
+                        ToolTip.Tip="One more zone on this display" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="zoneStepper"
+                    Canvas.Right="0" Canvas.Top="0"
+                    CornerRadius="0,0,0,8" BorderThickness="1,0,0,1">
+              <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="CanEditZoneCount" />
+                  <Binding Path="$parent[Canvas].Bounds.Width"
+                           Converter="{x:Static ctl:WiderThanConverter.Instance}"
+                           ConverterParameter="150" />
+                  <Binding Path="LabelInside" />
+                </MultiBinding>
+              </Border.IsVisible>
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Button Classes="stepperButton" Content="&#x2212;"
+                        Command="{Binding RemoveZoneCommand}"
+                        IsEnabled="{Binding CanRemoveZone}"
+                        ToolTip.Tip="One fewer zone on this display" />
+                <TextBlock Classes="stepperCount" Text="{Binding ZoneCount}" />
+                <Button Classes="stepperButton" Content="+"
+                        Command="{Binding AddZoneCommand}"
+                        IsEnabled="{Binding CanAddZone}"
+                        ToolTip.Tip="One more zone on this display" />
               </StackPanel>
             </Border>
           </Canvas>

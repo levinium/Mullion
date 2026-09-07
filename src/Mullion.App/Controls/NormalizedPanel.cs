@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 
 namespace Mullion.App.Controls;
 
@@ -22,8 +23,24 @@ public sealed class NormalizedPanel : Panel
     static NormalizedPanel()
     {
         AffectsArrange<NormalizedPanel>(GapProperty);
+        // The VISUAL parent, and both passes. Two traps in one line:
+        //
+        // Parent is the logical parent, which for a child of an items panel is
+        // the ItemsControl rather than this panel - so a zone whose area changed
+        // invalidated nothing at all, and the diagram only caught up when
+        // something else forced a layout. Dragging a seam moved the numbers and
+        // redrew nothing until the drag ended.
+        //
+        // And measure, not just arrange: MeasureOverride sizes each child by its
+        // own area, so a tile re-arranged at a new width still holds contents
+        // measured for the old one.
         AreaProperty.Changed.AddClassHandler<Control>((c, _) =>
-            (c.Parent as NormalizedPanel)?.InvalidateArrange());
+        {
+            if (c.GetVisualParent() is not NormalizedPanel panel) return;
+
+            panel.InvalidateMeasure();
+            panel.InvalidateArrange();
+        });
     }
 
     public double Gap
