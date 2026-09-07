@@ -757,4 +757,22 @@
     <Setter Property="Background" Value="{DynamicResource CaptureBorder}" />
   </Style>
 
+
+  <!-- The floating hint
+       Looks like a tooltip and is not one: it lives in the diagram's own tree,
+       so IsHitTestVisible=False actually keeps the pointer out of it. A real
+       tooltip is a window, and a window takes the pointer whatever you do. -->
+  <Style Selector="Border.hoverLabel">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="BoxShadow" Value="0 2 8 0 #40000000" />
+  </Style>
+
+  <Style Selector="Border.hoverLabel TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
 </Styles>

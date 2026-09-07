@@ -5,6 +5,17 @@
              x:Class="Mullion.App.Controls.MonitorDiagram"
              x:DataType="vm:MonitorDiagramViewModel">
 
+  <!-- The diagram, with a label floating over it that follows the pointer.
+
+       A tooltip would be a window of its own, and a window takes the pointer:
+       the region being described lost its highlight the moment the tip appeared
+       over it, and a click aimed at the zone landed on the popup. Following the
+       cursor does not fix that on its own - a readable label has to sit clear of
+       the pointer, so you can always move onto it.
+
+       Drawn in the diagram's own tree instead, where IsHitTestVisible=False
+       means exactly what it says: the pointer passes through it. -->
+  <Panel>
   <ItemsControl ItemsSource="{Binding Nodes}">
 
     <ItemsControl.ItemsPanel>
@@ -61,7 +72,8 @@
                 Classes.interactive="{Binding IsInteractive}"
                 IsHitTestVisible="{Binding IsInteractive}"
                 Command="{Binding ActivateCommand}"
-                ToolTip.Tip="{Binding Name}">
+                PointerEntered="OnSpanEntered"
+                PointerExited="OnHoverLeft">
           <Grid RowDefinitions="Auto,Auto,Auto" VerticalAlignment="Center">
 
             <!-- The halves of the span, above and below the rule: the same
@@ -172,7 +184,8 @@
                 Classes.interactive="{Binding IsInteractive}"
                 IsHitTestVisible="{Binding IsInteractive}"
                 Command="{Binding ActivateCommand}"
-                ToolTip.Tip="{Binding Name}">
+                PointerEntered="OnSpanEntered"
+                PointerExited="OnHoverLeft">
           <!-- Rule, chip and text OVERLAID rather than laid out in columns. In
                columns the chip sized the rule's column, so a longer key pushed
                the text away from the line it is meant to sit against - and the
@@ -412,8 +425,7 @@
                           Classes.capturing="{Binding IsCapturing}"
                           Classes.interactive="{Binding IsInteractive}"
                           IsHitTestVisible="{Binding IsInteractive}"
-                          Command="{Binding ActivateCommand}"
-                          ToolTip.Tip="{Binding WholeHint}">
+                          Command="{Binding ActivateCommand}">
 
                     <Grid>
 
@@ -452,7 +464,8 @@
                                 Classes.interactive="{Binding IsUpperInteractive}"
                                 IsHitTestVisible="{Binding IsUpperInteractive}"
                                 Command="{Binding ActivateUpperCommand}"
-                                ToolTip.Tip="{Binding UpperHint}" />
+                                PointerEntered="OnUpperEntered"
+                                PointerExited="OnHoverLeft" />
 
                         <Button Grid.Row="1" Name="LowerRegion" Classes="subZoneRegion"
                                 IsVisible="{Binding HasLower}"
@@ -460,7 +473,8 @@
                                 Classes.interactive="{Binding IsLowerInteractive}"
                                 IsHitTestVisible="{Binding IsLowerInteractive}"
                                 Command="{Binding ActivateLowerCommand}"
-                                ToolTip.Tip="{Binding LowerHint}" />
+                                PointerEntered="OnLowerEntered"
+                                PointerExited="OnHoverLeft" />
                       </Grid>
 
 
@@ -572,7 +586,9 @@
                       <Border Classes="wholeZoneBand"
                               VerticalAlignment="Center"
                               HorizontalAlignment="Stretch"
-                              Background="Transparent">
+                              Background="Transparent"
+                              PointerEntered="OnWholeEntered"
+                              PointerExited="OnHoverLeft">
                         <Border Classes="wholeZoneBlock"
                                 HorizontalAlignment="Center"
                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
@@ -727,6 +743,16 @@
 
     </ItemsControl.DataTemplates>
   </ItemsControl>
+
+    <Canvas IsHitTestVisible="False" ClipToBounds="True">
+      <Border Classes="hoverLabel"
+              Canvas.Left="{Binding HintX}"
+              Canvas.Top="{Binding HintY}"
+              IsVisible="{Binding HoverHint, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Classes="body" Text="{Binding HoverHint}" TextWrapping="NoWrap" />
+      </Border>
+    </Canvas>
+  </Panel>
 
 </UserControl>
 

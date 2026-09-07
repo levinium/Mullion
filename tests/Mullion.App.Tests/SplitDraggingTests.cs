@@ -660,6 +660,74 @@ public class SeamRenderingTests
 
 
     /// <summary>
+    /// The floating hint names what the pointer is over, and nothing in the
+    /// diagram uses a real tooltip to do it.
+    /// <para>
+    /// A tooltip is a window of its own, and a window takes the pointer: the
+    /// region being described lost its highlight the moment the tip appeared
+    /// over it, and a click aimed at the zone landed on the popup instead. The
+    /// replacement is drawn in the diagram's own tree, where IsHitTestVisible
+    /// means what it says.
+    /// </para>
+    /// </summary>
+    [AvaloniaFact]
+    public void TheHintNamesWhatIsUnderThePointerWithoutABlockingPopup()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, onZoneActivated: _ => { }),
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var vm = (MonitorDiagramViewModel)diagram.DataContext!;
+        var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        var tile = diagram.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("zoneTileButton"))
+            .OrderBy(b => b.Bounds.X)
+            .First();
+
+        // Nothing a pointer can land on inside a tile may carry a tooltip.
+        foreach (var target in tile.GetVisualDescendants().OfType<Control>()
+                     .Where(c => c.IsHitTestVisible))
+        {
+            ToolTip.GetTip(target).ShouldBeNull(
+                $"{target.GetType().Name} still has a tooltip, which will take the pointer");
+        }
+
+        var box = tile.Bounds.TransformToAABB(
+            tile.GetVisualParent()!.TransformToVisual(window)!.Value);
+
+        window.MouseMove(new Point(box.Center.X, box.Y + box.Height * 0.15));
+        Dispatcher.UIThread.RunJobs();
+        vm.HoverHint.ShouldNotBeNull();
+        vm.HoverHint.ShouldContain(cell.UpperName!);
+
+        window.MouseMove(new Point(box.Center.X, box.Center.Y));
+        Dispatcher.UIThread.RunJobs();
+        vm.HoverHint.ShouldNotBeNull();
+        vm.HoverHint.ShouldContain(cell.Name);
+
+        // Off the diagram entirely: nothing is being pointed at, so nothing is named.
+        window.MouseMove(new Point(box.Center.X, box.Bottom + 40));
+        Dispatcher.UIThread.RunJobs();
+        vm.HoverHint.ShouldBeNull();
+    }
+
+    /// <summary>
     /// For every piece of a tile that is actually drawn, what lights up under
     /// the pointer and what a click changes must be the same zone.
     /// <para>

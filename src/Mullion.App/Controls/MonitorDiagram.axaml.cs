@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Input;
+using Mullion.App.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 
@@ -88,6 +90,79 @@ public partial class MonitorDiagram : UserControl
         [.. ModifierPrefix
             .Split('+', StringSplitOptions.RemoveEmptyEntries)
             .Select(part => $"{part}+")];
+
+
+    // ---- Hover hints --------------------------------------------------------
+
+    /// <summary>
+    /// Report what the pointer is over, so the editor can name it in its own
+    /// line instead of a tooltip.
+    /// <para>
+    /// Tooltips were doing this and doing it badly: a tooltip is a window of its
+    /// own, so it takes the pointer from the thing it is describing. The region
+    /// underneath lost its highlight the moment the tip appeared, and a click
+    /// aimed at the zone landed on the popup.
+    /// </para>
+    /// </summary>
+
+    /// <summary>
+    /// Keep the floating label beside the pointer and inside the diagram.
+    /// <para>
+    /// Below and right of the cursor where there is room, above and left where
+    /// there is not - so it never runs off the edge, and never sits under the
+    /// hand that is pointing.
+    /// </para>
+    /// </summary>
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+
+        if (DataContext is not MonitorDiagramViewModel vm || vm.HoverHint is null) return;
+
+        var at = e.GetPosition(this);
+
+        // Room for the longest hint the diagram produces. Measuring the label
+        // itself would be exact, but it has not been arranged yet on the frame
+        // that first shows it, and a label that jumps on its second frame is
+        // worse than one that reserves a little too much.
+        const double Width = 250;
+        const double Height = 26;
+        const double Gap = 18;
+
+        vm.HintX = at.X + Gap + Width < Bounds.Width ? at.X + Gap : Math.Max(0, at.X - Gap - Width);
+        vm.HintY = at.Y + Gap + Height < Bounds.Height ? at.Y + Gap : Math.Max(0, at.Y - Gap - Height);
+    }
+
+    private void OnWholeEntered(object? sender, PointerEventArgs e) =>
+        Hint((sender as Control)?.DataContext, c => c.WholeHint);
+
+    /// <summary>A span measure names itself the same way a zone does.</summary>
+    private void OnSpanEntered(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is not MonitorDiagramViewModel vm) return;
+        if ((sender as Control)?.DataContext is not SpanMeasureViewModel span) return;
+
+        vm.HoverHint = span.IsInteractive ? span.WholeHint : null;
+    }
+
+    private void OnUpperEntered(object? sender, PointerEventArgs e) =>
+        Hint((sender as Control)?.DataContext, c => c.UpperHint);
+
+    private void OnLowerEntered(object? sender, PointerEventArgs e) =>
+        Hint((sender as Control)?.DataContext, c => c.LowerHint);
+
+    private void OnHoverLeft(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is MonitorDiagramViewModel vm) vm.HoverHint = null;
+    }
+
+    private void Hint(object? context, Func<ZoneCellViewModel, string> describe)
+    {
+        if (DataContext is not MonitorDiagramViewModel vm) return;
+        if (context is not ZoneCellViewModel cell) return;
+
+        vm.HoverHint = cell.IsInteractive ? describe(cell) : null;
+    }
 
     public MonitorDiagram() => AvaloniaXamlLoader.Load(this);
 }

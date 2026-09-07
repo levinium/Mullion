@@ -250,6 +250,9 @@ public abstract partial class SpanMeasureViewModel : DiagramNodeViewModel
     public Action<GridPos>? Activated { get; set; }
     public bool IsInteractive => Activated is not null;
 
+    /// <summary>What pointing here would change, for the floating hint.</summary>
+    public string WholeHint => $"{Name} - click to change its key";
+
     [RelayCommand]
     private void Activate() => Activated?.Invoke(Position);
 }
@@ -640,6 +643,22 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _modifierPrefix = "Win+";
+
+    /// <summary>
+    /// What the pointer is over, named. Shown in the editor's own line rather
+    /// than as a tooltip: a tooltip is a window of its own, so it takes the
+    /// pointer from whatever it is describing - the region under it loses its
+    /// highlight and a click lands on the popup instead of the zone.
+    /// </summary>
+    [ObservableProperty]
+    private string? _hoverHint;
+
+    /// <summary>Where that label sits, kept beside the pointer and inside the diagram.</summary>
+    [ObservableProperty]
+    private double _hintX;
+
+    [ObservableProperty]
+    private double _hintY;
 
     /// <summary>Everything the panel places, monitors and span measures alike.</summary>
     public IEnumerable<DiagramNodeViewModel> Nodes => Displays.Cast<DiagramNodeViewModel>().Concat(Spans);
