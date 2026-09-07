@@ -47,6 +47,20 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
     /// the pipeline can be exercised against a known window in tests without
     /// depending on which window happens to have focus.
     /// </summary>
+    public PxRect? BoundsOf(nint hwnd)
+    {
+        var root = Win.GetAncestor(hwnd, Win.GA_ROOT);
+        if (root != 0) hwnd = root;
+
+        if (!Win.IsWindow(hwnd)) return null;
+
+        // The same measure a move is verified against, so "is it already
+        // filling this zone" is asked in the units the answer was written in.
+        var bounds = GetFrameBounds(hwnd);
+
+        return bounds.Width > 0 && bounds.Height > 0 ? bounds : null;
+    }
+
     public MoveResult MoveWindowTo(nint hwnd, PxRect target)
     {
         var root = Win.GetAncestor(hwnd, Win.GA_ROOT);

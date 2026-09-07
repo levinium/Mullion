@@ -46,6 +46,13 @@ public sealed record WindowSnapshot(
 /// <summary>Moves the focused window. Implemented per platform.</summary>
 public interface IWindowManager
 {
+    /// <summary>
+    /// Where a window is on screen, as the user sees it - the visible frame,
+    /// not the invisible resize border around it. Null when there is no such
+    /// window any more.
+    /// </summary>
+    PxRect? BoundsOf(nint hwnd);
+
     MoveResult MoveForegroundTo(PxRect target);
 
     /// <summary>Restore the most recent move. Returns false when nothing is on the stack.</summary>

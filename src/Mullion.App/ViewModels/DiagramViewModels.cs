@@ -94,6 +94,21 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     public bool IsUpperInteractive => IsInteractive && UpperPosition is not null;
 
     /// <summary>
+    /// What repeated presses of this key walk through, e.g. "Left, then Left +
+    /// Center, then the whole display".
+    /// <para>
+    /// Nothing on screen said this happened. The zones are drawn, so a first
+    /// press is obvious; that holding the modifier and pressing again widens the
+    /// window is invisible until someone does it by accident.
+    /// </para>
+    /// </summary>
+    public string? Cycle { get; init; }
+
+    /// <summary>How a zone reads when the diagram is only being looked at.</summary>
+    public string ViewHint =>
+        Cycle is null ? $"{ModifierPrefix}{KeyLabel} - {Name}" : $"{ModifierPrefix}{KeyLabel} - {Cycle}";
+
+    /// <summary>
     /// What pointing here would change. Each target names its OWN zone: the
     /// halves had no tooltip of their own, so they inherited the tile's, which
     /// names the whole column - the pointer said one thing and the click did
@@ -699,7 +714,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         vm.Displays =
         [
             .. displays.Select(d =>
-                BuildNode(d, layout, HasClearanceAbove(d, displays), defaultModifier)),
+                BuildNode(d, layout, HasClearanceAbove(d, displays), defaultModifier, displays)),
         ];
         vm.Spans = BuildSpans(displays, layout, desk, defaultModifier);
 
@@ -935,7 +950,11 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     }
 
     private static DisplayNodeViewModel BuildNode(
-        DisplayInfo display, LayoutResult? layout, bool labelAbove, ChordModifiers defaultModifier)
+        DisplayInfo display,
+        LayoutResult? layout,
+        bool labelAbove,
+        ChordModifiers defaultModifier,
+        IReadOnlyList<DisplayInfo> allDisplays)
     {
         var taskbarHeight = display.Bounds.Height - display.WorkArea.Height;
 
@@ -954,13 +973,16 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 ? new Rect(0, 1.0 - (double)taskbarHeight / display.Bounds.Height, 1,
                            (double)taskbarHeight / display.Bounds.Height)
                 : default,
-            Cells = BuildCells(display, layout, defaultModifier),
+            Cells = BuildCells(display, layout, defaultModifier, allDisplays),
             LabelAbove = labelAbove,
         };
     }
 
     private static IReadOnlyList<ZoneCellViewModel> BuildCells(
-        DisplayInfo display, LayoutResult? layout, ChordModifiers defaultModifier)
+        DisplayInfo display,
+        LayoutResult? layout,
+        ChordModifiers defaultModifier,
+        IReadOnlyList<DisplayInfo> allDisplays)
     {
         if (layout is null) return [];
 
@@ -1014,6 +1036,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                         SpansDisplays = e.Zone.SpansDisplays,
                         Position = e.Zone.Position,
                         ModifierPrefix = Prefix(e.Zone, defaultModifier),
+                        Cycle = Describe(e.Zone, layout, allDisplays),
                     });
                 }
 
@@ -1033,6 +1056,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 SpansDisplays = primary.Zone.SpansDisplays,
                 Position = primary.Zone.Position,
                 ModifierPrefix = Prefix(primary.Zone, defaultModifier),
+                Cycle = Describe(primary.Zone, layout, allDisplays),
                 UpperModifierPrefix = Prefix(upper.Zone, defaultModifier),
                 LowerModifierPrefix = Prefix(lower.Zone, defaultModifier),
                 UpperKey = upper.Zone is null ? null : layout.Surface.FallbackLabelAt(upper.Zone.Position),
@@ -1047,6 +1071,22 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         }
 
         return cells;
+    }
+
+    /// <summary>
+    /// The ring a key walks through, in words.
+    /// <para>
+    /// Read from RingBuilder - the same one the hotkey engine uses - so what the
+    /// diagram promises and what a second press actually does cannot drift
+    /// apart. A zone with nowhere wider to go says nothing rather than repeating
+    /// its own name.
+    /// </para>
+    /// </summary>
+    private static string? Describe(Zone zone, LayoutResult layout, IReadOnlyList<DisplayInfo> displays)
+    {
+        var steps = RingBuilder.Build(zone, layout, displays);
+
+        return steps.Count < 2 ? null : string.Join(", then ", steps.Select(s => s.Name));
     }
 
     /// <summary>

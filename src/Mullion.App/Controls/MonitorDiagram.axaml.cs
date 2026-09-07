@@ -151,6 +151,25 @@ public partial class MonitorDiagram : UserControl
     private void OnLowerEntered(object? sender, PointerEventArgs e) =>
         Hint((sender as Control)?.DataContext, c => c.LowerHint);
 
+    /// <summary>
+    /// The tile speaks only when nothing more specific can.
+    /// <para>
+    /// PointerEntered is a direct event, not a bubbling one, so every element
+    /// under the pointer raises its own and Handled stops nothing. The tile is
+    /// the parent of the halves and the middle band, so it answers last - and
+    /// its answer, the whole column, was overwriting theirs every time. While
+    /// editing they report for themselves; the tile is only needed when the
+    /// diagram is a picture and they are not listening at all.
+    /// </para>
+    /// </summary>
+    private void OnTileEntered(object? sender, PointerEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not ZoneCellViewModel cell) return;
+        if (cell.IsInteractive) return;
+
+        Hint(cell, c => c.WholeHint);
+    }
+
     private void OnHoverLeft(object? sender, PointerEventArgs e)
     {
         if (DataContext is MonitorDiagramViewModel vm) vm.HoverHint = null;
@@ -161,7 +180,9 @@ public partial class MonitorDiagram : UserControl
         if (DataContext is not MonitorDiagramViewModel vm) return;
         if (context is not ZoneCellViewModel cell) return;
 
-        vm.HoverHint = cell.IsInteractive ? describe(cell) : null;
+        // Editing: what a click would change. Just looking: what the key does,
+        // including the widening nobody would otherwise discover.
+        vm.HoverHint = cell.IsInteractive ? describe(cell) : cell.ViewHint;
     }
 
     public MonitorDiagram() => AvaloniaXamlLoader.Load(this);

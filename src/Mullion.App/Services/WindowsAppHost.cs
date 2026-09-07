@@ -1,3 +1,4 @@
+using Mullion.Core.Geometry;
 #if PLATFORM_WINDOWS
 using Avalonia.Threading;
 using Mullion.App.ViewModels;
@@ -155,6 +156,17 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     private readonly DragZoneOverlay _dragOverlay = new();
     private IReadOnlyList<DropTarget> _dropTargets = [];
     private DropTarget? _dropHover;
+    /// <summary>
+    /// What a window looked like before Mullion filled a zone with it, so
+    /// dropping it into the same zone again can put it back.
+    /// <para>
+    /// Keyed by handle, which Windows recycles - so entries are dropped once
+    /// the window is gone rather than kept until some later window inherits the
+    /// number and a stale size with it.
+    /// </para>
+    /// </summary>
+    private readonly Dictionary<nint, PxRect> _beforeFill = [];
+
     private int _dragStartWidth;
     private int _dragStartHeight;
     private bool _dragArmed;
@@ -281,14 +293,54 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         Dispatcher.UIThread.Post(() =>
         {
-            var result = Windows.MoveWindowTo(state.Hwnd, hit.Bounds);
-            _lastAction = $"Dropped into {hit.Zone.Name}: {result.Outcome} {result.Achieved}";
+            var current = Windows.BoundsOf(state.Hwnd);
+
+            // Dropped where it already is. That used to accept the gesture and
+            // do nothing; it is the way back now - out to fill the zone, then
+            // back to the size it had before, then out again.
+            var restoring =
+                current is not null &&
+                ZoneFit.Fills(current.Value, hit.Bounds) &&
+                _beforeFill.TryGetValue(state.Hwnd, out var remembered);
+
+            var target = restoring
+                ? ZoneFit.Restore(_beforeFill[state.Hwnd], hit.Bounds)
+                : hit.Bounds;
+
+            if (restoring) _beforeFill.Remove(state.Hwnd);
+            else if (current is not null) Remember(state.Hwnd, current.Value);
+
+            var result = Windows.MoveWindowTo(state.Hwnd, target);
+
+            _lastAction = restoring
+                ? $"Restored in {hit.Zone.Name}: {result.Outcome} {result.Achieved}"
+                : $"Dropped into {hit.Zone.Name}: {result.Outcome} {result.Achieved}";
+
             _log.Info(_lastAction);
 
             if (result.Outcome == MoveOutcome.Moved) _flash.Flash(result.Achieved);
             StateChanged?.Invoke();
         });
     }
+
+    /// <summary>
+    /// Note a window's size, and forget any whose windows have closed.
+    /// <para>
+    /// Swept on write rather than on a timer: the only thing that grows this is
+    /// dropping windows into zones, so that is the only moment it can need
+    /// tidying, and there is no cost at all while nobody is dragging.
+    /// </para>
+    /// </summary>
+    private void Remember(nint hwnd, PxRect bounds)
+    {
+        _beforeFill[hwnd] = bounds;
+
+        if (_beforeFill.Count <= 32) return;
+
+        foreach (var stale in _beforeFill.Keys.Where(h => Windows.BoundsOf(h) is null).ToList())
+            _beforeFill.Remove(stale);
+    }
+
 
     private void OnDisplaysChanged()
     {
@@ -407,12 +459,20 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         var health = _engine?.Health;
 
+        // Just the state when all is well. The latency and re-arm counts are
+        // what you want the moment something is wrong and noise every other
+        // moment - and this line is on the window people leave open, so it has
+        // to earn its space. Re-arms are the exception: they mean Windows
+        // dropped the hook and the watchdog put it back, which is worth saying
+        // out loud because it is otherwise completely silent.
         var hookStatus = health is null
             ? "Not started"
-            : health.Installed
-                ? $"Active · p50 {health.LatencyP50Ms:0.###} ms · max {health.LatencyMaxMs:0.##} ms · " +
-                  $"{health.ReinstallCount} reinstall(s) · budget {health.LowLevelHooksTimeoutMs} ms"
-                : "Not installed";
+            : !health.Installed
+                ? "Not installed"
+                : health.ReinstallCount > 0
+                    ? $"Active, re-armed {health.ReinstallCount} time" +
+                      (health.ReinstallCount == 1 ? "" : "s")
+                    : "Active";
 
         // When hotkeys are actually blocked right now, say so concretely and
         // name the window - that is far more useful than the general caveat,

@@ -132,6 +132,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void Rescan() => _host.Rescan();
 
     /// <summary>
+    /// The one behaviour the diagram cannot draw: keep the modifier held and
+    /// press again, and the window grows past the zone it just went to.
+    /// </summary>
+    public string CycleNote =>
+        $"Hold {Editor.Diagram.ModifierPrefix.TrimEnd('+')} and press a zone key again to widen " +
+        "the window through its sizes. " +
+        "Point at a zone to see its own sequence.";
+
+    /// <summary>
     /// What pressing the button will DO - a play triangle while paused, a pause
     /// bar while running. Showing the current state instead means the two look
     /// nearly identical and neither says which way round it is.
@@ -152,6 +161,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var snapshot = _host.GetSnapshot();
 
         Editor.Refresh();
+        OnPropertyChanged(nameof(CycleNote));
         TopologySummary = snapshot.TopologySummary;
         HookStatus = snapshot.HookStatus;
         PrivilegeStatus = snapshot.PrivilegeStatus;

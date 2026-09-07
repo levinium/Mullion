@@ -417,6 +417,10 @@
 
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ZoneCellViewModel">
+                  <!-- Hit-testable even when the diagram is only a picture, so
+                       pointing at a zone can still say what its key does. The
+                       command is a no-op outside edit mode and nothing lights
+                       up, so it stays something to look at as well as click. -->
                   <!-- A Button so the tile is clickable where the diagram is
                        interactive; templated flat so it reads as a zone, not a
                        control. Non-interactive diagrams leave the command null. -->
@@ -424,8 +428,9 @@
                           Classes.spanning="{Binding SpansDisplays}"
                           Classes.capturing="{Binding IsCapturing}"
                           Classes.interactive="{Binding IsInteractive}"
-                          IsHitTestVisible="{Binding IsInteractive}"
-                          Command="{Binding ActivateCommand}">
+                          Command="{Binding ActivateCommand}"
+                          PointerEntered="OnTileEntered"
+                          PointerExited="OnHoverLeft">
 
                     <Grid>
 
