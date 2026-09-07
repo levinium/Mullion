@@ -38,9 +38,26 @@ public sealed class NormalizedPanel : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        foreach (var child in Children) child.Measure(availableSize);
+        // Each child is measured at the size it will actually be ARRANGED at,
+        // not at the panel's full size. Measuring a zone tile as though it had
+        // the whole display lets everything inside size to content, and arrange
+        // cannot undo that: a Viewbox told it had room never scales, and text
+        // told it had room never wraps or trims. It then overflows the tile and
+        // the bezel clips it.
+        foreach (var child in Children)
+        {
+            var area = GetArea(child);
+
+            child.Measure(new Size(
+                Share(availableSize.Width, area.Width),
+                Share(availableSize.Height, area.Height)));
+        }
+
         return default;   // fills whatever the parent gives it
     }
+
+    private static double Share(double available, double fraction) =>
+        double.IsInfinity(available) ? double.PositiveInfinity : Math.Max(0, available * fraction);
 
     protected override Size ArrangeOverride(Size finalSize)
     {

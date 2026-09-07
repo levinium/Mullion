@@ -1,0 +1,242 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
+using Mullion.App.Controls;
+using Mullion.App.ViewModels;
+using Mullion.Core.Hotkeys;
+using Mullion.Core.Layout;
+using Mullion.Core.Simulation;
+using Shouldly;
+using Xunit;
+
+namespace Mullion.App.Tests;
+
+/// <summary>
+/// Renders the diagram for every simulated arrangement and checks that things
+/// land inside the things that contain them.
+/// <para>
+/// These exist because the diagram was being checked by looking at screenshots,
+/// which catches whatever you thought to look at on the arrangement you happened
+/// to capture. Every regression here was found by the user rather than by me:
+/// key chips cropped by a narrow monitor, a span measure cut off by its gutter,
+/// tier chips that looked centered above and bottom-justified below. Each is a
+/// statement about rectangles, so each can be asserted.
+/// </para>
+/// </summary>
+public class MonitorDiagramLayoutTests
+{
+    /// <summary>Wide enough for the desk, short enough to force real scaling.</summary>
+    private static readonly Size Canvas = new(1040, 360);
+
+    /// <summary>
+    /// The longest modifier offered. Every size assertion runs with it, because
+    /// the failures all appeared when chips grew from "A" to "Win+A" and would
+    /// reappear at "Ctrl+Shift+A".
+    /// </summary>
+    private const string LongestPrefix = "Ctrl+Shift+";
+
+    /// <summary>
+    /// Slack for arrange rounding and the bezel's own 2px border - not for real
+    /// overflow. The bug this catches was a chip 105px wider than its monitor.
+    /// </summary>
+    private const double Slack = 2.5;
+
+    public static TheoryData<string> Arrangements()
+    {
+        var data = new TheoryData<string>();
+        foreach (var t in SimulatedTopologies.All) data.Add(t.Id);
+        return data;
+    }
+
+    private static MonitorDiagram Render(string topologyId, string prefix)
+    {
+        var topology = SimulatedTopologies.Find(topologyId)!;
+        var layout = LayoutBuilder.Build(topology.Displays, KeySurface.LeftHandBlock);
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(topology.Displays, layout, modifierPrefix: prefix),
+            ModifierPrefix = prefix,
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        // Several passes, pumping the dispatcher between them. One is not
+        // enough: the panel reserves gutters from what its children measure, and
+        // constraints bound to an arranged size cannot be known until something
+        // has been arranged. Without RunJobs those bindings never deliver at
+        // all, so the test would measure a half-built layout the app never shows.
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        return diagram;
+    }
+
+    private static IEnumerable<T> Descendants<T>(Visual root) where T : Visual =>
+        root.GetVisualDescendants().OfType<T>();
+
+    /// <summary>Bounds of a visual in the diagram's own coordinates.</summary>
+    private static Rect BoundsIn(Visual visual, Visual root) =>
+        visual.Bounds.TransformToAABB(visual.GetVisualParent()!.TransformToVisual(root) ?? Matrix.Identity);
+
+    // ---- The failures that reached the user, as assertions ------------------
+
+    /// <summary>
+    /// A key chip must fit inside the monitor it belongs to. The bezel clips, so
+    /// anything wider is cut off mid-chord - which is how "Win+Q" became "Win+"
+    /// on a rotated 32:9.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void KeyChipsFitInsideTheirMonitor(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var bezel in Descendants<Border>(diagram).Where(b => b.Classes.Contains("monitorBezel")))
+        {
+            var frame = BoundsIn(bezel, diagram);
+
+            foreach (var chip in Descendants<Border>(bezel).Where(b => b.Classes.Contains("keyChip")))
+            {
+                if (!chip.IsVisible || chip.Bounds.Width <= 0) continue;
+
+                var box = BoundsIn(chip, diagram);
+
+                box.Left.ShouldBeGreaterThanOrEqualTo(frame.Left - Slack,
+                    $"{topologyId}: a key chip starts left of its monitor");
+                box.Right.ShouldBeLessThanOrEqualTo(frame.Right + Slack,
+                    $"{topologyId}: a key chip runs past the right of its monitor");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Upper and lower tier chips must sit the same distance from the middle of
+    /// their tile. Pinned to its edges instead, the pair reads as one centered
+    /// and one bottom-justified.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void TierChipsAreSymmetricAboutTheirTile(string topologyId)
+    {
+        var diagram = Render(topologyId, "Win+");
+
+        foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
+        {
+            var chips = Descendants<Border>(tile)
+                .Where(b => b.Classes.Contains("tierChip") && b.IsVisible && b.Bounds.Height > 0)
+                .Select(b => BoundsIn(b, diagram))
+                .OrderBy(r => r.Top)
+                .ToList();
+
+            if (chips.Count != 2) continue;
+
+            var frame = BoundsIn(tile, diagram);
+            var above = frame.Center.Y - chips[0].Center.Y;
+            var below = chips[1].Center.Y - frame.Center.Y;
+
+            Math.Abs(above - below).ShouldBeLessThan(2,
+                $"{topologyId}: tier chips sit {above:F0}px above and {below:F0}px below the middle");
+        }
+    }
+
+    /// <summary>
+    /// A span measure's chip must fit the gutter opened for it. The gutter is
+    /// sized from what the measure reports, so a chip wider than that is a
+    /// measurement that did not reach the panel.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void SpanMeasuresFitTheirGutter(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var measure in Descendants<Button>(diagram).Where(b => b.Classes.Contains("spanMeasure")))
+        {
+            var frame = BoundsIn(measure, diagram);
+
+            foreach (var chip in Descendants<Border>(measure).Where(b => b.Classes.Contains("keyChip")))
+            {
+                if (!chip.IsVisible || chip.Bounds.Width <= 0) continue;
+
+                var box = BoundsIn(chip, diagram);
+
+                box.Left.ShouldBeGreaterThanOrEqualTo(frame.Left - Slack,
+                    $"{topologyId}: a span measure's chip is cut off on the left");
+                box.Right.ShouldBeLessThanOrEqualTo(frame.Right + Slack,
+                    $"{topologyId}: a span measure's chip is cut off on the right");
+            }
+        }
+    }
+
+    /// <summary>Nothing may be pushed outside the diagram itself.</summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void EverythingStaysInsideTheDiagram(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+        var frame = new Rect(diagram.Bounds.Size);
+
+        foreach (var bezel in Descendants<Border>(diagram).Where(b => b.Classes.Contains("monitorBezel")))
+        {
+            var box = BoundsIn(bezel, diagram);
+
+            box.Left.ShouldBeGreaterThanOrEqualTo(-1, $"{topologyId}: a monitor is off the left edge");
+            box.Right.ShouldBeLessThanOrEqualTo(frame.Right + Slack, $"{topologyId}: a monitor is off the right edge");
+            box.Top.ShouldBeGreaterThanOrEqualTo(-1, $"{topologyId}: a monitor is off the top edge");
+        }
+    }
+
+    /// <summary>
+    /// Monitor name tabs must not reach a neighbour's. They overflow their own
+    /// display on purpose, which is exactly why they need checking.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void MonitorTabsDoNotOverlapEachOther(string topologyId)
+    {
+        var diagram = Render(topologyId, "Win+");
+
+        var tabs = Descendants<Border>(diagram)
+            .Where(b => b.Classes.Contains("monitorLabel") && b.IsVisible && b.Bounds.Width > 0)
+            .Select(b => BoundsIn(b, diagram))
+            .ToList();
+
+        for (var i = 0; i < tabs.Count; i++)
+        for (var j = i + 1; j < tabs.Count; j++)
+        {
+            tabs[i].Intersects(tabs[j]).ShouldBeFalse($"{topologyId}: two monitor tabs overlap");
+        }
+    }
+
+    /// <summary>
+    /// The chord is what the diagram is for. A chip may shrink to fit, but it
+    /// must never drop the modifier and show a key that is not the hotkey.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void EveryChipShowsTheWholeChord(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var chip in Descendants<Border>(diagram).Where(b => b.Classes.Contains("keyChip")))
+        {
+            if (!chip.IsVisible) continue;
+
+            var texts = Descendants<TextBlock>(chip).Where(t => t.IsVisible).ToList();
+            if (texts.Count == 0) continue;
+
+            texts.ShouldContain(
+                t => t.Text == LongestPrefix,
+                $"{topologyId}: a chip shows a bare key instead of the whole chord");
+        }
+    }
+}

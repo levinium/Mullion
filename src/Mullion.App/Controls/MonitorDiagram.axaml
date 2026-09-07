@@ -368,83 +368,107 @@
                            upper one reads as centered and the lower one as
                            bottom-justified, which is the same arrangement
                            looking lopsided. -->
-                      <Grid RowDefinitions="*,*" Margin="6">
-                        <StackPanel Grid.Row="0"
-                                    Orientation="Horizontal"
-                                    Spacing="6"
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    IsVisible="{Binding HasUpper}">
-                          <Border Classes="keyChip tierChip">
-                            <StackPanel Orientation="Horizontal">
-                              <TextBlock Classes="chipModifier"
-                                         Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}"
-                                         IsVisible="{Binding $parent[Button].Bounds.Width,
-                                                     Converter={x:Static ctl:WiderThanConverter.Instance},
-                                                     ConverterParameter=90}" />
-                              <TextBlock Text="{Binding UpperKey}" />
-                            </StackPanel>
-                          </Border>
-                          <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
-                                     IsVisible="{Binding $parent[Button].Bounds.Width,
-                                                 Converter={x:Static ctl:WiderThanConverter.Instance},
-                                                 ConverterParameter=170}"
-                                     VerticalAlignment="Center" />
-                        </StackPanel>
+                      <Grid RowDefinitions="*,*" ColumnDefinitions="*" Margin="6">
+                        <!-- The Viewbox wraps the ROW, not the chip. A horizontal
+                             StackPanel measures its children with infinite
+                             width, so a Viewbox inside one is never told it has
+                             to shrink; out here the width is the tile's. -->
+                        <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
+                                 HorizontalAlignment="Stretch"
+                                 MaxHeight="20" IsVisible="{Binding HasUpper}"
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Classes="keyChip tierChip">
+                              <StackPanel Orientation="Horizontal">
+                                <TextBlock Classes="chipModifier"
+                                           Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                                <TextBlock Text="{Binding UpperKey}" />
+                              </StackPanel>
+                            </Border>
+                            <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+                                       IsVisible="{Binding $parent[Button].Bounds.Width,
+                                                   Converter={x:Static ctl:WiderThanConverter.Instance},
+                                                   ConverterParameter=170}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Viewbox>
 
-                        <StackPanel Grid.Row="1"
-                                    Orientation="Horizontal"
-                                    Spacing="6"
-                                    VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    IsVisible="{Binding HasLower}">
-                          <Border Classes="keyChip tierChip">
-                            <StackPanel Orientation="Horizontal">
-                              <TextBlock Classes="chipModifier"
-                                         Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}"
-                                         IsVisible="{Binding $parent[Button].Bounds.Width,
-                                                     Converter={x:Static ctl:WiderThanConverter.Instance},
-                                                     ConverterParameter=90}" />
-                              <TextBlock Text="{Binding LowerKey}" />
-                            </StackPanel>
-                          </Border>
-                          <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
-                                     IsVisible="{Binding $parent[Button].Bounds.Width,
-                                                 Converter={x:Static ctl:WiderThanConverter.Instance},
-                                                 ConverterParameter=170}"
-                                     VerticalAlignment="Center" />
-                        </StackPanel>
+                        <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly"
+                                 HorizontalAlignment="Stretch"
+                                 MaxHeight="20" IsVisible="{Binding HasLower}"
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Classes="keyChip tierChip">
+                              <StackPanel Orientation="Horizontal">
+                                <TextBlock Classes="chipModifier"
+                                           Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                                <TextBlock Text="{Binding LowerKey}" />
+                              </StackPanel>
+                            </Border>
+                            <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+                                       IsVisible="{Binding $parent[Button].Bounds.Width,
+                                                   Converter={x:Static ctl:WiderThanConverter.Instance},
+                                                   ConverterParameter=170}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Viewbox>
                       </Grid>
 
                       <!-- The zone's own key, on the middle of the whole tile.
                            With tiers present that is the line between the two
                            halves, so it never lands on either tier chip. -->
-                      <StackPanel VerticalAlignment="Center"
-                                  HorizontalAlignment="Center"
-                                  Margin="6"
-                                  Spacing="4">
-                        <Border Classes="keyChip primaryChip" HorizontalAlignment="Center">
-                          <StackPanel Orientation="Horizontal">
-                            <TextBlock Classes="chipModifier"
-                                       Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}"
-                                       IsVisible="{Binding $parent[Button].Bounds.Width,
-                                                   Converter={x:Static ctl:WiderThanConverter.Instance},
-                                                   ConverterParameter=80}" />
-                            <TextBlock Text="{Binding KeyLabel}" />
-                          </StackPanel>
-                        </Border>
-                        <TextBlock Classes="zoneName" Text="{Binding Name}"
+                      <!-- A Grid, not a StackPanel. A StackPanel arranges its
+                           children at the width of its WIDEST child rather than
+                           its own, so a chip too big for the tile was handed the
+                           space it asked for and the Viewbox was never told to
+                           shrink. A Grid arranges to the cell. -->
+                      <!-- ColumnDefinitions="*" is load-bearing: an implicit
+                           column sizes to its content, so the Viewbox was still
+                           handed more width than the tile had. A star column
+                           distributes what is actually available. -->
+                      <Grid RowDefinitions="Auto,Auto,Auto"
+                            ColumnDefinitions="*"
+                            VerticalAlignment="Center"
+                            Margin="6">
+
+                        <!-- Shrinks to fit a narrow display rather than dropping
+                             the modifier. A chord with its modifier removed is
+                             not the hotkey it names, and saying which key does
+                             what is the diagram's whole job. DownOnly, so it
+                             never grows past its natural size where there is
+                             room. -->
+                        <!-- MaxWidth bound to the tile, because neither a
+                             StackPanel nor a Grid reliably hands a child less
+                             room than it asked for: both will arrange it at its
+                             own desired width and let it overflow. This states
+                             the limit rather than hoping a container enforces
+                             it. -->
+                        <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
+                                 MaxHeight="24"
+                                 MaxWidth="{Binding $parent[Button].Bounds.Width}">
+                          <Border Classes="keyChip primaryChip">
+                            <StackPanel Orientation="Horizontal">
+                              <TextBlock Classes="chipModifier"
+                                         Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                              <TextBlock Text="{Binding KeyLabel}" />
+                            </StackPanel>
+                          </Border>
+                        </Viewbox>
+
+                        <TextBlock Grid.Row="1" Classes="zoneName" Text="{Binding Name}"
                                    IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                                   Margin="0,4,0,0"
                                    TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170" />
 
                         <!-- The bezel clips, so a size that does not fit would be
                              cut mid-word. Dropped instead, and still on hover. -->
-                        <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
+                        <TextBlock Grid.Row="2" Classes="zoneSize" Text="{Binding SizeLabel}"
                                    IsVisible="{Binding $parent[Button].Bounds.Width,
                                                Converter={x:Static ctl:WiderThanConverter.Instance},
                                                ConverterParameter=95}"
+                                   Margin="0,4,0,0"
                                    TextAlignment="Center" />
-                      </StackPanel>
+                      </Grid>
                     </Grid>
                   </Button>
                 </DataTemplate>

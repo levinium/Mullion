@@ -5,6 +5,7 @@
     <Project Path="src/Mullion.Platform.Windows/Mullion.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Mullion.App.Tests/Mullion.App.Tests.csproj" />
     <Project Path="tests/Mullion.Core.Tests/Mullion.Core.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

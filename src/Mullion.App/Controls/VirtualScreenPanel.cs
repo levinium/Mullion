@@ -150,10 +150,19 @@ public sealed class VirtualScreenPanel : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        foreach (var child in Children) child.Measure(Size.Infinity);
-
         var bounds = VirtualBounds;
-        if (bounds.Width <= 0 || bounds.Height <= 0) return default;
+
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            foreach (var child in Children) child.Measure(Size.Infinity);
+            return default;
+        }
+
+        // Annotations are measured unconstrained, because their natural size is
+        // precisely what decides how thick a gutter has to be.
+        foreach (var child in Children)
+            if (GetLane(child) != DiagramLane.Desk)
+                child.Measure(Size.Infinity);
 
         var gutters = Gutters();
         var inserted = gutters.Sum(g => g.Thickness);
@@ -167,6 +176,20 @@ public sealed class VirtualScreenPanel : Panel
 
         var headroom = TopHeadroom;
         var scale = Scale(width - inserted, height - below - headroom, bounds);
+
+        // Displays are measured at the size they will be ARRANGED at. Measured
+        // unconstrained they size to content, and arrange cannot take that back:
+        // a Viewbox told it had room never scales, text told it had room never
+        // wraps, and the result overflows the monitor it belongs to.
+        foreach (var child in Children)
+        {
+            if (GetLane(child) != DiagramLane.Desk) continue;
+
+            var rect = GetRect(child);
+            child.Measure(new Size(
+                Math.Max(0, rect.Width * scale),
+                Math.Max(0, rect.Height * scale)));
+        }
 
         return new Size(bounds.Width * scale + inserted, bounds.Height * scale + below + headroom);
     }
