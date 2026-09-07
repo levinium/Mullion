@@ -470,7 +470,12 @@
                            upper one reads as centered and the lower one as
                            bottom-justified, which is the same arrangement
                            looking lopsided. -->
-                      <Grid RowDefinitions="*,*" ColumnDefinitions="*" Margin="6">
+                      <!-- Decoration only. Every hit inside a half belongs to that
+                           half's own button underneath: layering targets over it
+                           gave one rectangle two owners that disagreed about
+                           both hover and click. -->
+                      <Grid RowDefinitions="*,*" ColumnDefinitions="*" Margin="6"
+                            IsHitTestVisible="False">
                         <!-- The Viewbox wraps the ROW, not the chip. A horizontal
                              StackPanel measures its children with infinite
                              width, so a Viewbox inside one is never told it has
@@ -482,21 +487,15 @@
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Button Classes="tierChipButton"
-                                    Classes.capturing="{Binding IsUpperCapturing}"
-                                    Classes.interactive="{Binding IsUpperInteractive}"
-                                    IsHitTestVisible="{Binding IsUpperInteractive}"
-                                    Command="{Binding ActivateUpperCommand}"
-                                    ToolTip.Tip="{Binding UpperHint}">
-                              <Border Classes="keyChip tierChip">
+                            <Border Classes="keyChip tierChip"
+                                    Classes.capturing="{Binding IsUpperCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
                                              TextAlignment="Center"
                                              Text="{Binding UpperModifierPrefix}" />
                                   <TextBlock Text="{Binding UpperKey}" />
                                 </StackPanel>
-                              </Border>
-                            </Button>
+                            </Border>
                             <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
@@ -512,21 +511,15 @@
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Button Classes="tierChipButton"
-                                    Classes.capturing="{Binding IsLowerCapturing}"
-                                    Classes.interactive="{Binding IsLowerInteractive}"
-                                    IsHitTestVisible="{Binding IsLowerInteractive}"
-                                    Command="{Binding ActivateLowerCommand}"
-                                    ToolTip.Tip="{Binding LowerHint}">
-                              <Border Classes="keyChip tierChip">
+                            <Border Classes="keyChip tierChip"
+                                    Classes.capturing="{Binding IsLowerCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
                                              TextAlignment="Center"
                                              Text="{Binding LowerModifierPrefix}" />
                                   <TextBlock Text="{Binding LowerKey}" />
                                 </StackPanel>
-                              </Border>
-                            </Button>
+                            </Border>
                             <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},

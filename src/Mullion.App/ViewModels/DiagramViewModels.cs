@@ -130,9 +130,26 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     /// </summary>
     public string ModifierPrefix { get; init; } = "Win+";
 
-    public string UpperModifierPrefix { get; init; } = "Win+";
+    private readonly string? _upperPrefix;
+    private readonly string? _lowerPrefix;
 
-    public string LowerModifierPrefix { get; init; } = "Win+";
+    /// <summary>
+    /// A tier's chord, falling back to this zone's own rather than to a fixed
+    /// "Win+". A hardcoded default is a lie waiting for the one path that
+    /// forgets to set it - and it would claim the wrong modifier on screen
+    /// while everything around it was right.
+    /// </summary>
+    public string UpperModifierPrefix
+    {
+        get => _upperPrefix ?? ModifierPrefix;
+        init => _upperPrefix = value;
+    }
+
+    public string LowerModifierPrefix
+    {
+        get => _lowerPrefix ?? ModifierPrefix;
+        init => _lowerPrefix = value;
+    }
 
     /// <summary>The prefix split where a long chord may be broken across lines.</summary>
     public IReadOnlyList<string> ModifierSegments => ChordSegments(ModifierPrefix);
@@ -254,9 +271,21 @@ public sealed partial class HorizontalSpanViewModel : SpanMeasureViewModel
     public string? LowerKey { get; init; }
     public string? LowerSize { get; init; }
 
-    public string UpperModifierPrefix { get; init; } = "Win+";
+    private readonly string? _upperPrefix;
+    private readonly string? _lowerPrefix;
 
-    public string LowerModifierPrefix { get; init; } = "Win+";
+    /// <summary>As on a zone cell: a tier follows the span's own chord.</summary>
+    public string UpperModifierPrefix
+    {
+        get => _upperPrefix ?? ModifierPrefix;
+        init => _upperPrefix = value;
+    }
+
+    public string LowerModifierPrefix
+    {
+        get => _lowerPrefix ?? ModifierPrefix;
+        init => _lowerPrefix = value;
+    }
 
     public bool HasUpper => UpperKey is not null;
     public bool HasLower => LowerKey is not null;

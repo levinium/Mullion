@@ -658,13 +658,23 @@ public class SeamRenderingTests
             .ShouldAllBe(c => !c.IsUpperInteractive && !c.IsLowerInteractive);
     }
 
+
+    /// <summary>
+    /// For every piece of a tile that is actually drawn, what lights up under
+    /// the pointer and what a click changes must be the same zone.
+    /// <para>
+    /// This is the property that was broken, and the one the click-only sweeps
+    /// could not see. Layering targets over a half gave one rectangle two owners
+    /// that disagreed: the tier chip had a button of its own, so hovering it
+    /// left the half cold and lit the whole column while a click still went to
+    /// the half; the size text beside it had no button, so a click on it sailed
+    /// past the half and up to the tile. Pointing at a thing and pressing it did
+    /// two different things.
+    /// </para>
+    /// </summary>
     [AvaloniaFact]
-    public void ClickingATierChipDoesNotAlsoHitTheTileUnderIt()
+    public void HoverAndClickAgreeOnEveryPieceOfATile()
     {
-        // The chip sits inside the tile's own button. Driven with a real press
-        // rather than by calling the command, because the question is entirely
-        // about which of two nested buttons takes the click - and a command test
-        // would pass whichever way that went.
         var topology = SimulatedTopologies.Find("single-32-9")!;
         var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
 
@@ -686,29 +696,84 @@ public class SeamRenderingTests
             Dispatcher.UIThread.RunJobs();
         }
 
-        var chip = diagram.GetVisualDescendants().OfType<Button>()
-            .Where(b => b.Classes.Contains("tierChipButton") && b.IsVisible && b.Bounds.Width > 0)
+        var vm = (MonitorDiagramViewModel)diagram.DataContext!;
+        var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        var tile = diagram.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("zoneTileButton"))
             .OrderBy(b => b.Bounds.X)
             .First();
 
-        var middle = chip.Bounds
-            .TransformToAABB(chip.GetVisualParent()!.TransformToVisual(window)!.Value)
-            .Center;
+        Rect BoxOf(Visual v) =>
+            v.Bounds.TransformToAABB(v.GetVisualParent()!.TransformToVisual(window)!.Value);
 
-        window.MouseMove(middle);
-        window.MouseDown(middle, MouseButton.Left);
-        window.MouseUp(middle, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
+        var regions = tile.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("subZoneRegion"))
+            .OrderBy(b => BoxOf(b).Y)
+            .ToList();
 
-        var cells = ((MonitorDiagramViewModel)diagram.DataContext!)
-            .Displays.Single().Cells;
+        var highlight = tile.GetVisualDescendants().OfType<Border>()
+            .First(b => b.Classes.Contains("zoneHighlight"));
 
-        var owner = cells.First(c => c.UpperPosition is not null || c.LowerPosition is not null);
+        // Every chip and every line of text the tile actually draws, plus some
+        // open space in each band so the gaps between them are covered too.
+        var pieces = new List<(string Name, Point At)>();
 
-        asked.Count.ShouldBe(1, "the click reached both the chip and the tile beneath it");
-        asked[0].ShouldNotBe(owner.Position, "the click was taken by the whole column instead of the half");
+        foreach (var chip in tile.GetVisualDescendants().OfType<Border>()
+                     .Where(b => b.Classes.Contains("keyChip") && b.IsVisible && b.Bounds.Width > 0))
+        {
+            pieces.Add(($"chip '{chip.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault()?.Text}'",
+                BoxOf(chip).Center));
+        }
+
+        foreach (var text in tile.GetVisualDescendants().OfType<TextBlock>()
+                     .Where(t => t.IsVisible && t.Bounds.Width > 0 && !string.IsNullOrEmpty(t.Text)))
+        {
+            pieces.Add(($"text '{text.Text}'", BoxOf(text).Center));
+        }
+
+        var box = BoxOf(tile);
+
+        foreach (var down in new[] { 0.10, 0.50, 0.90 })
+            pieces.Add(($"open space at {down:P0}", new Point(box.Center.X, box.Y + box.Height * down)));
+
+        pieces.Count.ShouldBeGreaterThan(6, "the tile should be drawing more than this");
+
+        foreach (var (name, at) in pieces)
+        {
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+
+            var hovered =
+                regions.Count > 0 && regions[0].IsPointerOver ? cell.UpperPosition :
+                regions.Count > 1 && regions[1].IsPointerOver ? cell.LowerPosition :
+                highlight.IsVisible ? cell.Position : null;
+
+            asked.Clear();
+            window.MouseDown(at, MouseButton.Left);
+            window.MouseUp(at, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+
+            var clicked = asked.Count == 0 ? (GridPos?)null : asked[0];
+
+            // Which zone it OUGHT to be, from where the piece is drawn. Agreement
+            // alone is not enough: hover and click can be wrong together, which
+            // is exactly what happens when a chip inside a half is hit-testable
+            // but carries no command - the pointer and the press then both walk
+            // up to the tile.
+            var third = (at.Y - box.Y) / box.Height;
+
+            var expected =
+                third < 0.36 ? cell.UpperPosition :
+                third > 0.64 ? cell.LowerPosition : cell.Position;
+
+            hovered.ShouldNotBeNull($"{name}: nothing lit up under the pointer");
+            clicked.ShouldNotBeNull($"{name}: the click went nowhere");
+
+            hovered.ShouldBe(expected, $"{name}: it lit up the wrong zone");
+            clicked.ShouldBe(expected, $"{name}: it changed the wrong zone");
+        }
     }
-
 
     /// <summary>
     /// Where a click lands, swept down AND across a tile that carries tiers.
