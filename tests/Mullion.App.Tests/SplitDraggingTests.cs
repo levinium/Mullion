@@ -708,6 +708,71 @@ public class SeamRenderingTests
         asked.Count.ShouldBe(1, "the click reached both the chip and the tile beneath it");
         asked[0].ShouldNotBe(owner.Position, "the click was taken by the whole column instead of the half");
     }
+
+    /// <summary>
+    /// Where a click lands, at three heights down a tile that carries tiers.
+    /// The upper half means the upper zone, the middle band means the whole
+    /// column, the lower half means the lower zone - and the middle band is the
+    /// one that was wrong, because the name and size are text with nothing
+    /// behind them and the pointer went straight through to the half beneath.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(0.14, "upper")]
+    [InlineData(0.50, "whole")]
+    [InlineData(0.86, "lower")]
+    public void ClickingATileHitsTheRegionItLandsIn(double downTheTile, string expected)
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var asked = new List<GridPos>();
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, onZoneActivated: asked.Add),
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var vm = (MonitorDiagramViewModel)diagram.DataContext!;
+        var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        cell.UpperPosition.ShouldNotBeNull();
+        cell.LowerPosition.ShouldNotBeNull();
+
+        var tile = diagram.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("zoneTileButton"))
+            .OrderBy(b => b.Bounds.X)
+            .First();
+
+        var box = tile.Bounds.TransformToAABB(
+            tile.GetVisualParent()!.TransformToVisual(window)!.Value);
+
+        var at = new Point(box.Center.X, box.Y + box.Height * downTheTile);
+
+        window.MouseMove(at);
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseUp(at, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        var wanted = expected switch
+        {
+            "upper" => cell.UpperPosition!.Value,
+            "lower" => cell.LowerPosition!.Value,
+            _ => cell.Position,
+        };
+
+        asked.ShouldBe([wanted]);
+    }
     [AvaloniaFact]
     public void ASeamIsWiredToTheViewModel()
     {

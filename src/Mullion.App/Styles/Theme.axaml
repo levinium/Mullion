@@ -611,4 +611,70 @@
     <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
+
+  <!-- Sub-zone regions
+       The half of a column, drawn as it really is and clickable as what it is.
+       Templated rather than styled directly so the dashed outline and the hover
+       fill are the same control: what lights up under the pointer is exactly
+       what a click will change. -->
+  <Style Selector="Button.subZoneRegion">
+    <!-- Stretch explicitly. A templated button with no content has nothing to
+         size to, and these came out 5px square - present, hit-testable, and
+         far too small ever to be pointed at. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel Background="Transparent">
+          <Rectangle Classes="subZone" />
+          <Border Name="Glow" Opacity="0" CornerRadius="3"
+                  Background="{DynamicResource AccentSoft}"
+                  BorderBrush="{DynamicResource Accent}"
+                  BorderThickness="1" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.subZoneRegion.interactive">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.subZoneRegion.interactive:pointerover /template/ Border#Glow">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Still lit while it waits for a key, so the zone being rebound stays
+       obvious after the pointer has moved away to the keyboard. -->
+  <Style Selector="Button.subZoneRegion.capturing /template/ Border#Glow">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource CaptureTint}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+  </Style>
+
+  <Style Selector="Button.subZoneRegion /template/ Border#Glow">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.09" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- The whole column, lit the same way so the two read as one idea at two
+       scales rather than as two different kinds of highlight. -->
+  <Style Selector="Border.zoneHighlight">
+    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Margin" Value="2" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
 </Styles>

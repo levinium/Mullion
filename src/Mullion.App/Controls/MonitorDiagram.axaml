@@ -417,13 +417,52 @@
 
                     <Grid>
 
-                      <!-- The upper and lower halves drawn as they actually
-                           are, dashed and faded so they read as regions inside
-                           this zone rather than as separate zones beside it. -->
+                      <!-- Hovering the whole tile, meaning the whole column -
+                       but only where the pointer is not inside one of the
+                       halves. A parent counts as hovered while any child is,
+                       so without excluding them the tile would light up at the
+                       same time as the half inside it and neither would say
+                       what a click was about to do. -->
+                      <Border Classes="zoneHighlight">
+                        <Border.IsVisible>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="IsInteractive" />
+                            <Binding Path="$parent[Button].IsPointerOver" />
+                            <Binding ElementName="UpperRegion" Path="IsPointerOver"
+                                     Converter="{x:Static BoolConverters.Not}" />
+                            <Binding ElementName="LowerRegion" Path="IsPointerOver"
+                                     Converter="{x:Static BoolConverters.Not}" />
+                          </MultiBinding>
+                        </Border.IsVisible>
+                      </Border>
+
+                      <!-- The upper and lower halves, drawn as they actually
+                           are and clickable as what they are. Dashed and faded
+                           so they read as regions inside this zone rather than
+                           as separate zones beside it.
+
+                           The whole half is the target, not just the chip on
+                           it: the thing being pointed at has to be the thing
+                           that changes, or the diagram is a picture with a few
+                           small hidden buttons scattered over it. -->
                       <Grid RowDefinitions="*,*" Margin="3">
-                        <Rectangle Grid.Row="0" Classes="subZone" IsVisible="{Binding HasUpper}" />
-                        <Rectangle Grid.Row="1" Classes="subZone" IsVisible="{Binding HasLower}" />
+                        <Button Grid.Row="0" Name="UpperRegion" Classes="subZoneRegion"
+                                IsVisible="{Binding HasUpper}"
+                                Classes.capturing="{Binding IsUpperCapturing}"
+                                Classes.interactive="{Binding IsUpperInteractive}"
+                                IsHitTestVisible="{Binding IsUpperInteractive}"
+                                Command="{Binding ActivateUpperCommand}"
+                                ToolTip.Tip="Give this half its own key" />
+
+                        <Button Grid.Row="1" Name="LowerRegion" Classes="subZoneRegion"
+                                IsVisible="{Binding HasLower}"
+                                Classes.capturing="{Binding IsLowerCapturing}"
+                                Classes.interactive="{Binding IsLowerInteractive}"
+                                IsHitTestVisible="{Binding IsLowerInteractive}"
+                                Command="{Binding ActivateLowerCommand}"
+                                ToolTip.Tip="Give this half its own key" />
                       </Grid>
+
 
                       <!-- Tier chips sit in the MIDDLE of their own half, the
                            same way the zone's own chip sits in the middle of the
@@ -509,9 +548,21 @@
                            column sizes to its content, so the Viewbox was still
                            handed more width than the tile had. A star column
                            distributes what is actually available. -->
+                      <!-- Transparent rather than unset, which makes this band a
+                           hit target: the chip, the name and the size are the
+                           whole zone stated in the middle of the tile, so
+                           pointing at any of them has to mean the whole column.
+                           With no background the pointer falls straight through
+                           the words to the half behind them, and hovering the
+                           zone name lit up a sub-zone instead.
+
+                           Sized to its content by VerticalAlignment, so it
+                           claims only the middle band and the halves keep the
+                           rest. -->
                       <Grid RowDefinitions="Auto,Auto,Auto"
                             ColumnDefinitions="*"
                             VerticalAlignment="Center"
+                            Background="Transparent"
                             Margin="6">
 
                         <!-- Wraps first, shrinks second, and never drops the
