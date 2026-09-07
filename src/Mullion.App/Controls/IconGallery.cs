@@ -24,7 +24,7 @@ namespace Mullion.App.Controls;
 /// </summary>
 public static class IconGallery
 {
-    private const double Big = 2.6;
+    private const double Big = 2.2;
 
     public static Window Create() => new()
     {
@@ -49,19 +49,9 @@ public static class IconGallery
         panel.Children.Add(Row("Pause — hotkeys", Icons.Pause));
         panel.Children.Add(Row("Play — resume", Icons.Play));
 
-        panel.Children.Add(Heading("Snap — pick one"));
-        panel.Children.Add(Row("A  magnet with poles", IconCandidates.MagnetPoles));
-        panel.Children.Add(Row("B  magnet, plain legs", IconCandidates.MagnetPlain));
-        panel.Children.Add(Row("C  walls, arrow between  |<->|", IconCandidates.SnapBetween));
-        panel.Children.Add(Row("D  walls, arrows outward", IconCandidates.SnapToEdges));
-
-        panel.Children.Add(Heading("Reset zones — pick one"));
-        panel.Children.Add(Row("E  panes", IconCandidates.Zones));
-        panel.Children.Add(Row("F  panes with reset arrow", IconCandidates.ZonesReset));
-
-        panel.Children.Add(Heading("Reset keys — pick one"));
-        panel.Children.Add(Row("G  keycap", IconCandidates.Keycap));
-        panel.Children.Add(Row("H  keycap with reset arrow", IconCandidates.KeycapReset));
+        panel.Children.Add(Row("Snap — while dragging", Icons.Snap));
+        panel.Children.Add(Row("Reset zones — to defaults", Icons.ResetZones));
+        panel.Children.Add(Row("Reset keys — to defaults", Icons.ResetKeys));
 
         return panel;
     }

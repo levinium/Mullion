@@ -38,13 +38,13 @@
                     VerticalAlignment="Center"
                     IsVisible="{Binding IsEditing}">
 
-          <!-- A magnet: the one control here that holds a state rather than
-               doing something, so it is the one that lights up. -->
+          <!-- The one control here that holds a state rather than doing
+               something, so it is the one that lights up. -->
           <Button Classes="iconButton"
                   Classes.active="{Binding SnapSplits}"
                   Command="{Binding ToggleSnapCommand}"
                   ToolTip.Tip="Snap while dragging. Seams settle on a 5% grid, on halves and thirds, and on the positions where a zone comes out at an exact 16:9 or 3:2 for that monitor. Hold Alt while dragging to place one freely.">
-            <Path Data="{x:Static ctl:Icons.Magnet}" />
+            <Path Data="{x:Static ctl:Icons.Snap}" />
           </Button>
 
           <Button Classes="iconButton" Command="{Binding UndoCommand}"
@@ -57,16 +57,21 @@
             <Path Data="{x:Static ctl:Icons.Redo}" />
           </Button>
 
-          <!-- These two stay words. They throw away work, they are not
-               reversible by pressing them again, and no icon distinguishes
-               "reset the zones" from "reset the keys" well enough to be worth
-               guessing at. A tidier row is not worth losing someone's layout. -->
-          <Button Content="Reset zones" Command="{Binding ResetZonesCommand}"
-                  Margin="6,0,0,0"
-                  ToolTip.Tip="Discard every custom split and zone count. Keys are left alone." />
-          <Button Content="Reset keys" Command="{Binding ResetKeysCommand}"
-                  Margin="2,0,0,0"
-                  ToolTip.Tip="Put every key back where Mullion would have put it. Zone shapes are left alone." />
+          <!-- The two resets, each showing what it acts on with a reset arrow
+               worked into it. They throw away work and pressing them again does
+               not bring it back, so the tooltips say plainly what goes and what
+               is left alone. -->
+          <Button Classes="iconButton" Margin="6,0,0,0"
+                  Command="{Binding ResetZonesCommand}"
+                  ToolTip.Tip="Reset zones to defaults. Discards every custom split and zone count; keys are left alone.">
+            <Path Data="{x:Static ctl:Icons.ResetZones}" />
+          </Button>
+
+          <Button Classes="iconButton"
+                  Command="{Binding ResetKeysCommand}"
+                  ToolTip.Tip="Reset keys to defaults. Puts every key back where Mullion would have put it; zone shapes are left alone.">
+            <Path Data="{x:Static ctl:Icons.ResetKeys}" />
+          </Button>
         </StackPanel>
 
         <!-- Furthest right, matching the settings gear it sits under: the same
