@@ -488,6 +488,7 @@
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip"
+                                    Classes.hot="{Binding #UpperRegion.IsPointerOver}"
                                     Classes.capturing="{Binding IsUpperCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
@@ -496,7 +497,9 @@
                                   <TextBlock Text="{Binding UpperKey}" />
                                 </StackPanel>
                             </Border>
-                            <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+                            <TextBlock Classes="zoneSize"
+                                       Classes.hot="{Binding #UpperRegion.IsPointerOver}"
+                                       Text="{Binding UpperSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
                                                    ConverterParameter=170}"
@@ -512,6 +515,7 @@
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip"
+                                    Classes.hot="{Binding #LowerRegion.IsPointerOver}"
                                     Classes.capturing="{Binding IsLowerCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
@@ -520,7 +524,9 @@
                                   <TextBlock Text="{Binding LowerKey}" />
                                 </StackPanel>
                             </Border>
-                            <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+                            <TextBlock Classes="zoneSize"
+                                       Classes.hot="{Binding #LowerRegion.IsPointerOver}"
+                                       Text="{Binding LowerSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
                                                    ConverterParameter=170}"
@@ -563,7 +569,8 @@
 
                            Transparent rather than unset, or the pointer falls
                            straight through the words to the half behind them. -->
-                      <Border VerticalAlignment="Center"
+                      <Border Classes="wholeZoneBand"
+                              VerticalAlignment="Center"
                               HorizontalAlignment="Stretch"
                               Background="Transparent">
                         <Border Classes="wholeZoneBlock"

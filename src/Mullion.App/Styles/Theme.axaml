@@ -707,6 +707,33 @@
     <Setter Property="BorderThickness" Value="2" />
   </Style>
 
+  <!-- Pointed at
+       Hovering the middle band lifts its outline and its words together, so the
+       block reads as one thing being pointed at rather than a box that happens
+       to have text in it. A half does the same to its chip and size, which sit
+       in a layer of their own above it - no selector reaches across, so they
+       carry the half's hover as a class instead. -->
+  <Style Selector="Border.wholeZoneBand:pointerover Border.wholeZoneBlock">
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
+  <Style Selector="Border.wholeZoneBand:pointerover TextBlock.zoneName">
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="Border.wholeZoneBand:pointerover TextBlock.zoneSize">
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
+  <Style Selector="Border.keyChip.tierChip.hot TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="TextBlock.zoneSize.hot">
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
   <!-- Text goes white on the green, both here and on the whole-zone chip. The
        tier chip normally sits on a dark plate and its text is deliberately dim;
        left dim on a bright green fill it is barely readable, and the one chip
