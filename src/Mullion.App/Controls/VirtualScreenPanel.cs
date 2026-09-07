@@ -61,7 +61,12 @@ public sealed class VirtualScreenPanel : Panel
     public static readonly AttachedProperty<int> LaneSlotProperty =
         AvaloniaProperty.RegisterAttached<VirtualScreenPanel, Control, int>("LaneSlot");
 
-    /// <summary>How thick this child's gutter is, in device pixels.</summary>
+    /// <summary>
+    /// The LEAST thick this child's gutter may be, in device pixels. The actual
+    /// thickness is whatever the child measures, so a gutter grows to fit its
+    /// content instead of cropping it - which is what a fixed number did the
+    /// moment key chips went from "A" to "Win+A".
+    /// </summary>
     public static readonly AttachedProperty<double> LaneThicknessProperty =
         AvaloniaProperty.RegisterAttached<VirtualScreenPanel, Control, double>("LaneThickness", 32);
 
@@ -222,7 +227,7 @@ public sealed class VirtualScreenPanel : Panel
             if (lane == DiagramLane.Bottom)
             {
                 var slotOffset = BottomOffset(GetLaneSlot(child));
-                child.Arrange(new Rect(left, deskBottom + slotOffset, w, GetLaneThickness(child)));
+                child.Arrange(new Rect(left, deskBottom + slotOffset, w, BottomThickness(child)));
                 continue;
             }
 
@@ -250,7 +255,10 @@ public sealed class VirtualScreenPanel : Panel
     private List<(Control Child, double Anchor, double Thickness)> Gutters() =>
         [.. Children
             .Where(c => GetLane(c) == DiagramLane.VerticalGutter)
-            .Select(c => (Child: c, Anchor: GetLaneAnchor(c), Thickness: GetLaneThickness(c) + LaneGap))
+            .Select(c => (
+                Child: c,
+                Anchor: GetLaneAnchor(c),
+                Thickness: Math.Max(GetLaneThickness(c), c.DesiredSize.Width) + LaneGap))
             .OrderBy(g => g.Anchor)
             .ThenBy(g => GetLaneSlot(g.Child))];
 
@@ -261,7 +269,7 @@ public sealed class VirtualScreenPanel : Panel
         foreach (var child in Children)
         {
             if (GetLane(child) != DiagramLane.Bottom) continue;
-            total += GetLaneThickness(child) + LaneGap;
+            total += BottomThickness(child) + LaneGap;
         }
 
         return total;
@@ -275,9 +283,12 @@ public sealed class VirtualScreenPanel : Panel
         {
             if (GetLane(child) != DiagramLane.Bottom) continue;
             if (GetLaneSlot(child) >= slot) continue;
-            total += GetLaneThickness(child) + LaneGap;
+            total += BottomThickness(child) + LaneGap;
         }
 
         return total;
     }
+
+    private static double BottomThickness(Control child) =>
+        Math.Max(GetLaneThickness(child), child.DesiredSize.Height);
 }

@@ -376,7 +376,9 @@
                         </StackPanel>
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
-                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                                   IsVisible="{Binding $parent[Button].Bounds.Width,
+                                               Converter={x:Static ctl:WiderThanConverter.Instance},
+                                               ConverterParameter=170}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
@@ -395,8 +397,13 @@
                         <TextBlock Classes="zoneName" Text="{Binding Name}"
                                    IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                                    TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170" />
+
+                        <!-- The bezel clips, so a size that does not fit would be
+                             cut mid-word. Dropped instead, and still on hover. -->
                         <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
-                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                                   IsVisible="{Binding $parent[Button].Bounds.Width,
+                                               Converter={x:Static ctl:WiderThanConverter.Instance},
+                                               ConverterParameter=95}"
                                    TextAlignment="Center" />
                       </StackPanel>
 
@@ -414,7 +421,9 @@
                         </StackPanel>
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
-                                   IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
+                                   IsVisible="{Binding $parent[Button].Bounds.Width,
+                                               Converter={x:Static ctl:WiderThanConverter.Instance},
+                                               ConverterParameter=170}"
                                    VerticalAlignment="Center" />
                       </StackPanel>
 
