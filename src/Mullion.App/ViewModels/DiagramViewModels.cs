@@ -69,6 +69,18 @@ public sealed partial class ZoneCellViewModel : ObservableObject
 
     /// <summary>As <see cref="NameNeedsHeight"/>, with a line for the size too.</summary>
     public double SizeNeedsHeight => HasTiers ? 142 : 62;
+
+    /// <summary>
+    /// How tall this zone's key chip may grow, in device pixels.
+    /// <para>
+    /// A long chord wraps onto a second line rather than shrinking to nothing,
+    /// which costs height. A zone with tier chips at its quarter marks has only
+    /// the middle band to spend, so a wrapped chip there grows straight into
+    /// them; it shrinks instead. Without tiers the whole height is free and
+    /// wrapping is the better trade.
+    /// </para>
+    /// </summary>
+    public double ChipMaxHeight => HasTiers ? 24 : 52;
 }
 
 /// <summary>Anything the diagram places at a real position on the virtual desktop.</summary>

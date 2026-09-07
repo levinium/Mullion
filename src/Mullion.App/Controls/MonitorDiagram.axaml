@@ -378,11 +378,12 @@
                                  MaxHeight="20" IsVisible="{Binding HasUpper}"
                                  MaxWidth="{Binding $parent[Button].Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
-                                            ConverterParameter=18}">
+                                            ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip">
                               <StackPanel Orientation="Horizontal">
-                                <TextBlock Classes="chipModifier"
+                                <TextBlock Classes="chipModifier" TextWrapping="Wrap"
+                                           TextAlignment="Center"
                                            Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
                                 <TextBlock Text="{Binding UpperKey}" />
                               </StackPanel>
@@ -400,11 +401,12 @@
                                  MaxHeight="20" IsVisible="{Binding HasLower}"
                                  MaxWidth="{Binding $parent[Button].Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
-                                            ConverterParameter=18}">
+                                            ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <Border Classes="keyChip tierChip">
                               <StackPanel Orientation="Horizontal">
-                                <TextBlock Classes="chipModifier"
+                                <TextBlock Classes="chipModifier" TextWrapping="Wrap"
+                                           TextAlignment="Center"
                                            Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
                                 <TextBlock Text="{Binding LowerKey}" />
                               </StackPanel>
@@ -435,29 +437,62 @@
                             VerticalAlignment="Center"
                             Margin="6">
 
-                        <!-- Shrinks to fit a narrow display rather than dropping
-                             the modifier. A chord with its modifier removed is
-                             not the hotkey it names, and saying which key does
-                             what is the diagram's whole job. DownOnly, so it
-                             never grows past its natural size where there is
-                             room. -->
-                        <!-- MaxWidth bound to the tile, because neither a
-                             StackPanel nor a Grid reliably hands a child less
-                             room than it asked for: both will arrange it at its
-                             own desired width and let it overflow. This states
-                             the limit rather than hoping a container enforces
-                             it. -->
-                        <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
-                                 MaxHeight="24"
+                        <!-- Wraps first, shrinks second, and never drops the
+                             modifier: a chord without it is not the hotkey it
+                             names, and saying which key does what is the
+                             diagram's whole job.
+
+                             The cap is on the CHIP rather than the Viewbox. A
+                             Viewbox always measures its child unconstrained -
+                             that is how it learns the natural size it scales
+                             from - so nothing inside one can ever wrap. Capping
+                             the chip makes it wrap at the tile's width first,
+                             and the Viewbox then shrinks only what is left. A
+                             long chord costs height, which a narrow display has
+                             plenty of, before it costs legibility.
+
+                             MaxWidth on the chip, not on a container, because
+                             neither a StackPanel nor a Grid reliably hands a
+                             child less room than it asked for: both arrange it
+                             at its own desired width and let it overflow.
+
+                             The same inset caps the VIEWBOX too, floorless. The chip's
+                             cap has a floor so a long chord stops shrinking and wraps
+                             instead of being clipped - but that floor lets the chip
+                             exceed the tile, and the Viewbox then reports the scaled
+                             width it needs, which its Grid arranges it at and lets
+                             overflow. Capping the Viewbox at the same width the chip
+                             is allowed makes the overflow impossible to express: below
+                             the floor the scale comes off a width that already has the
+                             inset taken out of it. -->
+                        <Viewbox Grid.Row="0" x:Name="ChipBox" Stretch="Uniform" StretchDirection="DownOnly"
+                                 MaxHeight="{Binding ChipMaxHeight}"
                                  MaxWidth="{Binding $parent[Button].Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18}">
-                          <Border Classes="keyChip primaryChip">
-                            <StackPanel Orientation="Horizontal">
-                              <TextBlock Classes="chipModifier"
-                                         Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
-                              <TextBlock Text="{Binding KeyLabel}" />
-                            </StackPanel>
+                          <Border Classes="keyChip primaryChip"
+                                  MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                             Converter={x:Static ctl:InsetConverter.Instance},
+                                             ConverterParameter=18;64}">
+                            <ItemsControl>
+                              <ItemsControl.ItemsSource>
+                                <MultiBinding Converter="{x:Static ctl:ChordPartsConverter.Instance}">
+                                  <Binding Path="$parent[ctl:MonitorDiagram].ModifierSegments" />
+                                  <Binding Path="KeyLabel" />
+                                </MultiBinding>
+                              </ItemsControl.ItemsSource>
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <ctl:CenterWrapPanel />
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="ctl:ChordPart">
+                                  <TextBlock Text="{Binding Text}" TextWrapping="NoWrap"
+                                             Classes.chipModifier="{Binding IsModifier}" />
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                           </Border>
                         </Viewbox>
 
@@ -468,12 +503,13 @@
                              hence a threshold from the zone rather than a
                              constant. -->
                         <TextBlock Grid.Row="1" Classes="zoneName" Text="{Binding Name}"
-                                   Margin="0,4,0,0"
+                                   Margin="0,1,0,0"
                                    TextAlignment="Center" TextWrapping="Wrap" MaxWidth="170">
                           <TextBlock.IsVisible>
                             <MultiBinding Converter="{x:Static ctl:AtLeastConverter.Instance}">
                               <Binding Path="$parent[Button].Bounds.Height" />
                               <Binding Path="NameNeedsHeight" />
+                              <Binding ElementName="ChipBox" Path="Bounds.Height" />
                             </MultiBinding>
                           </TextBlock.IsVisible>
                         </TextBlock>
@@ -486,13 +522,14 @@
                             <MultiBinding Converter="{x:Static ctl:AtLeastConverter.Instance}">
                               <Binding Path="$parent[Button].Bounds.Height" />
                               <Binding Path="SizeNeedsHeight" />
+                              <Binding ElementName="ChipBox" Path="Bounds.Height" />
                             </MultiBinding>
                           </Panel.IsVisible>
                           <TextBlock Classes="zoneSize" Text="{Binding SizeLabel}"
                                      IsVisible="{Binding $parent[Button].Bounds.Width,
                                                  Converter={x:Static ctl:WiderThanConverter.Instance},
                                                  ConverterParameter=95}"
-                                     Margin="0,4,0,0"
+                                     Margin="0,1,0,0"
                                      TextAlignment="Center" />
                         </Panel>
                       </Grid>

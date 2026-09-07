@@ -39,6 +39,11 @@ public partial class MonitorDiagram : UserControl
             d.RaisePropertyChanged(DetailedProperty, !d.Detailed, d.Detailed);
             d.RaisePropertyChanged(TierTopMarginProperty, default, d.TierTopMargin);
         });
+
+        // ModifierSegments is derived, so it has to be told when its source
+        // changed or every chip goes on rendering the previous modifier.
+        ModifierPrefixProperty.Changed.AddClassHandler<MonitorDiagram>(
+            (d, _) => d.RaisePropertyChanged(ModifierSegmentsProperty, [], d.ModifierSegments));
     }
 
     private static readonly DirectProperty<MonitorDiagram, bool> DetailedProperty =
@@ -54,11 +59,35 @@ public partial class MonitorDiagram : UserControl
     public static readonly StyledProperty<string> ModifierPrefixProperty =
         AvaloniaProperty.Register<MonitorDiagram, string>(nameof(ModifierPrefix), "Win+");
 
+    /// <summary>Change notification for the derived segment list.</summary>
+    public static readonly DirectProperty<MonitorDiagram, IReadOnlyList<string>> ModifierSegmentsProperty =
+        AvaloniaProperty.RegisterDirect<MonitorDiagram, IReadOnlyList<string>>(
+            nameof(ModifierSegments), d => d.ModifierSegments);
+
     public string ModifierPrefix
     {
         get => GetValue(ModifierPrefixProperty);
         set => SetValue(ModifierPrefixProperty, value);
     }
+
+    /// <summary>
+    /// The prefix split into the pieces a chord may be broken between, e.g.
+    /// "Ctrl+" and "Shift+".
+    /// <para>
+    /// Given as separate runs rather than one string because text layout cannot
+    /// be talked into breaking only where we want. A plain "Ctrl+Shift+" breaks
+    /// on either side of a plus, leaving a lone "+" on a line reading as a key;
+    /// gluing the pluses on with word joiners makes the whole chord one
+    /// unbreakable word, and a chip narrower than that gets it split
+    /// mid-letter - "Ctrl / +Sh / ift+". As separate runs in a WrapPanel the
+    /// only possible breaks are the ones we chose, and a run too wide to fit
+    /// overflows for the Viewbox to scale rather than being cut in half.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<string> ModifierSegments =>
+        [.. ModifierPrefix
+            .Split('+', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => $"{part}+")];
 
     public MonitorDiagram() => AvaloniaXamlLoader.Load(this);
 }

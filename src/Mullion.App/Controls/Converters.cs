@@ -37,11 +37,21 @@ public sealed class WiderThanConverter : IValueConverter
 }
 
 /// <summary>
-/// A measured length less a fixed inset, floored at zero.
+/// A measured length less a fixed inset, never below a floor.
 /// <para>
-/// Used to cap a chip at the tile's width minus its own margin. Capped at the
-/// full width it can sit flush against the zone's border, which reads as having
+/// Used to cap a chip at the tile's width minus its own margin: capped at the
+/// full width it sits flush against the zone's border, which reads as having
 /// burst out of it.
+/// </para>
+/// <para>
+/// The floor is what stops the cap becoming a lie. A chord is drawn as separate
+/// runs so it can wrap between them, and a run squeezed below its own width is
+/// not wrapped but CLIPPED - the trailing "+" simply disappears. Below the floor
+/// the chip stops shrinking and the Viewbox around it scales instead, which
+/// costs legibility rather than correctness.
+/// </para>
+/// <para>
+/// Parameter is "inset" or "inset;floor".
 /// </para>
 /// </summary>
 public sealed class InsetConverter : IValueConverter
@@ -52,14 +62,25 @@ public sealed class InsetConverter : IValueConverter
     {
         if (value is not double actual || double.IsNaN(actual)) return 0d;
 
-        var inset = parameter switch
-        {
-            double d => d,
-            string s when double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var p) => p,
-            _ => 0,
-        };
+        var (inset, floor) = Parse(parameter);
 
-        return Math.Max(0, actual - inset);
+        return Math.Max(floor, actual - inset);
+    }
+
+    private static (double Inset, double Floor) Parse(object? parameter)
+    {
+        if (parameter is double d) return (d, 0);
+        if (parameter is not string text) return (0, 0);
+
+        var parts = text.Split(';', StringSplitOptions.TrimEntries);
+
+        var inset = parts.Length > 0 && double.TryParse(
+            parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var i) ? i : 0;
+
+        var floor = parts.Length > 1 && double.TryParse(
+            parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : 0;
+
+        return (inset, floor);
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
@@ -80,12 +101,55 @@ public sealed class AtLeastConverter : IMultiValueConverter
 {
     public static readonly AtLeastConverter Instance = new();
 
+    /// <summary>Height of a key chip whose chord fits on one line.</summary>
+    private const double SingleLineChip = 24;
+
     public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
         if (values.Count < 2) return false;
         if (values[0] is not double actual || double.IsNaN(actual)) return false;
         if (values[1] is not double threshold) return false;
 
+        // An optional third value is space already spoken for above this one -
+        // in practice the key chip, whose height is not a constant since a long
+        // chord wraps to two or three lines. The thresholds are tuned against a
+        // single-line chip, so only the growth beyond that is charged. Without
+        // this the name shows on a tile the wrapped chip has already filled, and
+        // lands on the zone's own border.
+        if (values.Count > 2 && values[2] is double occupied && !double.IsNaN(occupied))
+            threshold += Math.Max(0, occupied - SingleLineChip);
+
         return actual >= threshold;
+    }
+}
+
+/// <summary>One run of a chord, and whether it is a modifier or the key itself.</summary>
+public sealed record ChordPart(string Text, bool IsModifier);
+
+/// <summary>
+/// A chord as the runs it may be broken between: "Ctrl+", "Shift+", "Q".
+/// <para>
+/// The modifier runs come from the diagram and the key from the zone, but they
+/// have to end up as siblings in one panel: wrapping only happens between a
+/// panel's own children, so a modifier nested in its own ItemsControl can never
+/// break onto the same line as the key. Joining them here is what lets
+/// "Ctrl+Shift+Q" wrap as three runs instead of two things that each wrap alone.
+/// </para>
+/// </summary>
+public sealed class ChordPartsConverter : IMultiValueConverter
+{
+    public static readonly ChordPartsConverter Instance = new();
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var parts = new List<ChordPart>();
+
+        if (values.Count > 0 && values[0] is IEnumerable<string> segments)
+            parts.AddRange(segments.Select(s => new ChordPart(s, true)));
+
+        if (values.Count > 1 && values[1] is string key && key.Length > 0)
+            parts.Add(new ChordPart(key, false));
+
+        return parts;
     }
 }

@@ -217,42 +217,38 @@
     <Setter Property="Padding" Value="8,2" />
   </Style>
 
-  <!-- Dimmer and smaller than the key: the modifier is the same on every chip,
-       so it is context rather than information, and the letter is what the eye
-       needs to find. -->
-  <Style Selector="Border.keyChip TextBlock.chipModifier">
-    <Setter Property="Opacity" Value="0.65" />
-    <Setter Property="FontSize" Value="10" />
+  <!-- Descendant selectors, not child ones: a chip's runs sit inside a panel
+       that changes with how the chord is laid out, and a selector naming that
+       panel silently stops matching the moment it does. -->
+  <Style Selector="Border.keyChip TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.keyChip.primaryChip TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="Border.keyChip.tierChip TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
+  <!-- Dimmer than the key but the SAME size. It was smaller, which read well on
+       one line and badly the moment a long chord wrapped: stacked, two type
+       sizes in one chip look like a mistake rather than a hierarchy. Opacity
+       alone still says "this part is context, the letter is the answer".
+       Last, so it wins over the chip variants above without restating them. -->
+  <Style Selector="Border.keyChip TextBlock.chipModifier">
+    <Setter Property="Opacity" Value="0.7" />
     <Setter Property="Margin" Value="0" />
 
     <!-- The key chips letter-space their text, which after a "+" reads as a
          space between the modifier and the key rather than as tracking. -->
     <Setter Property="LetterSpacing" Value="0" />
-  </Style>
-
-  <Style Selector="Border.keyChip > StackPanel > TextBlock">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-    <Setter Property="LetterSpacing" Value="0.6" />
-  </Style>
-
-  <Style Selector="Border.keyChip.primaryChip > StackPanel > TextBlock">
-    <Setter Property="Foreground" Value="#FFFFFF" />
-    <Setter Property="FontSize" Value="13" />
-  </Style>
-
-  <Style Selector="Border.keyChip.tierChip > StackPanel > TextBlock">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
-  </Style>
-
-  <Style Selector="Border.keyChip > TextBlock">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-    <Setter Property="LetterSpacing" Value="0.6" />
   </Style>
 
   <!-- The home-row key reads as the column's main target -->

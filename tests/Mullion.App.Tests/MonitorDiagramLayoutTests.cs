@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Mullion.App.Controls;
 using Mullion.App.ViewModels;
@@ -183,6 +184,76 @@ public class MonitorDiagramLayoutTests
     }
 
     /// <summary>
+    /// No run of text may be arranged narrower than it needs.
+    /// <para>
+    /// A TextBlock given less width than its text clips it rather than
+    /// overflowing, and the part that disappears is the end - which on a chord
+    /// is the "+" or the key itself. Nothing about the layout looks wrong when
+    /// this happens; the text is simply, silently, not all there. Comparing
+    /// arranged width against desired width is the only way to see it.
+    /// </para>
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void NoTextIsClipped(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var text in Descendants<TextBlock>(diagram))
+        {
+            if (!text.IsVisible || string.IsNullOrEmpty(text.Text)) continue;
+            if (text.TextWrapping != TextWrapping.NoWrap) continue;
+
+            // Half a pixel of slack for rounding; anything more is a lost glyph.
+            text.Bounds.Width.ShouldBeGreaterThanOrEqualTo(text.DesiredSize.Width - 0.5,
+                $"{topologyId}: '{text.Text}' is cut off - " +
+                $"{text.Bounds.Width:F1}px given, {text.DesiredSize.Width:F1}px needed");
+        }
+    }
+
+    /// <summary>
+    /// Room a label needs between itself and the zone border. Touching it, the
+    /// label reads as clipped whether or not a pixel is actually lost.
+    /// </summary>
+    private const double LabelClearance = 4;
+
+    /// <summary>
+    /// A zone's name and size must sit inside their tile.
+    /// <para>
+    /// They are dropped on a tile too short to hold them, but "too short" was a
+    /// constant measured against a chip whose chord fits on one line. A chord
+    /// that wraps makes the chip two or three times taller, and the name it
+    /// pushes down lands on the zone's own border.
+    /// </para>
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(Arrangements))]
+    public void ZoneLabelsStayInsideTheirTile(string topologyId)
+    {
+        var diagram = Render(topologyId, LongestPrefix);
+
+        foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
+        {
+            var frame = BoundsIn(tile, diagram).Deflate(LabelClearance);
+
+            var labels = Descendants<TextBlock>(tile)
+                .Where(t => t.IsVisible && t.Bounds.Height > 0)
+                .Where(t => t.Classes.Contains("zoneName") || t.Classes.Contains("zoneSize"));
+
+            foreach (var label in labels)
+            {
+                var box = BoundsIn(label, diagram);
+
+                box.Top.ShouldBeGreaterThanOrEqualTo(frame.Top,
+                    $"{topologyId}: '{label.Text}' runs off the top of its zone");
+                box.Bottom.ShouldBeLessThanOrEqualTo(frame.Bottom,
+                    $"{topologyId}: '{label.Text}' sits on the bottom of its zone " +
+                    $"[tile {frame.Height:F0}px, label bottom {box.Bottom:F0} vs {frame.Bottom:F0}]");
+            }
+        }
+    }
+
+    /// <summary>
     /// A chip must sit inside its tile with room to spare, not flush against the
     /// zone's own border - which reads as the chip having burst out of it.
     /// </summary>
@@ -205,7 +276,8 @@ public class MonitorDiagramLayoutTests
                 box.Left.ShouldBeGreaterThanOrEqualTo(frame.Left,
                     $"{topologyId}: a chip is flush with the left of its zone");
                 box.Right.ShouldBeLessThanOrEqualTo(frame.Right,
-                    $"{topologyId}: a chip is flush with the right of its zone");
+                    $"{topologyId}: a chip is flush with the right of its zone " +
+                    $"[{string.Join(' ', chip.Classes)}] box={box} tile={frame}");
             }
         }
     }
@@ -296,9 +368,13 @@ public class MonitorDiagramLayoutTests
             var texts = Descendants<TextBlock>(chip).Where(t => t.IsVisible).ToList();
             if (texts.Count == 0) continue;
 
-            texts.ShouldContain(
-                t => t.Text == LongestPrefix,
-                $"{topologyId}: a chip shows a bare key instead of the whole chord");
+            // Concatenated, because the chord is drawn as separate runs so a
+            // panel can wrap between them. What must never happen is a chip
+            // showing a bare key: that is not the hotkey it names.
+            var chord = string.Concat(texts.Select(t => t.Text));
+
+            chord.StartsWith(LongestPrefix, StringComparison.Ordinal).ShouldBeTrue(
+                $"{topologyId}: a chip shows '{chord}' rather than the whole chord");
         }
     }
 }
