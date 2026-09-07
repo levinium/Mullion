@@ -87,6 +87,11 @@ public sealed class HotkeyEngine : IDisposable
         {
             var scan = layout.Surface.ScanCodeAt(zone.Position);
 
+            // Its own modifier where it has been given one, the default
+            // otherwise - so changing the default moves everything that has
+            // not been bound by hand, and nothing that has.
+            var chord = zone.ChordWith(modifiers);
+
             // Each ring step gets its own id so the executor can resolve which
             // rectangle a given press meant.
             var steps = RingBuilder.Build(zone, layout, displays);
@@ -94,13 +99,13 @@ public sealed class HotkeyEngine : IDisposable
 
             for (var i = 0; i < steps.Count; i++)
             {
-                var id = $"{zone.Position.Row}:{zone.Position.Col}:{i}";
+                var id = $"{chord}:{zone.Position.Row}:{zone.Position.Col}:{i}";
                 zones[id] = (zone.Position, steps[i].Name, Project(steps[i].Parts, displays));
                 actions.Add(new HotkeyAction(id, zone.Position));
             }
 
-            bindings[(modifiers, scan)] = actions[0];
-            if (actions.Count > 1) rings[(modifiers, scan)] = actions;
+            bindings[(chord, scan)] = actions[0];
+            if (actions.Count > 1) rings[(chord, scan)] = actions;
         }
 
         // Fixed actions live OUTSIDE the key surface on purpose: the allocator

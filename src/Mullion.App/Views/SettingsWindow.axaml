@@ -143,7 +143,7 @@
                     HorizontalAlignment="Stretch" />
 
           <TextBlock Classes="body" Margin="0,6,0,0"
-                     Text="Modifier for every zone hotkey. Win is the default, and the reason Mullion installs a keyboard hook at all — Windows will not let an app claim Win+letter any other way." />
+                     Text="Default modifier for zone hotkeys — what a zone is taken with unless you have bound it to something else yourself. Win is the default, and the reason Mullion installs a keyboard hook at all: Windows will not let an app claim Win+letter any other way." />
           <ComboBox ItemsSource="{Binding HotkeyModifiers}"
                     SelectedItem="{Binding SelectedHotkeyModifier}"
                     HorizontalAlignment="Stretch" />

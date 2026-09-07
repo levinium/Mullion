@@ -65,6 +65,64 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     [RelayCommand]
     private void Activate() => Activated?.Invoke(Position);
 
+    /// <summary>
+    /// Where the upper and lower tiers sit on the key surface.
+    /// <para>
+    /// A tier is a zone in its own right - the upper half of this column, the
+    /// lower half - drawn as a chip on the tile rather than as a rectangle of
+    /// its own because all three overlap in space. Carrying its position means
+    /// the chip can be clicked to rebind that zone, instead of the tile being
+    /// the only thing on the diagram that answers to a click and always meaning
+    /// the whole column.
+    /// </para>
+    /// </summary>
+    public GridPos? UpperPosition { get; init; }
+
+    public GridPos? LowerPosition { get; init; }
+
+    [ObservableProperty]
+    private bool _isUpperCapturing;
+
+    [ObservableProperty]
+    private bool _isLowerCapturing;
+
+    public bool IsUpperInteractive => IsInteractive && UpperPosition is not null;
+
+    public bool IsLowerInteractive => IsInteractive && LowerPosition is not null;
+
+    [RelayCommand]
+    private void ActivateUpper()
+    {
+        if (UpperPosition is not null) Activated?.Invoke(UpperPosition.Value);
+    }
+
+    [RelayCommand]
+    private void ActivateLower()
+    {
+        if (LowerPosition is not null) Activated?.Invoke(LowerPosition.Value);
+    }
+
+    /// <summary>
+    /// This zone's own chord prefix, e.g. "Win+" or "Ctrl+Alt+".
+    /// <para>
+    /// Per zone rather than one prefix for the diagram, because a zone bound by
+    /// hand may be taken with any modifier. Drawn from the control's single
+    /// prefix, every chip claimed the default and the picture lied about half
+    /// the bindings on it.
+    /// </para>
+    /// </summary>
+    public string ModifierPrefix { get; init; } = "Win+";
+
+    public string UpperModifierPrefix { get; init; } = "Win+";
+
+    public string LowerModifierPrefix { get; init; } = "Win+";
+
+    /// <summary>The prefix split where a long chord may be broken across lines.</summary>
+    public IReadOnlyList<string> ModifierSegments => ChordSegments(ModifierPrefix);
+
+    internal static IReadOnlyList<string> ChordSegments(string prefix) =>
+        [.. prefix.Split('+', StringSplitOptions.RemoveEmptyEntries).Select(part => $"{part}+")];
+
     public string? UpperKey { get; init; }
     public string? UpperSize { get; init; }
     public string? LowerKey { get; init; }
@@ -141,6 +199,11 @@ public abstract partial class SpanMeasureViewModel : DiagramNodeViewModel
     public required string KeyLabel { get; init; }
     public required string SizeLabel { get; init; }
 
+    /// <summary>The chord this span answers to, which may not be the default.</summary>
+    public string ModifierPrefix { get; init; } = "Win+";
+
+    public IReadOnlyList<string> ModifierSegments => ZoneCellViewModel.ChordSegments(ModifierPrefix);
+
     public GridPos Position { get; init; }
     public Action<GridPos>? Activated { get; set; }
     public bool IsInteractive => Activated is not null;
@@ -165,6 +228,10 @@ public sealed partial class HorizontalSpanViewModel : SpanMeasureViewModel
     public string? UpperSize { get; init; }
     public string? LowerKey { get; init; }
     public string? LowerSize { get; init; }
+
+    public string UpperModifierPrefix { get; init; } = "Win+";
+
+    public string LowerModifierPrefix { get; init; } = "Win+";
 
     public bool HasUpper => UpperKey is not null;
     public bool HasLower => LowerKey is not null;
@@ -538,13 +605,16 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         IReadOnlyList<DisplayInfo> displays,
         LayoutResult? layout = null,
         Action<GridPos>? onZoneActivated = null,
-        string modifierPrefix = "Win+",
         Action<string, IReadOnlyList<double>>? onSplitChanged = null,
         Action<string, int>? onZoneCountChanged = null,
         ShapeTuning? tuning = null,
-        bool snapSplits = true)
+        bool snapSplits = true,
+        ChordModifiers defaultModifier = ChordModifiers.Win)
     {
-        var vm = new MonitorDiagramViewModel { ModifierPrefix = modifierPrefix };
+        var vm = new MonitorDiagramViewModel
+        {
+            ModifierPrefix = $"{ModifierChoice.Format(defaultModifier)}+",
+        };
         if (displays.Count == 0) return vm;
 
         var desk = PxRect.Union(displays.Select(d => d.Bounds));
@@ -553,8 +623,12 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         // the panel in device pixels, since only it knows the scale.
         vm.VirtualBounds = new Rect(desk.X, desk.Y, desk.Width, desk.Height);
 
-        vm.Displays = [.. displays.Select(d => BuildNode(d, layout, HasClearanceAbove(d, displays)))];
-        vm.Spans = BuildSpans(displays, layout, desk);
+        vm.Displays =
+        [
+            .. displays.Select(d =>
+                BuildNode(d, layout, HasClearanceAbove(d, displays), defaultModifier)),
+        ];
+        vm.Spans = BuildSpans(displays, layout, desk, defaultModifier);
 
         if (onZoneActivated is not null)
         {
@@ -625,7 +699,11 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     public void SetCapturing(GridPos? position)
     {
         foreach (var cell in Displays.SelectMany(d => d.Cells))
+        {
             cell.IsCapturing = position is not null && cell.Position == position.Value;
+            cell.IsUpperCapturing = position is not null && cell.UpperPosition == position;
+            cell.IsLowerCapturing = position is not null && cell.LowerPosition == position;
+        }
 
         foreach (var span in Spans)
             span.IsCapturing = position is not null && span.Position == position.Value;
@@ -638,7 +716,8 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     /// next to what it describes rather than in one distant column of them.
     /// </summary>
     private static IReadOnlyList<SpanMeasureViewModel> BuildSpans(
-        IReadOnlyList<DisplayInfo> displays, LayoutResult? layout, PxRect desk)
+        IReadOnlyList<DisplayInfo> displays, LayoutResult? layout, PxRect desk,
+        ChordModifiers defaultModifier)
     {
         if (layout is null) return [];
 
@@ -686,6 +765,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                     KeyLabel = label,
                     SizeLabel = size,
                     Position = zone.Position,
+                    ModifierPrefix = Prefix(zone, defaultModifier),
                 });
             }
             else
@@ -701,6 +781,9 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                     KeyLabel = label,
                     SizeLabel = size,
                     Position = zone.Position,
+                    ModifierPrefix = Prefix(zone, defaultModifier),
+                    UpperModifierPrefix = Prefix(upper, defaultModifier),
+                    LowerModifierPrefix = Prefix(lower, defaultModifier),
                     UpperKey = upper is null ? null : layout.Surface.FallbackLabelAt(upper.Position),
                     UpperSize = Extent(upper, byKey),
                     LowerKey = lower is null ? null : layout.Surface.FallbackLabelAt(lower.Position),
@@ -778,7 +861,8 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         return true;
     }
 
-    private static DisplayNodeViewModel BuildNode(DisplayInfo display, LayoutResult? layout, bool labelAbove)
+    private static DisplayNodeViewModel BuildNode(
+        DisplayInfo display, LayoutResult? layout, bool labelAbove, ChordModifiers defaultModifier)
     {
         var taskbarHeight = display.Bounds.Height - display.WorkArea.Height;
 
@@ -797,12 +881,13 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 ? new Rect(0, 1.0 - (double)taskbarHeight / display.Bounds.Height, 1,
                            (double)taskbarHeight / display.Bounds.Height)
                 : default,
-            Cells = BuildCells(display, layout),
+            Cells = BuildCells(display, layout, defaultModifier),
             LabelAbove = labelAbove,
         };
     }
 
-    private static IReadOnlyList<ZoneCellViewModel> BuildCells(DisplayInfo display, LayoutResult? layout)
+    private static IReadOnlyList<ZoneCellViewModel> BuildCells(
+        DisplayInfo display, LayoutResult? layout, ChordModifiers defaultModifier)
     {
         if (layout is null) return [];
 
@@ -855,6 +940,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                         SizeLabel = $"{e.Pixels.Width} × {e.Pixels.Height}",
                         SpansDisplays = e.Zone.SpansDisplays,
                         Position = e.Zone.Position,
+                        ModifierPrefix = Prefix(e.Zone, defaultModifier),
                     });
                 }
 
@@ -873,15 +959,27 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 SizeLabel = $"{primary.Pixels.Width} × {primary.Pixels.Height}",
                 SpansDisplays = primary.Zone.SpansDisplays,
                 Position = primary.Zone.Position,
+                ModifierPrefix = Prefix(primary.Zone, defaultModifier),
+                UpperModifierPrefix = Prefix(upper.Zone, defaultModifier),
+                LowerModifierPrefix = Prefix(lower.Zone, defaultModifier),
                 UpperKey = upper.Zone is null ? null : layout.Surface.FallbackLabelAt(upper.Zone.Position),
+                UpperPosition = upper.Zone?.Position,
                 UpperSize = upper.Zone is null ? null : $"{upper.Pixels.Width} × {upper.Pixels.Height}",
                 LowerKey = lower.Zone is null ? null : layout.Surface.FallbackLabelAt(lower.Zone.Position),
+                LowerPosition = lower.Zone?.Position,
                 LowerSize = lower.Zone is null ? null : $"{lower.Pixels.Width} × {lower.Pixels.Height}",
             });
         }
 
         return cells;
     }
+
+    /// <summary>
+    /// The chord prefix a zone is shown with - its own where it has been bound
+    /// by hand, the default otherwise.
+    /// </summary>
+    private static string Prefix(Zone? zone, ChordModifiers fallback) =>
+        $"{ModifierChoice.Format(zone?.ChordWith(fallback) ?? fallback)}+";
 
     /// <summary>
     /// Cluster zones into visual columns by how much their horizontal spans

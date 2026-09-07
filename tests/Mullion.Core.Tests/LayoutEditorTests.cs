@@ -171,4 +171,107 @@ public class LayoutEditorTests
         a.Zones.Select(z => z.Id).ShouldNotBe(b.Zones.Select(z => z.Id));
         LayoutEditor.SameKeyAssignments(a, b).ShouldBeTrue();
     }
+
+    [Fact]
+    public void AZoneCanBeBoundWithItsOwnModifier()
+    {
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = layout.Surface.HomeRow;
+
+        var outcome = LayoutEditor.Rebind(
+            layout, new GridPos(home, 0), new GridPos(home, 0),
+            ChordModifiers.Control | ChordModifiers.Alt, ChordModifiers.Win);
+
+        outcome.Success.ShouldBeTrue();
+
+        var zone = outcome.Layout.Zones.First(z => z.Position == new GridPos(home, 0));
+        zone.Modifier.ShouldBe(ChordModifiers.Control | ChordModifiers.Alt);
+    }
+
+    [Fact]
+    public void TheSameKeyWithADifferentModifierIsNotACollision()
+    {
+        // Win+A and Ctrl+Alt+A are different hotkeys. Treating the key alone as
+        // the identity would swap two zones that never conflicted.
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = layout.Surface.HomeRow;
+
+        var target = new GridPos(home, 1);
+        var occupant = layout.Zones.First(z => z.Position == target).Name;
+
+        var outcome = LayoutEditor.Rebind(
+            layout, new GridPos(home, 0), target,
+            ChordModifiers.Control | ChordModifiers.Alt, ChordModifiers.Win);
+
+        outcome.Message.ShouldNotContain("Swapped");
+
+        // The zone that already held that key keeps it, on its own chord.
+        outcome.Layout.Zones
+            .Count(z => z.Position == target)
+            .ShouldBe(2, "both zones sit on the key, with different modifiers");
+
+        outcome.Layout.Zones
+            .First(z => z.Name == occupant)
+            .Position.ShouldBe(target);
+    }
+
+    [Fact]
+    public void TheSameChordStillSwaps()
+    {
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = layout.Surface.HomeRow;
+
+        var outcome = LayoutEditor.Rebind(
+            layout, new GridPos(home, 0), new GridPos(home, 1), null, ChordModifiers.Win);
+
+        outcome.Message.ShouldContain("Swapped");
+    }
+
+    [Fact]
+    public void AZoneLeftOnTheDefaultFollowsIt()
+    {
+        // The whole point of it being a DEFAULT: a zone nobody has bound by hand
+        // has no modifier of its own, so changing the setting moves it.
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+
+        layout.Zones.ShouldAllBe(z => z.Modifier == null);
+
+        layout.Zones.ShouldAllBe(z => z.ChordWith(ChordModifiers.Alt) == ChordModifiers.Alt);
+    }
+
+    [Fact]
+    public void AZoneBoundByHandKeepsItsChordWhenTheDefaultChanges()
+    {
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = layout.Surface.HomeRow;
+
+        var bound = LayoutEditor.Rebind(
+            layout, new GridPos(home, 0), new GridPos(home, 0),
+            ChordModifiers.Control | ChordModifiers.Alt, ChordModifiers.Win).Layout;
+
+        var zone = bound.Zones.First(z => z.Modifier is not null);
+
+        zone.ChordWith(ChordModifiers.Alt)
+            .ShouldBe(ChordModifiers.Control | ChordModifiers.Alt,
+                "binding it by hand was the act of choosing");
+    }
+
+    [Fact]
+    public void ChangingOnlyTheModifierCountsAsACustomKey()
+    {
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+        var layout = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = layout.Surface.HomeRow;
+
+        var bound = LayoutEditor.Rebind(
+            layout, new GridPos(home, 0), new GridPos(home, 0),
+            ChordModifiers.Control | ChordModifiers.Alt, ChordModifiers.Win).Layout;
+
+        LayoutEditor.SameKeyAssignments(layout, bound).ShouldBeFalse();
+    }
 }

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Mullion.App.Controls;
 using Mullion.App.ViewModels;
+using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Simulation;
 using Shouldly;
@@ -591,6 +592,122 @@ public class SeamRenderingTests
                 $"{topologyId}: the zone stepper at {stepper} lands on a display name at {name}");
     }
 
+
+    [AvaloniaFact]
+    public void ATierChipRebindsItsOwnHalf()
+    {
+        // The tile means "the whole of this column"; the chip drawn in its upper
+        // half means that half. Before this, the tile was the only thing on the
+        // diagram that answered to a click, so a tier could only be rebound from
+        // the list in settings.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var asked = new List<GridPos>();
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onZoneActivated: asked.Add);
+
+        var cell = diagram.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        cell.UpperPosition.ShouldNotBeNull();
+        cell.LowerPosition.ShouldNotBeNull();
+
+        cell.ActivateUpperCommand.Execute(null);
+        cell.ActivateLowerCommand.Execute(null);
+        cell.ActivateCommand.Execute(null);
+
+        asked.ShouldBe([cell.UpperPosition!.Value, cell.LowerPosition!.Value, cell.Position]);
+
+        // And they really are three different zones.
+        asked.Distinct().Count().ShouldBe(3);
+    }
+
+    [AvaloniaFact]
+    public void ATierWaitingForAKeyLooksLikeIt()
+    {
+        // Capture marking only reached the tiles, so a tier waiting for a key
+        // showed nothing at all and the diagram looked inert.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(
+            topology.Displays, layout, onZoneActivated: _ => { });
+
+        var cell = diagram.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        diagram.SetCapturing(cell.UpperPosition);
+
+        cell.IsUpperCapturing.ShouldBeTrue();
+        cell.IsCapturing.ShouldBeFalse("the whole column is not the thing being rebound");
+        cell.IsLowerCapturing.ShouldBeFalse();
+
+        diagram.SetCapturing(null);
+        cell.IsUpperCapturing.ShouldBeFalse();
+    }
+
+    [AvaloniaFact]
+    public void TierChipsAreInertOnAPlainDiagram()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var diagram = MonitorDiagramViewModel.Build(topology.Displays, layout);
+
+        diagram.Displays.SelectMany(d => d.Cells)
+            .ShouldAllBe(c => !c.IsUpperInteractive && !c.IsLowerInteractive);
+    }
+
+    [AvaloniaFact]
+    public void ClickingATierChipDoesNotAlsoHitTheTileUnderIt()
+    {
+        // The chip sits inside the tile's own button. Driven with a real press
+        // rather than by calling the command, because the question is entirely
+        // about which of two nested buttons takes the click - and a command test
+        // would pass whichever way that went.
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var asked = new List<GridPos>();
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, onZoneActivated: asked.Add),
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var chip = diagram.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("tierChipButton") && b.IsVisible && b.Bounds.Width > 0)
+            .OrderBy(b => b.Bounds.X)
+            .First();
+
+        var middle = chip.Bounds
+            .TransformToAABB(chip.GetVisualParent()!.TransformToVisual(window)!.Value)
+            .Center;
+
+        window.MouseMove(middle);
+        window.MouseDown(middle, MouseButton.Left);
+        window.MouseUp(middle, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        var cells = ((MonitorDiagramViewModel)diagram.DataContext!)
+            .Displays.Single().Cells;
+
+        var owner = cells.First(c => c.UpperPosition is not null || c.LowerPosition is not null);
+
+        asked.Count.ShouldBe(1, "the click reached both the chip and the tile beneath it");
+        asked[0].ShouldNotBe(owner.Position, "the click was taken by the whole column instead of the half");
+    }
     [AvaloniaFact]
     public void ASeamIsWiredToTheViewModel()
     {

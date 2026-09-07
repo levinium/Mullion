@@ -9,14 +9,26 @@ public sealed record RebindOutcome(bool Success, LayoutResult Layout, string Mes
 public static class LayoutEditor
 {
     /// <summary>
-    /// Move the zone at <paramref name="source"/> onto <paramref name="target"/>.
+    /// Move the zone at <paramref name="source"/> onto <paramref name="target"/>,
+    /// optionally with a modifier of its own.
     /// <para>
-    /// If another zone already holds the target key the two SWAP rather than one
-    /// overwriting the other. Silently dropping a zone because its key was taken
-    /// would lose a target the user still wants and give no clue where it went.
+    /// Two zones collide only when their whole CHORD matches, not merely their
+    /// key. Win+A and Ctrl+Alt+A are different hotkeys and can sit on the same
+    /// key of the surface; treating the key alone as the identity would refuse
+    /// half the bindings a person might reasonably want.
+    /// </para>
+    /// <para>
+    /// When they do collide the two SWAP rather than one overwriting the other.
+    /// Silently dropping a zone because its chord was taken would lose a target
+    /// the user still wants and give no clue where it went.
     /// </para>
     /// </summary>
-    public static RebindOutcome Rebind(LayoutResult layout, GridPos source, GridPos target)
+    public static RebindOutcome Rebind(
+        LayoutResult layout,
+        GridPos source,
+        GridPos target,
+        ChordModifiers? modifier = null,
+        ChordModifiers fallback = ChordModifiers.Win)
     {
         if (!layout.Surface.Contains(target))
             return new RebindOutcome(false, layout, "That key is outside the current key surface.");
@@ -25,29 +37,41 @@ public static class LayoutEditor
         if (moving is null)
             return new RebindOutcome(false, layout, "That zone no longer exists.");
 
-        if (source == target)
+        var wanted = modifier ?? moving.Modifier;
+
+        if (source == target && wanted == moving.Modifier)
             return new RebindOutcome(true, layout, "Unchanged.");
 
-        var displaced = layout.Zones.FirstOrDefault(z => z.Position == target);
+        var chord = wanted ?? fallback;
+
+        var displaced = layout.Zones.FirstOrDefault(z =>
+            !ReferenceEquals(z, moving) &&
+            z.Position == target &&
+            z.ChordWith(fallback) == chord);
 
         var zones = layout.Zones
             .Select(z =>
-                ReferenceEquals(z, moving) ? z with { Position = target }
-                : displaced is not null && ReferenceEquals(z, displaced) ? z with { Position = source }
+                ReferenceEquals(z, moving) ? z with { Position = target, Modifier = wanted }
+                : displaced is not null && ReferenceEquals(z, displaced)
+                    ? z with { Position = source, Modifier = moving.Modifier }
                 : z)
             .ToList();
 
         var updated = new LayoutResult(zones, layout.Surface, layout.Notes);
 
-        var targetLabel = layout.Surface.FallbackLabelAt(target);
-        var sourceLabel = layout.Surface.FallbackLabelAt(source);
+        var targetLabel = Describe(chord, layout.Surface.FallbackLabelAt(target));
+        var sourceLabel = Describe(moving.ChordWith(fallback), layout.Surface.FallbackLabelAt(source));
 
         var message = displaced is null
-            ? $"{moving.Name} is now Win+{targetLabel}."
-            : $"Swapped — {moving.Name} is now Win+{targetLabel}, and {displaced.Name} took Win+{sourceLabel}.";
+            ? $"{moving.Name} is now {targetLabel}."
+            : $"Swapped — {moving.Name} is now {targetLabel}, and {displaced.Name} took {sourceLabel}.";
 
         return new RebindOutcome(true, updated, message);
     }
+
+    private static string Describe(ChordModifiers mods, string key) =>
+        $"{ModifierChoice.Format(mods)}+{key}";
+
 
 
     /// <summary>
@@ -68,9 +92,10 @@ public static class LayoutEditor
     public static bool SameKeyAssignments(LayoutResult a, LayoutResult b) =>
         Signature(a).SequenceEqual(Signature(b));
 
-    private static IEnumerable<(string Shape, int Row, int Col)> Signature(LayoutResult layout) =>
+    private static IEnumerable<(string Shape, int Row, int Col, ChordModifiers? Mods)> Signature(
+        LayoutResult layout) =>
         layout.Zones
-            .Select(z => (Shape: ShapeOf(z), z.Position.Row, z.Position.Col))
+            .Select(z => (Shape: ShapeOf(z), z.Position.Row, z.Position.Col, Mods: z.Modifier))
             .OrderBy(z => z.Shape, StringComparer.Ordinal)
             .ThenBy(z => z.Row)
             .ThenBy(z => z.Col);

@@ -39,6 +39,9 @@ public class MonitorDiagramLayoutTests
     /// </summary>
     private const string LongestPrefix = "Ctrl+Shift+";
 
+    /// <summary>The same chord as an enum, since the diagram derives the prefix from it.</summary>
+    private const ChordModifiers LongestModifier = ChordModifiers.Control | ChordModifiers.Shift;
+
     /// <summary>
     /// Slack for arrange rounding and the bezel's own 2px border - not for real
     /// overflow. The bug this catches was a chip 105px wider than its monitor.
@@ -52,15 +55,15 @@ public class MonitorDiagramLayoutTests
         return data;
     }
 
-    private static MonitorDiagram Render(string topologyId, string prefix)
+    private static MonitorDiagram Render(string topologyId, ChordModifiers modifier)
     {
         var topology = SimulatedTopologies.Find(topologyId)!;
         var layout = LayoutBuilder.Build(topology.Displays, KeySurface.LeftHandBlock);
 
         var diagram = new MonitorDiagram
         {
-            DataContext = MonitorDiagramViewModel.Build(topology.Displays, layout, modifierPrefix: prefix),
-            ModifierPrefix = prefix,
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, defaultModifier: modifier),
         };
 
         var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
@@ -99,7 +102,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void KeyChipsFitInsideTheirMonitor(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var bezel in Descendants<Border>(diagram).Where(b => b.Classes.Contains("monitorBezel")))
         {
@@ -128,7 +131,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void TierChipsAreSymmetricAboutTheirTile(string topologyId)
     {
-        var diagram = Render(topologyId, "Win+");
+        var diagram = Render(topologyId, ChordModifiers.Win);
 
         foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
         {
@@ -159,7 +162,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void NothingInATileOverlapsAnythingElse(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
         {
@@ -197,7 +200,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void NoTextIsClipped(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var text in Descendants<TextBlock>(diagram))
         {
@@ -230,7 +233,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void ZoneLabelsStayInsideTheirTile(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
         {
@@ -261,7 +264,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void ChipsKeepClearOfTheirTileEdges(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
         {
@@ -291,7 +294,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void SpanMeasuresFitTheirGutter(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var measure in Descendants<Button>(diagram).Where(b => b.Classes.Contains("spanMeasure")))
         {
@@ -316,7 +319,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void EverythingStaysInsideTheDiagram(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
         var frame = new Rect(diagram.Bounds.Size);
 
         foreach (var bezel in Descendants<Border>(diagram).Where(b => b.Classes.Contains("monitorBezel")))
@@ -337,7 +340,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void MonitorTabsDoNotOverlapEachOther(string topologyId)
     {
-        var diagram = Render(topologyId, "Win+");
+        var diagram = Render(topologyId, ChordModifiers.Win);
 
         var tabs = Descendants<Border>(diagram)
             .Where(b => b.Classes.Contains("monitorLabel") && b.IsVisible && b.Bounds.Width > 0)
@@ -359,7 +362,7 @@ public class MonitorDiagramLayoutTests
     [MemberData(nameof(Arrangements))]
     public void EveryChipShowsTheWholeChord(string topologyId)
     {
-        var diagram = Render(topologyId, LongestPrefix);
+        var diagram = Render(topologyId, LongestModifier);
 
         foreach (var chip in Descendants<Border>(diagram).Where(b => b.Classes.Contains("keyChip")))
         {

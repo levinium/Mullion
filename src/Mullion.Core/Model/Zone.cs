@@ -36,6 +36,21 @@ public sealed record Zone
     public required GridPos Position { get; init; }
     public ZoneKind Kind { get; init; } = ZoneKind.Region;
 
+    /// <summary>
+    /// The modifier this zone is taken with, when it is not the configured
+    /// default.
+    /// <para>
+    /// Null means "whatever the default is", so changing that setting moves
+    /// every zone that has not been given one of its own - which is what a
+    /// default is for. A zone that HAS been bound by hand keeps its chord,
+    /// because the point of binding it by hand was to choose.
+    /// </para>
+    /// </summary>
+    public Hotkeys.ChordModifiers? Modifier { get; init; }
+
+    /// <summary>The chord this zone actually answers to, given a default.</summary>
+    public Hotkeys.ChordModifiers ChordWith(Hotkeys.ChordModifiers fallback) => Modifier ?? fallback;
+
     /// <summary>True when the zone crosses a physical bezel.</summary>
     public bool SpansDisplays => Parts.Select(p => p.DisplayKey).Distinct().Count() > 1;
 

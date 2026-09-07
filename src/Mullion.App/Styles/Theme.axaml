@@ -581,4 +581,34 @@
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="10,6" />
   </Style>
+
+  <!-- A tier chip is its own target
+       The tile means "the whole of this column"; a tier chip means the half it
+       is drawn in. Making the chip a button is the difference between the
+       diagram being one big click target and being the thing you actually point
+       at. Templated to nothing so it stays a chip to look at. -->
+  <Style Selector="Button.tierChipButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Content="{TemplateBinding Content}" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tierChipButton.interactive">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.tierChipButton.interactive:pointerover Border.tierChip">
+    <Setter Property="Background" Value="{DynamicResource AccentMid}" />
+  </Style>
+
+  <Style Selector="Button.tierChipButton.capturing Border.tierChip">
+    <Setter Property="Background" Value="{DynamicResource CaptureTint}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
 </Styles>

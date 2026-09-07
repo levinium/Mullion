@@ -74,7 +74,7 @@
               <Border Classes="keyChip tierChip">
                 <StackPanel Orientation="Horizontal">
                           <TextBlock Classes="chipModifier"
-                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                                     Text="{Binding UpperModifierPrefix}" />
                           <TextBlock Text="{Binding UpperKey}" />
                         </StackPanel>
               </Border>
@@ -100,7 +100,7 @@
                       HorizontalAlignment="Right" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Classes="chipModifier"
-                               Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                               Text="{Binding ModifierPrefix}" />
                     <TextBlock Text="{Binding KeyLabel}" />
                   </StackPanel>
               </Border>
@@ -131,7 +131,7 @@
               <Border Classes="keyChip tierChip">
                 <StackPanel Orientation="Horizontal">
                           <TextBlock Classes="chipModifier"
-                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                                     Text="{Binding LowerModifierPrefix}" />
                           <TextBlock Text="{Binding LowerKey}" />
                         </StackPanel>
               </Border>
@@ -216,7 +216,7 @@
                       IsVisible="{Binding ReadsUpward}">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Classes="chipModifier"
-                             Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                             Text="{Binding ModifierPrefix}" />
                   <TextBlock Text="{Binding KeyLabel}" />
                 </StackPanel>
               </Border>
@@ -227,7 +227,7 @@
                       IsVisible="{Binding ReadsDownward}">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Classes="chipModifier"
-                             Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                             Text="{Binding ModifierPrefix}" />
                   <TextBlock Text="{Binding KeyLabel}" />
                 </StackPanel>
               </Border>
@@ -443,14 +443,21 @@
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Classes="keyChip tierChip">
-                              <StackPanel Orientation="Horizontal">
-                                <TextBlock Classes="chipModifier" TextWrapping="Wrap"
-                                           TextAlignment="Center"
-                                           Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
-                                <TextBlock Text="{Binding UpperKey}" />
-                              </StackPanel>
-                            </Border>
+                            <Button Classes="tierChipButton"
+                                    Classes.capturing="{Binding IsUpperCapturing}"
+                                    Classes.interactive="{Binding IsUpperInteractive}"
+                                    IsHitTestVisible="{Binding IsUpperInteractive}"
+                                    Command="{Binding ActivateUpperCommand}"
+                                    ToolTip.Tip="Give this half its own key">
+                              <Border Classes="keyChip tierChip">
+                                <StackPanel Orientation="Horizontal">
+                                  <TextBlock Classes="chipModifier" TextWrapping="Wrap"
+                                             TextAlignment="Center"
+                                             Text="{Binding UpperModifierPrefix}" />
+                                  <TextBlock Text="{Binding UpperKey}" />
+                                </StackPanel>
+                              </Border>
+                            </Button>
                             <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
@@ -466,14 +473,21 @@
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Classes="keyChip tierChip">
-                              <StackPanel Orientation="Horizontal">
-                                <TextBlock Classes="chipModifier" TextWrapping="Wrap"
-                                           TextAlignment="Center"
-                                           Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
-                                <TextBlock Text="{Binding LowerKey}" />
-                              </StackPanel>
-                            </Border>
+                            <Button Classes="tierChipButton"
+                                    Classes.capturing="{Binding IsLowerCapturing}"
+                                    Classes.interactive="{Binding IsLowerInteractive}"
+                                    IsHitTestVisible="{Binding IsLowerInteractive}"
+                                    Command="{Binding ActivateLowerCommand}"
+                                    ToolTip.Tip="Give this half its own key">
+                              <Border Classes="keyChip tierChip">
+                                <StackPanel Orientation="Horizontal">
+                                  <TextBlock Classes="chipModifier" TextWrapping="Wrap"
+                                             TextAlignment="Center"
+                                             Text="{Binding LowerModifierPrefix}" />
+                                  <TextBlock Text="{Binding LowerKey}" />
+                                </StackPanel>
+                              </Border>
+                            </Button>
                             <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
                                        IsVisible="{Binding $parent[Button].Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
@@ -540,7 +554,7 @@
                             <ItemsControl>
                               <ItemsControl.ItemsSource>
                                 <MultiBinding Converter="{x:Static ctl:ChordPartsConverter.Instance}">
-                                  <Binding Path="$parent[ctl:MonitorDiagram].ModifierSegments" />
+                                  <Binding Path="ModifierSegments" />
                                   <Binding Path="KeyLabel" />
                                 </MultiBinding>
                               </ItemsControl.ItemsSource>

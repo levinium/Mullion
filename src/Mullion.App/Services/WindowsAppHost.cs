@@ -433,7 +433,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         RefreshDragConflict();
 
         return new AppSnapshot(
-            MonitorDiagramViewModel.Build(_displays, _layout, modifierPrefix: ModifierPrefix),
+            MonitorDiagramViewModel.Build(_displays, _layout, defaultModifier: HotkeyModifier),
             summary,
             hookStatus,
             privilege,
@@ -473,11 +473,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             Rationale = c.Rationale,
             ZoneCount = c.Layout.Zones.Count,
             KeySummary = SummariseKeys(c.Layout),
-            Preview = MonitorDiagramViewModel.Build(_displays, c.Layout, modifierPrefix: ModifierPrefix),
+            Preview = MonitorDiagramViewModel.Build(_displays, c.Layout, defaultModifier: HotkeyModifier),
         }).ToList();
 
         return new WizardSnapshot(
-            MonitorDiagramViewModel.Build(_displays, null, modifierPrefix: ModifierPrefix),
+            MonitorDiagramViewModel.Build(_displays, null, defaultModifier: HotkeyModifier),
             _displays.Count == 0
                 ? "No displays detected"
                 : $"{_displays.Count} display{(_displays.Count == 1 ? "" : "s")} · " +
@@ -958,10 +958,14 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         if (_layout is null) return new RebindResult(false, "No layout.");
 
-        if (!mods.HasFlag(HotkeyModifier))
+        // Any modifier will do, not just the configured default: that setting
+        // is where UNBOUND zones get their chord from, and binding one by hand
+        // is precisely the case for wanting something else. What is refused is
+        // a bare key, which would fire while typing.
+        if (mods == ChordModifiers.None)
         {
             return new RebindResult(false,
-                $"Hold {ModifierChoice.Format(HotkeyModifier)} while pressing the key you want.");
+                "Hold at least one modifier - Win, Ctrl, Alt or Shift - while pressing the key.");
         }
 
         var target = LayoutEditor.PositionOfScanCode(surface, scan);
@@ -972,7 +976,12 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
                 "if you want keys outside it.");
         }
 
-        var outcome = LayoutEditor.Rebind(_layout, new GridPos(row, col), target.Value);
+        // Recorded as its own chord only when it differs from the default, so a
+        // zone left on the default still follows it if the default changes.
+        var chosen = mods == HotkeyModifier ? (ChordModifiers?)null : mods;
+
+        var outcome = LayoutEditor.Rebind(
+            _layout, new GridPos(row, col), target.Value, chosen, HotkeyModifier);
         if (!outcome.Success) return new RebindResult(false, outcome.Message);
 
         _layout = outcome.Layout;
@@ -988,9 +997,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         Action<string, IReadOnlyList<double>>? onSplitChanged,
         Action<string, int>? onZoneCountChanged) =>
         MonitorDiagramViewModel.Build(
-            _displays, _layout, onZoneActivated, ModifierPrefix,
+            _displays, _layout, onZoneActivated,
             onSplitChanged, onZoneCountChanged,
-            _config.General.Shape.ToTuning(), _config.General.SnapSplits);
+            _config.General.Shape.ToTuning(), _config.General.SnapSplits, HotkeyModifier);
 
     public void ResetLayout()
     {
