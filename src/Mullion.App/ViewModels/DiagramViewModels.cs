@@ -1,4 +1,7 @@
 using Avalonia;
+// Core has an Orientation too - Landscape/Portrait, a different question from
+// which way a seam runs.
+using Orientation = Avalonia.Layout.Orientation;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mullion.App.Controls;
@@ -30,7 +33,24 @@ public sealed partial class ZoneCellViewModel : ObservableObject
 
     public required string Name { get; init; }
     public required string KeyLabel { get; init; }
-    public required Rect Area { get; init; }
+
+    private Rect _area;
+
+    /// <summary>
+    /// The cell's rectangle, as a fraction of its display.
+    /// <para>
+    /// Settable rather than init-only so a seam drag can redraw the zones under
+    /// the cursor. Committing first and redrawing after would mean saving a
+    /// layout the user has not seen, and dragging against a static picture is
+    /// guessing.
+    /// </para>
+    /// </summary>
+    public required Rect Area
+    {
+        get => _area;
+        set => SetProperty(ref _area, value);
+    }
+
     public required string SizeLabel { get; init; }
     public required bool SpansDisplays { get; init; }
 
@@ -201,9 +221,43 @@ public sealed partial class VerticalSpanViewModel : SpanMeasureViewModel
     public override double LaneThickness => 50;
 }
 
+/// <summary>
+/// A draggable seam between two of a display's zones.
+/// <para>
+/// One per boundary, so a display split into three has two. The display's outer
+/// edges are not seams: there is nothing beyond them to trade width with.
+/// </para>
+/// </summary>
+public sealed partial class SplitHandleViewModel : ObservableObject
+{
+    /// <summary>Which boundary this is, counting from the display's near edge.</summary>
+    public required int Index { get; init; }
+
+    [ObservableProperty]
+    private double _position;
+
+    /// <summary>
+    /// The seam's extent across the other axis. Zones stop at the taskbar, so a
+    /// seam drawn the full height of the display would overhang them.
+    /// </summary>
+    public required double From { get; init; }
+
+    public required double To { get; init; }
+
+    public Action<int, double>? Dragged { get; set; }
+    public Action? Released { get; set; }
+}
+
 public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
 {
     public required string Key { get; init; }
+
+    /// <summary>
+    /// Geometry identity - size, position and orientation. Custom splits are
+    /// saved against this rather than the monitor, so swapping in a different
+    /// panel of the same shape in the same place keeps them.
+    /// </summary>
+    public required string Slot { get; init; }
     public required string Title { get; init; }
 
     /// <summary>
@@ -238,6 +292,137 @@ public sealed partial class DisplayNodeViewModel : DiagramNodeViewModel
     public string TitleAndDetail => $"{Title}  ·  {Detail}";
 
     public bool LabelInside => !LabelAbove;
+
+    // ---- Draggable splits ---------------------------------------------------
+
+    /// <summary>
+    /// The seams between this display's zones. Empty unless the diagram was
+    /// built with a commit callback - the wizard and the main window draw the
+    /// same picture but are not places to edit it.
+    /// </summary>
+    public IReadOnlyList<SplitHandleViewModel> Handles { get; private set; } = [];
+
+    /// <summary>Horizontal for a left-to-right split; the seams run down it.</summary>
+    public Orientation SeamOrientation { get; private set; }
+
+    public bool HasHandles => Handles.Count > 0;
+
+    private double[] _weights = [];
+    private double _spanStart;
+    private double _spanLength;
+    private double _minFraction = 0.05;
+    private Action<string, IReadOnlyList<double>>? _commit;
+
+    /// <summary>
+    /// Turn this display's zones into something draggable.
+    /// <para>
+    /// The weights come from the cells rather than being passed in: the cells
+    /// are what is on screen, so deriving from them means the seams cannot start
+    /// out disagreeing with the zones they sit between.
+    /// </para>
+    /// </summary>
+    /// <param name="minFraction">
+    /// How small a zone may be dragged, as a fraction of the split span. The
+    /// layout engine already refuses to generate a zone below a pixel floor;
+    /// dragging should not be a way around it.
+    /// </param>
+    public void EnableSplitDragging(
+        double minFraction, Action<string, IReadOnlyList<double>> commit)
+    {
+        if (Cells.Count < 2) return;
+
+        var horizontal = IsSplitHorizontally();
+        SeamOrientation = horizontal ? Orientation.Horizontal : Orientation.Vertical;
+        _commit = commit;
+        _minFraction = minFraction;
+
+        var ordered = Ordered(horizontal);
+
+        _spanStart = horizontal ? ordered[0].Area.X : ordered[0].Area.Y;
+        var end = horizontal ? ordered[^1].Area.Right : ordered[^1].Area.Bottom;
+        _spanLength = end - _spanStart;
+
+        if (_spanLength <= 0) return;
+
+        _weights = [.. ordered.Select(c => (horizontal ? c.Area.Width : c.Area.Height) / _spanLength)];
+
+        // Across the seam: the extent the zones themselves occupy, so a seam
+        // stops where they stop rather than running into the taskbar.
+        var from = horizontal ? ordered.Min(c => c.Area.Y) : ordered.Min(c => c.Area.X);
+        var to = horizontal ? ordered.Max(c => c.Area.Bottom) : ordered.Max(c => c.Area.Right);
+
+        var positions = SplitBoundaries.Of(_weights);
+
+        Handles = [.. positions.Select((p, i) => new SplitHandleViewModel
+        {
+            Index = i,
+            Position = _spanStart + p * _spanLength,
+            From = from,
+            To = to,
+            Dragged = DragSeam,
+            Released = CommitSeams,
+        })];
+
+        OnPropertyChanged(nameof(Handles));
+        OnPropertyChanged(nameof(HasHandles));
+    }
+
+    /// <summary>
+    /// A display splits along its long axis, but the reliable signal is where
+    /// the cells actually are: two cells sharing a left edge are stacked, and
+    /// nothing about the display's shape has to be consulted to see it.
+    /// </summary>
+    private bool IsSplitHorizontally()
+    {
+        var xs = Cells.Select(c => Math.Round(c.Area.X, 4)).Distinct().Count();
+        return xs > 1;
+    }
+
+    private List<ZoneCellViewModel> Ordered(bool horizontal) =>
+        [.. horizontal ? Cells.OrderBy(c => c.Area.X) : Cells.OrderBy(c => c.Area.Y)];
+
+    private void DragSeam(int index, double position)
+    {
+        if (_spanLength <= 0) return;
+
+        // The handle speaks in fractions of the display; the weights are
+        // fractions of the split, which starts wherever the zones start.
+        var local = (position - _spanStart) / _spanLength;
+
+        _weights = [.. SplitBoundaries.Move(_weights, index, local, _minFraction)];
+
+        Redraw();
+    }
+
+    /// <summary>Push the current weights back onto the cells and the seams.</summary>
+    private void Redraw()
+    {
+        var horizontal = SeamOrientation == Orientation.Horizontal;
+        var ordered = Ordered(horizontal);
+
+        var at = _spanStart;
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var length = _weights[i] * _spanLength;
+            var area = ordered[i].Area;
+
+            // Only the split axis moves. The other one is the display's own
+            // extent less its taskbar, which a seam has no say over.
+            ordered[i].Area = horizontal
+                ? new Rect(at, area.Y, length, area.Height)
+                : new Rect(area.X, at, area.Width, length);
+
+            at += length;
+        }
+
+        var positions = SplitBoundaries.Of(_weights);
+
+        for (var i = 0; i < Handles.Count && i < positions.Count; i++)
+            Handles[i].Position = _spanStart + positions[i] * _spanLength;
+    }
+
+    private void CommitSeams() => _commit?.Invoke(Slot, _weights);
 }
 
 public sealed partial class MonitorDiagramViewModel : ObservableObject
@@ -268,11 +453,18 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     /// grid position - which is how settings turns the picture into the
     /// rebinding control rather than duplicating it as a list.
     /// </param>
+    /// <param name="onSplitChanged">
+    /// When supplied the seams between zones become draggable and report the new
+    /// weights for a display slot. Left null the diagram is a picture: the
+    /// wizard and the main window show the same layout but are not places to
+    /// reshape it.
+    /// </param>
     public static MonitorDiagramViewModel Build(
         IReadOnlyList<DisplayInfo> displays,
         LayoutResult? layout = null,
         Action<GridPos>? onZoneActivated = null,
-        string modifierPrefix = "Win+")
+        string modifierPrefix = "Win+",
+        Action<string, IReadOnlyList<double>>? onSplitChanged = null)
     {
         var vm = new MonitorDiagramViewModel { ModifierPrefix = modifierPrefix };
         if (displays.Count == 0) return vm;
@@ -295,7 +487,38 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 span.Activated = onZoneActivated;
         }
 
+        if (onSplitChanged is not null)
+        {
+            var byKey = displays.ToDictionary(d => d.StableKey);
+
+            foreach (var node in vm.Displays)
+                if (byKey.TryGetValue(node.Key, out var display))
+                    node.EnableSplitDragging(MinSplitFraction(display, node), onSplitChanged);
+        }
+
         return vm;
+    }
+
+    /// <summary>
+    /// The smallest slice a seam may be dragged to, as a fraction of the split.
+    /// <para>
+    /// Taken from the same pixel floor the layout engine refuses to generate a
+    /// zone below, so dragging is not a way around it: a zone too narrow to hold
+    /// a window is no more useful for having been made by hand. Expressed
+    /// against the work area's long axis because that is what the weights divide.
+    /// </para>
+    /// </summary>
+    private static double MinSplitFraction(DisplayInfo display, DisplayNodeViewModel node)
+    {
+        var tuning = ShapeTuning.Default;
+
+        var axisPixels = node.Cells.Select(c => Math.Round(c.Area.X, 4)).Distinct().Count() > 1
+            ? display.WorkArea.Width
+            : display.WorkArea.Height;
+
+        if (axisPixels <= 0) return 0.05;
+
+        return Math.Clamp(tuning.MinZoneLogicalPx * display.Scale / axisPixels, 0.02, 0.45);
     }
 
     /// <summary>Mark one cell as awaiting a keypress, clearing any other.</summary>
@@ -462,6 +685,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         return new DisplayNodeViewModel
         {
             Key = display.StableKey,
+            Slot = DisplaySlot.Of(display),
             Title = display.FriendlyName,
             Detail = $"{display.Bounds.Width} × {display.Bounds.Height}" +
                      (display.Dpi != 96 ? $"  ·  {display.Scale:P0}" : string.Empty) +

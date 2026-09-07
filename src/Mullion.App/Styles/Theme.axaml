@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="clr-namespace:Mullion.App.Controls">
 
   <Styles.Resources>
     <ResourceDictionary>
@@ -440,4 +441,55 @@
     <Setter Property="Padding" Value="12" />
   </Style>
 
+
+  <!-- Split seams
+       Nearly invisible until pointed at. A diagram with a bar drawn between
+       every pair of zones reads as a layout made of bars, and the seams are
+       incidental to what it is showing: they are how you change the picture,
+       not part of it. Hover is what says a seam is there to be grabbed, and the
+       cursor says which way it moves. -->
+  <Style Selector="ctl|SplitHandle.seam">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <!-- Transparent, not unset: a null background is not hit-testable, so
+             the handle would be a control nothing can grab. -->
+        <Border Background="Transparent">
+          <Border Name="Grip" Background="{DynamicResource InkFaint}"
+                  Opacity="0" CornerRadius="2"
+                  HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                  Width="3" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="ctl|SplitHandle.seam[Orientation=Horizontal]">
+    <Setter Property="Cursor" Value="SizeWestEast" />
+  </Style>
+
+  <!-- A seam on a stacked split runs across the display, so its grip lies flat
+       and the cursor points the other way. -->
+  <Style Selector="ctl|SplitHandle.seam[Orientation=Vertical]">
+    <Setter Property="Cursor" Value="SizeNorthSouth" />
+  </Style>
+
+  <Style Selector="ctl|SplitHandle.seam[Orientation=Vertical] /template/ Border#Grip">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Height" Value="3" />
+  </Style>
+
+  <Style Selector="ctl|SplitHandle.seam:pointerover /template/ Border#Grip">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <Style Selector="ctl|SplitHandle.seam /template/ Border#Grip">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
 </Styles>

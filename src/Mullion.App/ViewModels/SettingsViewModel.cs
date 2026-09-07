@@ -248,11 +248,26 @@ public sealed partial class SettingsViewModel : ObservableObject
             }),
         ];
 
-        Diagram = _host.BuildInteractiveDiagram(BeginRebindAt);
+        Diagram = _host.BuildInteractiveDiagram(BeginRebindAt, ApplySplitWeights);
         OnPropertyChanged(nameof(HasCustomSplits));
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
+    }
+
+    /// <summary>
+    /// Save a split the user has just dragged, then reload.
+    /// <para>
+    /// The reload redraws from the regenerated layout rather than leaving the
+    /// dragged picture in place, so what stays on screen is what was actually
+    /// saved. If the two ever disagree the zones visibly move when the seam is
+    /// released, which is the right way to find out.
+    /// </para>
+    /// </summary>
+    private void ApplySplitWeights(string slot, IReadOnlyList<double> weights)
+    {
+        _host.SetDisplayWeights(slot, weights);
+        Reload();
     }
 
     partial void OnStartWithWindowsChanged(bool value) => ApplyAutoStart();
@@ -470,7 +485,9 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
     public void CancelRebind() { }
     public void ResetLayout() { }
-    public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) => new();
+    public MonitorDiagramViewModel BuildInteractiveDiagram(
+        Action<GridPos> onZoneActivated,
+        Action<string, IReadOnlyList<double>> onSplitChanged) => new();
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
 

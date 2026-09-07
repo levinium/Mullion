@@ -833,8 +833,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         return new RebindResult(true, outcome.Message);
     }
 
-    public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) =>
-        MonitorDiagramViewModel.Build(_displays, _layout, onZoneActivated, ModifierPrefix);
+    public MonitorDiagramViewModel BuildInteractiveDiagram(
+        Action<GridPos> onZoneActivated,
+        Action<string, IReadOnlyList<double>> onSplitChanged) =>
+        MonitorDiagramViewModel.Build(
+            _displays, _layout, onZoneActivated, ModifierPrefix, onSplitChanged);
 
     public void ResetLayout()
     {

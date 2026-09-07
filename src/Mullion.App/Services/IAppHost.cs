@@ -83,6 +83,7 @@ public sealed class DesignAppHost : IAppHost
                 new DisplayNodeViewModel
                 {
                     Key = "SAMPLE",
+                    Slot = "5120x1440@0,0",
                     Title = "Sample display",
                     Detail = "5120 × 1440 · primary",
                     Bounds = new Rect(0, 0, 5120, 1440),

@@ -539,6 +539,40 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
+            <!-- Seams between this display's zones, laid over the tiles so they
+                 can be grabbed. Present only where the diagram was built with a
+                 commit callback, which is settings and nowhere else: the wizard
+                 and the main window draw the same picture but are not places to
+                 reshape it. -->
+            <ItemsControl ItemsSource="{Binding Handles}" IsVisible="{Binding HasHandles}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <ctl:SeamOverlay Orientation="{Binding $parent[ItemsControl].((vm:DisplayNodeViewModel)DataContext).SeamOrientation}" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+
+              <ItemsControl.ItemContainerTheme>
+                <ControlTheme TargetType="ContentPresenter">
+                  <Setter Property="ctl:SeamOverlay.Position"
+                          Value="{Binding Position, DataType=vm:SplitHandleViewModel}" />
+                  <Setter Property="ctl:SeamOverlay.From"
+                          Value="{Binding From, DataType=vm:SplitHandleViewModel}" />
+                  <Setter Property="ctl:SeamOverlay.To"
+                          Value="{Binding To, DataType=vm:SplitHandleViewModel}" />
+                </ControlTheme>
+              </ItemsControl.ItemContainerTheme>
+
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SplitHandleViewModel">
+                  <ctl:SplitHandle Classes="seam"
+                                   Index="{Binding Index}"
+                                   Dragged="{Binding Dragged}"
+                                   Released="{Binding Released}"
+                                   Orientation="{Binding $parent[ctl:SeamOverlay].Orientation}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
           </Grid>
           </Border>
 

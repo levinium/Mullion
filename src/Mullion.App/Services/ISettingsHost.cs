@@ -112,8 +112,11 @@ public interface ISettingsHost
     void ResetLayout();
 
     /// <summary>
-    /// The monitor diagram, wired so clicking a zone starts a rebind. Built by
-    /// the host because only it holds the current displays and layout.
+    /// The monitor diagram, wired so clicking a zone starts a rebind and
+    /// dragging a seam reshapes the split. Built by the host because only it
+    /// holds the current displays and layout.
     /// </summary>
-    MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated);
+    MonitorDiagramViewModel BuildInteractiveDiagram(
+        Action<GridPos> onZoneActivated,
+        Action<string, IReadOnlyList<double>> onSplitChanged);
 }

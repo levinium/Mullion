@@ -86,6 +86,12 @@ public partial class App : Application
             _window.Show();
         }
 
+        // --settings opens straight onto the settings window. It exists so the
+        // capture tooling can screenshot it: the seam handles and the split
+        // controls live only there, and until this flag the only picture that
+        // could be taken automatically was of the main window, which has neither.
+        if (desktop.Args?.Contains("--settings") == true) ShowSettings();
+
         desktop.Exit += (_, _) =>
         {
             _tray?.Dispose();
