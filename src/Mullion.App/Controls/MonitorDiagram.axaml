@@ -413,7 +413,7 @@
                           Classes.interactive="{Binding IsInteractive}"
                           IsHitTestVisible="{Binding IsInteractive}"
                           Command="{Binding ActivateCommand}"
-                          ToolTip.Tip="{Binding Name}">
+                          ToolTip.Tip="{Binding WholeHint}">
 
                     <Grid>
 
@@ -452,7 +452,7 @@
                                 Classes.interactive="{Binding IsUpperInteractive}"
                                 IsHitTestVisible="{Binding IsUpperInteractive}"
                                 Command="{Binding ActivateUpperCommand}"
-                                ToolTip.Tip="Give this half its own key" />
+                                ToolTip.Tip="{Binding UpperHint}" />
 
                         <Button Grid.Row="1" Name="LowerRegion" Classes="subZoneRegion"
                                 IsVisible="{Binding HasLower}"
@@ -460,7 +460,7 @@
                                 Classes.interactive="{Binding IsLowerInteractive}"
                                 IsHitTestVisible="{Binding IsLowerInteractive}"
                                 Command="{Binding ActivateLowerCommand}"
-                                ToolTip.Tip="Give this half its own key" />
+                                ToolTip.Tip="{Binding LowerHint}" />
                       </Grid>
 
 
@@ -487,7 +487,7 @@
                                     Classes.interactive="{Binding IsUpperInteractive}"
                                     IsHitTestVisible="{Binding IsUpperInteractive}"
                                     Command="{Binding ActivateUpperCommand}"
-                                    ToolTip.Tip="Give this half its own key">
+                                    ToolTip.Tip="{Binding UpperHint}">
                               <Border Classes="keyChip tierChip">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
@@ -517,7 +517,7 @@
                                     Classes.interactive="{Binding IsLowerInteractive}"
                                     IsHitTestVisible="{Binding IsLowerInteractive}"
                                     Command="{Binding ActivateLowerCommand}"
-                                    ToolTip.Tip="Give this half its own key">
+                                    ToolTip.Tip="{Binding LowerHint}">
                               <Border Classes="keyChip tierChip">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
@@ -559,16 +559,25 @@
                            Sized to its content by VerticalAlignment, so it
                            claims only the middle band and the halves keep the
                            rest. -->
-                      <!-- Hugs the text rather than the tile. Centered, it is
-                           arranged at its own desired width - so it needs a cap
-                           too, or on a narrow monitor the name inside it would
-                           push the box out past the zone it belongs to. -->
-                      <Border Classes="wholeZoneBlock"
-                              VerticalAlignment="Center"
-                              HorizontalAlignment="Center"
-                              MaxWidth="{Binding $parent[Button].Bounds.Width,
-                                         Converter={x:Static ctl:InsetConverter.Instance},
-                                         ConverterParameter=10;70}">
+                      <!-- The middle band, which means the whole column.
+
+                           Two boxes, because what you point at and what you see
+                           are not the same shape here: the band spans the tile
+                           so the whole middle answers to a click, while the
+                           outline inside it hugs the words. Hugging the text
+                           with the target itself left the rest of the middle
+                           answering to nothing, and a click there did nothing.
+
+                           Transparent rather than unset, or the pointer falls
+                           straight through the words to the half behind them. -->
+                      <Border VerticalAlignment="Center"
+                              HorizontalAlignment="Stretch"
+                              Background="Transparent">
+                        <Border Classes="wholeZoneBlock"
+                                HorizontalAlignment="Center"
+                                MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                           Converter={x:Static ctl:InsetConverter.Instance},
+                                           ConverterParameter=10;70}">
                         <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*">
 
                         <!-- Wraps first, shrinks second, and never drops the
@@ -665,8 +674,9 @@
                                                  ConverterParameter=95}"
                                      Margin="0,1,0,0"
                                      TextAlignment="Center" />
-                          </Panel>
-                        </Grid>
+                            </Panel>
+                          </Grid>
+                        </Border>
                       </Border>
                     </Grid>
                   </Button>

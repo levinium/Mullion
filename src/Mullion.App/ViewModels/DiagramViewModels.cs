@@ -78,6 +78,11 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     /// </summary>
     public GridPos? UpperPosition { get; init; }
 
+    /// <summary>Names for the tooltips, so each target says which zone it is.</summary>
+    public string? UpperName { get; init; }
+
+    public string? LowerName { get; init; }
+
     public GridPos? LowerPosition { get; init; }
 
     [ObservableProperty]
@@ -87,6 +92,18 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     private bool _isLowerCapturing;
 
     public bool IsUpperInteractive => IsInteractive && UpperPosition is not null;
+
+    /// <summary>
+    /// What pointing here would change. Each target names its OWN zone: the
+    /// halves had no tooltip of their own, so they inherited the tile's, which
+    /// names the whole column - the pointer said one thing and the click did
+    /// another.
+    /// </summary>
+    public string WholeHint => $"{Name} - click to change its key";
+
+    public string UpperHint => $"{UpperName ?? "Upper half"} - click to change its key";
+
+    public string LowerHint => $"{LowerName ?? "Lower half"} - click to change its key";
 
     public bool IsLowerInteractive => IsInteractive && LowerPosition is not null;
 
@@ -972,9 +989,11 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 LowerModifierPrefix = Prefix(lower.Zone, defaultModifier),
                 UpperKey = upper.Zone is null ? null : layout.Surface.FallbackLabelAt(upper.Zone.Position),
                 UpperPosition = upper.Zone?.Position,
+                UpperName = upper.Zone?.Name,
                 UpperSize = upper.Zone is null ? null : $"{upper.Pixels.Width} × {upper.Pixels.Height}",
                 LowerKey = lower.Zone is null ? null : layout.Surface.FallbackLabelAt(lower.Zone.Position),
                 LowerPosition = lower.Zone?.Position,
+                LowerName = lower.Zone?.Name,
                 LowerSize = lower.Zone is null ? null : $"{lower.Pixels.Width} × {lower.Pixels.Height}",
             });
         }

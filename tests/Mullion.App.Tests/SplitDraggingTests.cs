@@ -709,6 +709,87 @@ public class SeamRenderingTests
         asked[0].ShouldNotBe(owner.Position, "the click was taken by the whole column instead of the half");
     }
 
+
+    /// <summary>
+    /// Where a click lands, swept down AND across a tile that carries tiers.
+    /// <para>
+    /// Three bands, each uniform across the width: the top means the upper zone,
+    /// the middle means the whole column, the bottom means the lower zone. The
+    /// single-column version of this passed while the diagram still had two
+    /// faults - a band that changed meaning halfway across, so pointing at a
+    /// sub-zone's own size label gave the whole column; and a dead spot between
+    /// the halves where a click did nothing at all.
+    /// </para>
+    /// </summary>
+    [AvaloniaFact]
+    public void EveryPointInATileBelongsToExactlyOneRegion()
+    {
+        var topology = SimulatedTopologies.Find("single-32-9")!;
+        var layout = LayoutBuilder.Build(topology.Displays, Core.Hotkeys.KeySurface.LeftHandBlock);
+
+        var asked = new List<GridPos>();
+
+        var diagram = new MonitorDiagram
+        {
+            DataContext = MonitorDiagramViewModel.Build(
+                topology.Displays, layout, onZoneActivated: asked.Add),
+        };
+
+        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        window.Show();
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            window.Measure(Canvas);
+            window.Arrange(new Rect(Canvas));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var vm = (MonitorDiagramViewModel)diagram.DataContext!;
+        var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
+
+        cell.UpperPosition.ShouldNotBeNull();
+        cell.LowerPosition.ShouldNotBeNull();
+
+        var tile = diagram.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("zoneTileButton"))
+            .OrderBy(b => b.Bounds.X)
+            .First();
+
+        var box = tile.Bounds.TransformToAABB(
+            tile.GetVisualParent()!.TransformToVisual(window)!.Value);
+
+        // Clear of the boundaries themselves, which are a pixel either way.
+        double[] upper = [0.10, 0.20, 0.30];
+        double[] whole = [0.45, 0.50, 0.55];
+        double[] lower = [0.70, 0.80, 0.90];
+        double[] across = [-0.30, -0.15, 0.0, 0.15, 0.30];
+
+        foreach (var (downs, wanted, what) in new[]
+                 {
+                     (upper, cell.UpperPosition!.Value, "the upper half"),
+                     (whole, cell.Position, "the whole column"),
+                     (lower, cell.LowerPosition!.Value, "the lower half"),
+                 })
+        {
+            foreach (var down in downs)
+            foreach (var side in across)
+            {
+                asked.Clear();
+
+                var at = new Point(box.Center.X + box.Width * side, box.Y + box.Height * down);
+
+                window.MouseMove(at);
+                window.MouseDown(at, MouseButton.Left);
+                window.MouseUp(at, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+
+                asked.ShouldBe(
+                    [wanted],
+                    $"{down:P0} down and {side:P0} across should be {what}");
+            }
+        }
+    }
     /// <summary>
     /// Where a click lands, at three heights down a tile that carries tiers.
     /// The upper half means the upper zone, the middle band means the whole

@@ -723,4 +723,12 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
+  <!-- Selected, like everything else that is selected. The outline round the
+       chip, name and size turns green with the zone it belongs to. Declared
+       late, since the plain outline style comes after it in the file. -->
+  <Style Selector="Button.zoneTileButton.capturing Border.wholeZoneBlock">
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
 </Styles>
