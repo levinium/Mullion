@@ -393,6 +393,13 @@
 
   <!-- A square, quiet icon button. No border or fill until hovered, so it sits
        beside labelled buttons without competing with them. -->
+  <!-- Icon buttons
+       One treatment for every one of them: dim at rest, bright with a soft
+       backing under the pointer, faint when there is nothing to press, and
+       tinted while it is holding a state on. Meaning is carried by the shape and
+       the tooltip, never by a colour one button has and its neighbour does not -
+       a tick that is always blue beside a cross that turns orange only on hover
+       reads as two unrelated controls that happen to sit together. -->
   <Style Selector="Button.iconButton">
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
@@ -405,35 +412,41 @@
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
+  <!-- Stretch=None so each icon keeps the size it was drawn at. Uniform scales
+       every glyph to fill the box, which made a square cross visibly bigger than
+       a short, wide tick in the same 18px. -->
   <Style Selector="Button.iconButton > Path">
     <Setter Property="Fill" Value="{DynamicResource InkDim}" />
-    <Setter Property="Width" Value="18" />
-    <Setter Property="Height" Value="18" />
-    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="None" />
+  </Style>
+
+  <Style Selector="Button.iconButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
   </Style>
 
   <Style Selector="Button.iconButton:pointerover > Path">
     <Setter Property="Fill" Value="{DynamicResource Ink}" />
   </Style>
 
-  <!-- A toggle, not a launcher: while editing, the pencil has to look pressed
-       or "Done" is a state with nothing showing it. -->
-  <Style Selector="Button.iconButton.active">
+  <!-- Faint rather than hidden: a row that loses buttons at its limits shifts
+       the remaining ones under the cursor. -->
+  <Style Selector="Button.iconButton:disabled > Path">
+    <Setter Property="Fill" Value="{DynamicResource InkFaint}" />
+  </Style>
+
+  <Style Selector="Button.iconButton:disabled">
+    <Setter Property="Cursor" Value="Arrow" />
+  </Style>
+
+  <!-- Holding something on, which is a different thing from being hovered. -->
+  <Style Selector="Button.iconButton.active /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMid}" />
   </Style>
 
   <Style Selector="Button.iconButton.active > Path">
     <Setter Property="Fill" Value="{DynamicResource Ink}" />
-  </Style>
-
-  <!-- Confirm and cancel carry their meaning in colour as well as shape: at
-       18px a tick and a cross are not that different in silhouette. -->
-  <Style Selector="Button.iconButton.confirm > Path">
-    <Setter Property="Fill" Value="{DynamicResource Accent}" />
-  </Style>
-
-  <Style Selector="Button.iconButton.cancel:pointerover > Path">
-    <Setter Property="Fill" Value="{DynamicResource SpanBorder}" />
   </Style>
 
   <Style Selector="Button.accent">

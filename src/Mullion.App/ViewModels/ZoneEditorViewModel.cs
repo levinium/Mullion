@@ -44,20 +44,16 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool _canEdit = true;
 
-    public bool SnapSplits
+    public bool SnapSplits => _host.SnapSplits;
+
+    [RelayCommand]
+    private void ToggleSnap()
     {
-        get => _host.SnapSplits;
-        set
-        {
-            if (_host.SnapSplits == value) return;
+        _host.SetSnapSplits(!_host.SnapSplits);
 
-            _host.SetSnapSplits(value);
-            OnPropertyChanged();
-
-            // The diagram works out its snap positions when it is built, so it
-            // has to be rebuilt for the change to reach a drag.
-            Refresh();
-        }
+        // The diagram works out its snap positions when it is built, so it has
+        // to be rebuilt for the change to reach a drag.
+        Refresh();
     }
 
     public bool CanUndo => IsEditing && _host.CanUndoZones;

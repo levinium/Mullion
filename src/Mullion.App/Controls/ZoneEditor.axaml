@@ -5,10 +5,10 @@
              x:DataType="vm:ZoneEditorViewModel"
              x:Class="Mullion.App.Controls.ZoneEditor">
 
-  <!-- Two rows, not three. Everything that is not the diagram lives on one
-       line above it, because anything below it comes straight out of the
-       diagram's own height - and edit mode was shrinking the very picture it
-       had just invited you to work on. -->
+  <!-- Two rows, not three. Everything that is not the diagram lives on one line
+       above it, because anything below it comes straight out of the diagram's
+       own height - and edit mode was shrinking the very picture it had just
+       invited you to work on. -->
   <Grid RowDefinitions="Auto,*" MinHeight="240">
 
     <!-- The controls sit with the picture they change, not on another card or
@@ -18,7 +18,7 @@
          Shown whenever it has anything on it. The settings page is always
          editing and offers no pencil, so keying the whole row off the pencil
          took its Undo away with it. -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,2">
       <Grid.IsVisible>
         <MultiBinding Converter="{x:Static BoolConverters.Or}">
           <Binding Path="CanEdit" />
@@ -31,34 +31,48 @@
                  TextTrimming="CharacterEllipsis"
                  Text="{Binding Message}" />
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
                   VerticalAlignment="Center">
 
-        <StackPanel Orientation="Horizontal" Spacing="6"
+        <StackPanel Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center"
                     IsVisible="{Binding IsEditing}">
 
-          <!-- Up here rather than under the diagram, and terse: the sentence
-               explaining it is worth a tooltip, not a permanent two lines of
-               the height the diagram wants. -->
-          <CheckBox Content="Snap" IsChecked="{Binding SnapSplits}"
-                    VerticalAlignment="Center" Margin="0,0,4,0"
-                    ToolTip.Tip="Seams settle on a 5% grid, on halves and thirds, and on the positions where a zone comes out at an exact 16:9 or 3:2 for that monitor. Hold Alt while dragging to place one freely." />
+          <!-- A magnet: the one control here that holds a state rather than
+               doing something, so it is the one that lights up. -->
+          <Button Classes="iconButton"
+                  Classes.active="{Binding SnapSplits}"
+                  Command="{Binding ToggleSnapCommand}"
+                  ToolTip.Tip="Snap while dragging. Seams settle on a 5% grid, on halves and thirds, and on the positions where a zone comes out at an exact 16:9 or 3:2 for that monitor. Hold Alt while dragging to place one freely.">
+            <Path Data="{x:Static ctl:Icons.Magnet}" />
+          </Button>
 
-          <Button Content="Undo" Command="{Binding UndoCommand}"
-                  ToolTip.Tip="Undo the last zone change" />
-          <Button Content="Redo" Command="{Binding RedoCommand}"
-                  ToolTip.Tip="Redo the zone change just undone" />
+          <Button Classes="iconButton" Command="{Binding UndoCommand}"
+                  ToolTip.Tip="Undo the last zone change">
+            <Path Data="{x:Static ctl:Icons.Undo}" />
+          </Button>
+
+          <Button Classes="iconButton" Command="{Binding RedoCommand}"
+                  ToolTip.Tip="Redo the zone change just undone">
+            <Path Data="{x:Static ctl:Icons.Redo}" />
+          </Button>
+
+          <!-- These two stay words. They throw away work, they are not
+               reversible by pressing them again, and no icon distinguishes
+               "reset the zones" from "reset the keys" well enough to be worth
+               guessing at. A tidier row is not worth losing someone's layout. -->
           <Button Content="Reset zones" Command="{Binding ResetZonesCommand}"
+                  Margin="6,0,0,0"
                   ToolTip.Tip="Discard every custom split and zone count. Keys are left alone." />
           <Button Content="Reset keys" Command="{Binding ResetKeysCommand}"
+                  Margin="2,0,0,0"
                   ToolTip.Tip="Put every key back where Mullion would have put it. Zone shapes are left alone." />
         </StackPanel>
 
         <!-- Furthest right, matching the settings gear it sits under: the same
              kind of control belongs in the same column. The pencil is replaced
-             by its own two outcomes rather than sitting beside them, so there
-             is never a question of which button ends the session. -->
+             by its own two outcomes rather than sitting beside them, so there is
+             never a question of which button ends the session. -->
         <Button Classes="iconButton" Margin="6,0,0,0"
                 IsVisible="{Binding ShowEditButton}"
                 Command="{Binding BeginEditCommand}"
@@ -66,14 +80,14 @@
           <Path Data="{x:Static ctl:Icons.Pencil}" />
         </Button>
 
-        <Button Classes="iconButton confirm" Margin="6,0,0,0"
+        <Button Classes="iconButton" Margin="6,0,0,0"
                 IsVisible="{Binding ShowSessionButtons}"
                 Command="{Binding ConfirmEditCommand}"
                 ToolTip.Tip="Keep these changes">
           <Path Data="{x:Static ctl:Icons.Check}" />
         </Button>
 
-        <Button Classes="iconButton cancel"
+        <Button Classes="iconButton"
                 IsVisible="{Binding ShowSessionButtons}"
                 Command="{Binding CancelEditCommand}"
                 ToolTip.Tip="Discard every change made since you started editing">

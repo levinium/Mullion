@@ -110,7 +110,10 @@
 
       </StackPanel>
 
-      <Border Grid.Row="1" Classes="card">
+      <!-- Tighter than a normal card: the diagram letterboxes itself to keep
+           the desk to scale, so it arrives with slack of its own and does not
+           need a full 16 on top of it. -->
+      <Border Grid.Row="1" Classes="card" Padding="12">
         <ctl:ZoneEditor DataContext="{Binding Editor}" />
       </Border>
     </Grid>
