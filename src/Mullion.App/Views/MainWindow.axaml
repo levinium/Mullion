@@ -65,6 +65,25 @@
         </Grid>
       </Border>
 
+      <!-- Two zone managers on one gesture do not look like a conflict from the
+           outside; they look like Mullion being unreliable. Naming it is worth
+           more than the drag itself working. -->
+      <Border Classes="warning" Margin="0,0,0,14"
+              IsVisible="{Binding ShowDragConflictBanner}">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Spacing="4">
+            <TextBlock Classes="h2" Text="Another window manager is competing" />
+            <TextBlock Classes="body" Text="{Binding DragConflictDetail}" TextWrapping="Wrap" />
+          </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="accent"
+                  Content="{Binding DragConflictAction}"
+                  Command="{Binding ResolveDragConflictCommand}"
+                  VerticalAlignment="Center"
+                  Margin="16,0,0,0" />
+        </Grid>
+      </Border>
+
       <Border Classes="warning" Margin="0,0,0,14"
               IsVisible="{Binding HasTrayFailure}">
         <StackPanel Spacing="4">

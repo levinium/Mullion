@@ -74,6 +74,17 @@
           <CheckBox Content="Flash the zone when a window moves"
                     IsChecked="{Binding ShowZoneFlash}" />
 
+          <CheckBox Content="Drop a window into a zone by dragging it"
+                    IsChecked="{Binding DragToSnap}" />
+
+          <TextBlock Classes="body" Margin="20,0,0,0"
+                     Text="Hold this while dragging and the zones appear; release over one to drop the window into it. Without a modifier every window drag raises the zones, which fights the edge snap built into Windows." />
+          <ComboBox ItemsSource="{Binding DragModifiers}"
+                    SelectedItem="{Binding SelectedDragModifier}"
+                    IsEnabled="{Binding DragToSnap}"
+                    Margin="20,0,0,0"
+                    HorizontalAlignment="Stretch" />
+
           <TextBlock Classes="body" Margin="0,6,0,0"
                      Text="Windows key handling — how Mullion stops the Start menu opening when it takes a Win shortcut. Change this only if the Start menu appears when it should not." />
           <ComboBox ItemsSource="{Binding SuppressionModes}"

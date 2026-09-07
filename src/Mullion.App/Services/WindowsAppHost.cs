@@ -150,61 +150,46 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             ? $"{DragArmingModifier}+drag"
             : "every window drag";
 
-        // Already switched off, but still running: PowerToys reads its enabled
-        // flags at startup only. Saying "turned off" here while the module goes
-        // on claiming the drag would be worse than saying nothing.
-        if (_fancyZones.DisabledInSettings)
-        {
-            return $"FancyZones is switched off in PowerToys settings, but it is still " +
-                   $"running and still claims {gesture}: PowerToys applies that setting " +
-                   "only when it restarts. Quit PowerToys from its tray icon and reopen " +
-                   "it, then press Check again.";
-        }
-
-        return $"PowerToys FancyZones is running and claims {gesture} as well. " +
-               "Both will move the window and whichever finishes last wins, so the " +
-               "result changes from drag to drag. Mullion replaces it.";
+        return $"PowerToys FancyZones is running and claims {gesture} as well. Both " +
+               "will move the window and whichever finishes last wins, so the result " +
+               "changes from drag to drag. Switch FancyZones off in PowerToys - " +
+               "Mullion replaces it.";
     }
 
-    /// <summary>Label for the banner's button, which changes with what is left to do.</summary>
-    private string DragConflictActionText =>
-        _fancyZones.DisabledInSettings ? "Check again" : "Turn off FancyZones";
+    private const string DragConflictActionText = "Open PowerToys";
 
     public void ResolveDragConflict()
     {
-        // Once it is already off in settings there is nothing left to write, and
-        // the button is only a re-check after the user has restarted PowerToys.
-        if (_fancyZones.DisabledInSettings)
+        if (!FancyZones.OpenPowerToysSettings(out var error))
         {
-            _fancyZones = FancyZones.Detect(DragArmingModifier);
-
-            _lastAction = _fancyZones.Collides
-                ? "FancyZones is still running. Quit and reopen PowerToys to apply it."
-                : "FancyZones is no longer running.";
-
-            _log.Info(_lastAction);
-            StateChanged?.Invoke();
-            return;
-        }
-
-        if (FancyZones.Disable(out var error, out var stopped))
-        {
-            _lastAction = stopped
-                ? "Turned off PowerToys FancyZones."
-                : "FancyZones switched off in PowerToys settings — restart PowerToys to apply it.";
-
-            _log.Info(_lastAction);
+            _lastAction = $"Could not open PowerToys: {error}";
+            _log.Warn(_lastAction);
         }
         else
         {
-            _lastAction = $"Could not turn off FancyZones: {error}";
-            _log.Warn(_lastAction);
+            _lastAction = "Opened PowerToys — switch FancyZones off there.";
         }
 
-        _fancyZones = FancyZones.Detect(DragArmingModifier);
+        RefreshDragConflict();
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Re-read whether the gesture is still contested, throttled because the
+    /// snapshot is rebuilt on every state change and this enumerates processes.
+    /// </summary>
+    private void RefreshDragConflict()
+    {
+        if (_drag is null) return;
+
+        var now = DateTime.UtcNow;
+        if (now - _fancyZonesCheckedAt < TimeSpan.FromSeconds(2)) return;
+
+        _fancyZonesCheckedAt = now;
+        _fancyZones = FancyZones.Detect(DragArmingModifier);
+    }
+
+    private DateTime _fancyZonesCheckedAt;
     /// <summary>Config stores the modifier by name, as it does every other enum.</summary>
     private DragModifier DragArmingModifier =>
         Enum.TryParse<DragModifier>(_config.General.DragModifier, ignoreCase: true, out var m)
@@ -415,6 +400,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             : $"{_displays.Count} display{(_displays.Count == 1 ? "" : "s")} · " +
               string.Join(" · ", _displays.Select(d => $"{d.Bounds.Width}×{d.Bounds.Height}"));
 
+        RefreshDragConflict();
+
         return new AppSnapshot(
             MonitorDiagramViewModel.Build(_displays, _layout),
             summary,
@@ -557,7 +544,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             [.. KeySurface.All.Select(s => (s.Id, s.Name))],
             bindings,
             _configStore.Path_,
-            _log.Path_);
+            _log.Path_,
+            _config.General.DragToSnap,
+            _config.General.DragModifier);
     }
 
     public void OpenLogFolder() => OpenFolder(Path.GetDirectoryName(_log.Path_));
@@ -578,6 +567,27 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         // This changes which zones exist, so the layout has to be rebuilt.
         Regenerate();
+    }
+
+    public void SetDragToSnap(bool enabled, string modifier)
+    {
+        UpdateGeneral(g => g with { DragToSnap = enabled, DragModifier = modifier });
+
+        // Applied live rather than at the next launch: the watcher is cheap to
+        // install and tear down, and a setting that needs a restart to try is
+        // one nobody tries.
+        if (_drag is not null)
+        {
+            _drag.Dispose();
+            _drag = null;
+            _dragOverlay.Hide();
+        }
+
+        if (enabled && Simulated is null) StartDragToSnap();
+
+        _fancyZonesCheckedAt = default;
+        RefreshDragConflict();
+        StateChanged?.Invoke();
     }
 
     public void SetWinKeySuppression(string value)

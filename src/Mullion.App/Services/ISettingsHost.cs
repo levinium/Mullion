@@ -22,7 +22,9 @@ public sealed record SettingsSnapshot(
     IReadOnlyList<(string Id, string Name)> AvailableSurfaces,
     IReadOnlyList<BindingEntry> Bindings,
     string ConfigPath,
-    string LogPath);
+    string LogPath,
+    bool DragToSnap,
+    string DragModifier);
 
 public interface ISettingsHost
 {
@@ -34,6 +36,9 @@ public interface ISettingsHost
     void SetShowZoneFlash(bool value);
 
     void SetAllowSpanningUnions(bool value);
+
+    /// <summary>Enable drag-to-snap and choose which modifier arms it.</summary>
+    void SetDragToSnap(bool enabled, string modifier);
 
     void SetWinKeySuppression(string value);
 

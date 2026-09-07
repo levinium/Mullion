@@ -86,6 +86,28 @@ there, so a live hotkey would throw a real window off-screen.
 `tools/Capture-Simulations.ps1` screenshots every preset into `screenshots/`,
 which is how the defaults get reviewed side by side.
 
+## Drag to snap
+
+Hold **Shift** while dragging a window and the zones appear; the one under the
+cursor highlights; release and the window lands in it, through the same mover
+the hotkeys use. The modifier is configurable, and can be set to none to have
+the zones appear on every drag.
+
+The zones offered are the largest tiling the layout allows, not every zone.
+Zones overlap on purpose — a column holds the whole of itself *and* its halves,
+on different keys — which a key can disambiguate and a pointer cannot, since it
+sits inside all three at once.
+
+Windows that draw their own title bars still work. Chromium and Electron
+implement a custom caption by returning `HTCAPTION` from `WM_NCHITTEST`, so the
+OS runs its normal move loop and `EVENT_SYSTEM_MOVESIZESTART` fires as it does
+for any other window — verified with `--drag-test` on Brave and VS Code.
+
+**PowerToys FancyZones claims the same gesture.** Two zone managers on one drag
+both move the window and whichever finishes last wins, so the result changes
+from drag to drag — which looks like Mullion being unreliable rather than like a
+conflict. Mullion detects this and says so, with a button to open PowerToys.
+
 ## The probe
 
 `tools/Mullion.Probe` exercises the engine without any UI in the way, which is
@@ -100,6 +122,7 @@ mullion-probe --watch-displays       log display-change messages as they arrive
 mullion-probe --inject Q             inject Win+Q at an already-running Mullion
 mullion-probe --snap S --delay 3     snap the foreground window
 mullion-probe --undo                 restore the last move
+mullion-probe --drag-test            log which apps report a drag, and the zone under the cursor
 ```
 
 ## The icon
@@ -116,7 +139,7 @@ src/Mullion.Core/               no OS calls; all the layout maths and hotkey mat
 src/Mullion.Platform.Windows/   every P/Invoke, and nothing else
 src/Mullion.App/                Avalonia UI, tray, wizard
 tools/Mullion.Probe/            diagnostic CLI
-tests/Mullion.Core.Tests/       125 tests, run on any OS
+tests/Mullion.Core.Tests/       132 tests, run on any OS
 ```
 
 `Mullion.Core` references no Windows or Avalonia assemblies. That boundary is
@@ -146,4 +169,4 @@ a self-contained job rather than a rewrite.
 
 ## Not yet built
 
-Named layout snapshots, per-app rules, and drag-to-snap.
+Named layout snapshots and per-app rules.

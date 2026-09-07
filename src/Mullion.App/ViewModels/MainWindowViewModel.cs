@@ -84,6 +84,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool HasConflicts => Conflicts.Count > 0;
 
     [ObservableProperty]
+    private bool _showDragConflictBanner;
+
+    [ObservableProperty]
+    private string _dragConflictDetail = string.Empty;
+
+    [ObservableProperty]
+    private string _dragConflictAction = "Turn off FancyZones";
+
+    [RelayCommand]
+    private void ResolveDragConflict() => _host.ResolveDragConflict();
+
+    [ObservableProperty]
     private string? _trayFailure;
 
     public bool HasTrayFailure => TrayFailure is not null;
@@ -125,6 +137,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsPaused = snapshot.Paused;
         LastAction = snapshot.LastAction;
         Conflicts = snapshot.Conflicts;
+        ShowDragConflictBanner = snapshot.DragConflict;
+        DragConflictDetail = snapshot.DragConflictDetail ?? string.Empty;
+        DragConflictAction = snapshot.DragConflictAction;
         IsElevated = snapshot.IsElevated;
         BlockedByWindow = snapshot.BlockedByWindow;
         SimulationName = snapshot.SimulationName;

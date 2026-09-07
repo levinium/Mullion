@@ -51,6 +51,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _allowSpanningUnions;
 
     [ObservableProperty]
+    private bool _dragToSnap;
+
+    /// <summary>"None" means always armed; the rest name a modifier to hold.</summary>
+    public IReadOnlyList<string> DragModifiers { get; } =
+        ["Shift", "Control", "Alt", "Win", "None"];
+
+    [ObservableProperty]
+    private string _selectedDragModifier = "Shift";
+
+    [ObservableProperty]
     private string _winKeySuppression = "DummyKey";
 
     [ObservableProperty]
@@ -139,6 +149,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         StartElevated = s.AutoStart is AutoStartMode.Elevated;
         ShowZoneFlash = s.ShowZoneFlash;
         AllowSpanningUnions = s.AllowSpanningUnions;
+        DragToSnap = s.DragToSnap;
+        SelectedDragModifier = DragModifiers.FirstOrDefault(
+            x => string.Equals(x, s.DragModifier, StringComparison.OrdinalIgnoreCase)) ?? "Shift";
         WinKeySuppression = s.WinKeySuppression;
         SelectedSuppression = SuppressionModes.FirstOrDefault(x => x.Id == s.WinKeySuppression)
                               ?? SuppressionModes[0];
@@ -169,6 +182,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowZoneFlashChanged(bool value)
     {
         if (!_loading) _host.SetShowZoneFlash(value);
+    }
+
+    partial void OnDragToSnapChanged(bool value)
+    {
+        if (!_loading) _host.SetDragToSnap(value, SelectedDragModifier);
+    }
+
+    partial void OnSelectedDragModifierChanged(string value)
+    {
+        if (!_loading) _host.SetDragToSnap(DragToSnap, value);
     }
 
     partial void OnAllowSpanningUnionsChanged(bool value)
@@ -310,7 +333,9 @@ public sealed class DesignSettingsHost : ISettingsHost
             new BindingEntry("Win+D", "Right", 1, 2),
         ],
         @"%APPDATA%\Mullion\config.json",
-        @"%LOCALAPPDATA%\Mullion\logs\mullion.log");
+        @"%LOCALAPPDATA%\Mullion\logs\mullion.log",
+        true,
+        "Shift");
 
     public string? SetAutoStart(AutoStartMode mode) => null;
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
@@ -319,6 +344,8 @@ public sealed class DesignSettingsHost : ISettingsHost
     public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) => new();
     public void SetShowZoneFlash(bool value) { }
     public void SetAllowSpanningUnions(bool value) { }
+
+    public void SetDragToSnap(bool enabled, string modifier) { }
     public void SetWinKeySuppression(string value) { }
     public void SetKeySurface(string surfaceId) { }
     public void RestartElevated() { }
