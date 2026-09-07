@@ -1,3 +1,4 @@
+using Mullion.Core.Model;
 using Mullion.Core.Hotkeys;
 
 namespace Mullion.Core.Layout;
@@ -47,6 +48,40 @@ public static class LayoutEditor
 
         return new RebindOutcome(true, updated, message);
     }
+
+
+    /// <summary>
+    /// Whether two layouts put the same keys on the same zones.
+    /// <para>
+    /// Used to tell whether any key has been moved off where the allocator would
+    /// have put it, by generating the layout again and comparing. That beats
+    /// keeping a flag: a flag has to be set everywhere a key can move and
+    /// cleared everywhere one can move back, and the first path that forgets
+    /// leaves a "reset" button lying about whether it has anything to do.
+    /// </para>
+    /// <para>
+    /// Zones are matched by the space they cover, because regenerating gives
+    /// every zone a fresh identity. The shapes come out the same either way -
+    /// only which key sits on which zone can differ.
+    /// </para>
+    /// </summary>
+    public static bool SameKeyAssignments(LayoutResult a, LayoutResult b) =>
+        Signature(a).SequenceEqual(Signature(b));
+
+    private static IEnumerable<(string Shape, int Row, int Col)> Signature(LayoutResult layout) =>
+        layout.Zones
+            .Select(z => (Shape: ShapeOf(z), z.Position.Row, z.Position.Col))
+            .OrderBy(z => z.Shape, StringComparer.Ordinal)
+            .ThenBy(z => z.Row)
+            .ThenBy(z => z.Col);
+
+    private static string ShapeOf(Zone zone) =>
+        $"{zone.Kind}|" + string.Join(
+            ';',
+            zone.Parts
+                .Select(p =>
+                    $"{p.DisplayKey}:{p.Area.X:0.####},{p.Area.Y:0.####},{p.Area.W:0.####},{p.Area.H:0.####}")
+                .OrderBy(s => s, StringComparer.Ordinal));
 
     /// <summary>Find the grid cell a scan code corresponds to on this surface.</summary>
     public static GridPos? PositionOfScanCode(KeySurface surface, ushort scanCode)

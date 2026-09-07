@@ -1,4 +1,5 @@
 using Mullion.Core.Hotkeys;
+using Mullion.Core.Simulation;
 using Mullion.Core.Layout;
 using Shouldly;
 using Xunit;
@@ -110,5 +111,64 @@ public class LayoutEditorTests
         // 0x10 is the home-of-Q position: 'Q' on QWERTY, 'A' on AZERTY.
         LayoutEditor.PositionOfScanCode(Left, 0x10).ShouldBe(new GridPos(0, 0));
         LayoutEditor.PositionOfScanCode(KeySurface.Numpad, 0x4C).ShouldBe(new GridPos(1, 1));
+    }
+
+    [Fact]
+    public void AFreshlyBuiltLayoutMatchesItself()
+    {
+        // What the greyed-out "reset keys" button turns on: nothing has moved,
+        // so there is nothing to put back.
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+
+        var a = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var b = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+
+        LayoutEditor.SameKeyAssignments(a, b).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void MovingAKeyIsNoticed()
+    {
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+
+        var original = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = original.Surface.HomeRow;
+
+        var moved = LayoutEditor.Rebind(
+            original, new GridPos(home, 0), new GridPos(home, 4));
+
+        moved.Success.ShouldBeTrue();
+        LayoutEditor.SameKeyAssignments(original, moved.Layout).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void MovingAKeyBackIsNoticedToo()
+    {
+        // The half that a flag gets wrong: it is set when a key moves and then
+        // has to be cleared again when the layout comes back to where it began.
+        var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
+
+        var original = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var home = original.Surface.HomeRow;
+
+        var moved = LayoutEditor.Rebind(original, new GridPos(home, 0), new GridPos(home, 4));
+        var back = LayoutEditor.Rebind(moved.Layout, new GridPos(home, 4), new GridPos(home, 0));
+
+        LayoutEditor.SameKeyAssignments(original, back.Layout).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ZonesAreMatchedByShapeNotByIdentity()
+    {
+        // Regenerating gives every zone a fresh Guid, so comparing identities
+        // would report every layout as customised and leave the reset button
+        // permanently lit.
+        var displays = SimulatedTopologies.Find("three-across")!.Displays;
+
+        var a = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+        var b = LayoutBuilder.Build(displays, KeySurface.LeftHandBlock);
+
+        a.Zones.Select(z => z.Id).ShouldNotBe(b.Zones.Select(z => z.Id));
+        LayoutEditor.SameKeyAssignments(a, b).ShouldBeTrue();
     }
 }

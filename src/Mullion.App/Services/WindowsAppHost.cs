@@ -770,6 +770,37 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Whether any key has been moved off where the allocator would have put it.
+    /// <para>
+    /// Answered by generating the layout again and comparing, rather than by
+    /// keeping a flag: a flag has to be set everywhere a key can move and
+    /// cleared everywhere one can move back, and the first path that forgets
+    /// leaves the button lying about whether there is anything to undo.
+    /// </para>
+    /// <para>
+    /// Zones are matched by the geometry they cover, since regenerating gives
+    /// every zone a fresh identity. The shapes are the same either way - only
+    /// which key sits on which zone can differ.
+    /// </para>
+    /// </summary>
+    public bool HasCustomKeys
+    {
+        get
+        {
+            if (_layout is null || _displays.Count == 0) return false;
+
+            var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout.Surface.Id)
+                          ?? KeySurface.LeftHandBlock;
+
+            var fresh = LayoutBuilder.Build(
+                _displays, surface, _config.General.Shape.ToTuning(),
+                _config.General.AllowSpanningUnions, _config.Overrides);
+
+            return !LayoutEditor.SameKeyAssignments(_layout, fresh);
+        }
+    }
+
     public bool HasCustomZones => _config.Overrides.Count > 0;
 
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights)

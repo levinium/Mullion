@@ -62,6 +62,8 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
 
     public bool CanResetZones => IsEditing && _host.HasCustomZones;
 
+    public bool CanResetKeys => IsEditing && _host.HasCustomKeys;
+
     /// <summary>
     /// The pencil, shown where editing is on offer and not already under way.
     /// </summary>
@@ -141,7 +143,7 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         Refresh();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanResetKeys))]
     private void ResetKeys()
     {
         _host.ResetLayout();
@@ -170,11 +172,13 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSessionButtons));
         OnPropertyChanged(nameof(CanRedo));
         OnPropertyChanged(nameof(CanResetZones));
+        OnPropertyChanged(nameof(CanResetKeys));
         OnPropertyChanged(nameof(SnapSplits));
 
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
         ResetZonesCommand.NotifyCanExecuteChanged();
+        ResetKeysCommand.NotifyCanExecuteChanged();
     }
 
     private void ApplyWeights(string slot, IReadOnlyList<double> weights)

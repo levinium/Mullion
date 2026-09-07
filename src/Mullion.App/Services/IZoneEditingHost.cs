@@ -42,8 +42,11 @@ public interface IZoneEditingHost
     /// <summary>Put everything back to where the session started.</summary>
     void CancelZoneEdit();
 
-    /// <summary>Whether anything has been customised, so a reset has a job to do.</summary>
+    /// <summary>Whether any zone shape has been customised, so a reset has a job to do.</summary>
     bool HasCustomZones { get; }
+
+    /// <summary>The same question for the keys, which reset separately.</summary>
+    bool HasCustomKeys { get; }
 
     /// <summary>Discard every custom split and zone count. Keys are left alone.</summary>
     void ResetAllOverrides();

@@ -85,6 +85,7 @@ public sealed class DesignAppHost : IAppHost
     public void SetDisplayColumns(string slot, int columns) { }
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights) { }
     public bool HasCustomZones => false;
+    public bool HasCustomKeys => false;
     public void BeginZoneEdit() { }
     public void CommitZoneEdit() { }
     public void CancelZoneEdit() { }

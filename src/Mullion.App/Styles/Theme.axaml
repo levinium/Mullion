@@ -571,4 +571,14 @@
     <Setter Property="TextAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
+
+  <!-- A message from the editor: an outcome, or what it is waiting for. Given a
+       surface of its own so a sentence can be read rather than trimmed. -->
+  <Style Selector="Border.editorMessage">
+    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMid}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
 </Styles>

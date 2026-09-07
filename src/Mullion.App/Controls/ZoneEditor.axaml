@@ -9,7 +9,7 @@
        above it, because anything below it comes straight out of the diagram's
        own height - and edit mode was shrinking the very picture it had just
        invited you to work on. -->
-  <Grid RowDefinitions="Auto,*" MinHeight="240">
+  <Grid RowDefinitions="Auto,Auto,*" MinHeight="240">
 
     <!-- The controls sit with the picture they change, not on another card or
          another window: Undo a page away from the thing it undoes reads as
@@ -18,18 +18,23 @@
          Shown whenever it has anything on it. The settings page is always
          editing and offers no pencil, so keying the whole row off the pencil
          took its Undo away with it. -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,2">
+    <!-- On its own line, wrapping, and only there when there is something to
+         say. Sharing the toolbar row with seven icons left it a sliver, and the
+         one message that most needs reading - which keys are allowed - came out
+         as "That key is not p... it." Height is only spent while a message is
+         up, so the diagram keeps it the rest of the time. -->
+    <Border Grid.Row="0" Classes="editorMessage" Margin="0,0,0,6"
+            IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Classes="body" TextWrapping="Wrap" Text="{Binding Message}" />
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,2">
       <Grid.IsVisible>
         <MultiBinding Converter="{x:Static BoolConverters.Or}">
           <Binding Path="CanEdit" />
           <Binding Path="IsEditing" />
         </MultiBinding>
       </Grid.IsVisible>
-
-      <TextBlock Grid.Column="0" Classes="body"
-                 VerticalAlignment="Center" Margin="0,0,12,0"
-                 TextTrimming="CharacterEllipsis"
-                 Text="{Binding Message}" />
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
                   VerticalAlignment="Center">
@@ -101,7 +106,7 @@
       </StackPanel>
     </Grid>
 
-    <ctl:MonitorDiagram Grid.Row="1" DataContext="{Binding Diagram}"
+    <ctl:MonitorDiagram Grid.Row="2" DataContext="{Binding Diagram}"
                         ModifierPrefix="{Binding ModifierPrefix}"
                         x:CompileBindings="False" />
   </Grid>
