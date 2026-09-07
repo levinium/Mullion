@@ -707,6 +707,22 @@
     <Setter Property="BorderThickness" Value="2" />
   </Style>
 
+  <!-- Text goes white on the green, both here and on the whole-zone chip. The
+       tier chip normally sits on a dark plate and its text is deliberately dim;
+       left dim on a bright green fill it is barely readable, and the one chip
+       you most need to read is the one you have just picked. -->
+  <Style Selector="Border.keyChip.tierChip.capturing TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <Style Selector="Border.keyChip.tierChip.capturing TextBlock.chipModifier">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <Style Selector="Button.zoneTileButton.capturing Border.keyChip.primaryChip TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
   <!-- A half waiting for a key, marked on its chip as well as its outline.
        The chip is decoration now, so it carries the state directly rather than
        through a button wrapped round it. -->
