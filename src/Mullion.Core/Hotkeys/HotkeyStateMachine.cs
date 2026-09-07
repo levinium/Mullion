@@ -99,6 +99,17 @@ public sealed class HotkeyStateMachine(
 
     public event Action<ChordModifiers, ushort>? ChordCaptured;
 
+    /// <summary>
+    /// Escape ended the capture without a chord.
+    /// <para>
+    /// Announced rather than handled silently: the key has to be swallowed
+    /// here, because a capture is armed and the hook sees it first, so nothing
+    /// above finds out on its own. Without this the machine stopped listening
+    /// while the UI went on saying it was waiting for a key.
+    /// </para>
+    /// </summary>
+    public event Action? CaptureCancelled;
+
     public void SetBindings(
         IReadOnlyDictionary<(ChordModifiers, ushort), HotkeyAction> bindings,
         IReadOnlyDictionary<(ChordModifiers, ushort), IReadOnlyList<HotkeyAction>>? rings = null)
@@ -203,7 +214,12 @@ public sealed class HotkeyStateMachine(
         {
             if (!e.IsKeyUp)
             {
-                if (e.VirtualKey == VkEscape) { _capturing = false; return new HookDecision(HookAction.Swallow); }
+                if (e.VirtualKey == VkEscape)
+                {
+                    _capturing = false;
+                    CaptureCancelled?.Invoke();
+                    return new HookDecision(HookAction.Swallow);
+                }
                 ChordCaptured?.Invoke(CurrentModifiers, e.ScanCode);
             }
 

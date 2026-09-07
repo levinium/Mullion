@@ -259,4 +259,44 @@ public class HotkeyStateMachineTests
         const ushort VkQ = 0x51;   // what AZERTY reports for the same physical key
         sm.Process(new KeyEvent(ScanA, VkQ, false, false, false, 0)).Fire!.Id.ShouldBe("zone-a");
     }
+
+    [Fact]
+    public void EscapeDuringCaptureCancelsAndSaysSo()
+    {
+        // The machine already stopped capturing on Escape, but silently - so the
+        // hook swallowed the key, the capture ended, and the UI went on saying
+        // it was waiting for one. Nothing above could find out on its own,
+        // because a capture is armed and the hook sees the key first.
+        var machine = Machine();
+
+        var captured = 0;
+        var cancelled = 0;
+
+        machine.ChordCaptured += (_, _) => captured++;
+        machine.CaptureCancelled += () => cancelled++;
+
+        machine.BeginCapture();
+
+        var decision = machine.Process(new KeyEvent(0x01, 0x1B, false, false, false, 0));
+
+        cancelled.ShouldBe(1);
+        captured.ShouldBe(0, "Escape is not a chord to bind");
+        decision.Action.ShouldBe(HookAction.Swallow, "the key must not reach whatever has focus");
+    }
+
+    [Fact]
+    public void EscapeAfterCaptureIsLeftAlone()
+    {
+        // Outside a capture, Escape is just a key and belongs to whatever has
+        // focus - swallowing it would break every dialog on the machine.
+        var machine = Machine();
+
+        var cancelled = 0;
+        machine.CaptureCancelled += () => cancelled++;
+
+        var decision = machine.Process(new KeyEvent(0x01, 0x1B, false, false, false, 0));
+
+        cancelled.ShouldBe(0);
+        decision.Action.ShouldBe(HookAction.PassThrough);
+    }
 }

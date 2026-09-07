@@ -227,7 +227,10 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         _host.BeginRebind(position.Row, position.Col, result =>
         {
             SetCapturing(null);
-            Message = result.Message;
+
+            // Backing out says nothing: the message area is for what happened,
+            // and what happened is that the user changed their mind.
+            Message = result.Cancelled ? null : result.Message;
 
             if (result.Success) Refresh();
         });

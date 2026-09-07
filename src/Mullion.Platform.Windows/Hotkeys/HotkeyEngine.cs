@@ -194,13 +194,16 @@ public sealed class HotkeyEngine : IDisposable
     public event Action<ChordModifiers, ushort>? ChordCaptured;
 
     private Action<ChordModifiers, ushort>? _captureHandler;
+    private Action? _cancelHandler;
 
-    public void BeginCapture(Action<ChordModifiers, ushort> onCaptured)
+    public void BeginCapture(Action<ChordModifiers, ushort> onCaptured, Action? onCancelled = null)
     {
         EndCapture();
 
         _captureHandler = onCaptured;
+        _cancelHandler = onCancelled;
         _machine.ChordCaptured += OnChordCaptured;
+        _machine.CaptureCancelled += OnCaptureCancelled;
         _machine.BeginCapture();
     }
 
@@ -208,7 +211,18 @@ public sealed class HotkeyEngine : IDisposable
     {
         _machine.EndCapture();
         _machine.ChordCaptured -= OnChordCaptured;
+        _machine.CaptureCancelled -= OnCaptureCancelled;
         _captureHandler = null;
+        _cancelHandler = null;
+    }
+
+    private void OnCaptureCancelled()
+    {
+        var handler = _cancelHandler;
+
+        EndCapture();
+
+        handler?.Invoke();
     }
 
     private void OnChordCaptured(ChordModifiers mods, ushort scan)

@@ -948,7 +948,15 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         var surface = _layout.Surface;
 
         _engine.BeginCapture((mods, scan) => Dispatcher.UIThread.Post(() =>
-            completed(ApplyRebind(row, col, mods, scan, surface))));
+        {
+            completed(ApplyRebind(row, col, mods, scan, surface));
+        }),
+
+            // Escape. It never reaches the UI - a capture is armed, so the hook
+            // takes it first and swallows it - which is why the state machine
+            // has to say so rather than the window listening for a key.
+            () => Dispatcher.UIThread.Post(
+                () => completed(new RebindResult(false, string.Empty, Cancelled: true))));
     }
 
     public void CancelRebind() => _engine?.EndCapture();

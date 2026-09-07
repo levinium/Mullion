@@ -143,10 +143,18 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     /// height is available and the name fits almost immediately.
     /// </para>
     /// </summary>
-    public double NameNeedsHeight => HasTiers ? 112 : 44;
+    public double NameNeedsHeight => (HasTiers ? 112 : 44) + BlockChrome;
 
     /// <summary>As <see cref="NameNeedsHeight"/>, with a line for the size too.</summary>
-    public double SizeNeedsHeight => HasTiers ? 142 : 62;
+    public double SizeNeedsHeight => (HasTiers ? 142 : 62) + BlockChrome;
+
+    /// <summary>
+    /// The padding and border of the outline drawn round the chip, name and
+    /// size. It is part of what has to fit, so a tile just tall enough for the
+    /// text alone is not tall enough once the box is round it - which is how
+    /// the name ended up hanging out of the bottom of a short tile.
+    /// </summary>
+    private const double BlockChrome = 10;
 
     /// <summary>
     /// How tall this zone's key chip may grow, in device pixels.

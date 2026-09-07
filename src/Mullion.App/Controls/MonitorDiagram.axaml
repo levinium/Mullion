@@ -559,11 +559,17 @@
                            Sized to its content by VerticalAlignment, so it
                            claims only the middle band and the halves keep the
                            rest. -->
-                      <Grid RowDefinitions="Auto,Auto,Auto"
-                            ColumnDefinitions="*"
-                            VerticalAlignment="Center"
-                            Background="Transparent"
-                            Margin="6">
+                      <!-- Hugs the text rather than the tile. Centered, it is
+                           arranged at its own desired width - so it needs a cap
+                           too, or on a narrow monitor the name inside it would
+                           push the box out past the zone it belongs to. -->
+                      <Border Classes="wholeZoneBlock"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"
+                              MaxWidth="{Binding $parent[Button].Bounds.Width,
+                                         Converter={x:Static ctl:InsetConverter.Instance},
+                                         ConverterParameter=10;70}">
+                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*">
 
                         <!-- Wraps first, shrinks second, and never drops the
                              modifier: a chord without it is not the hotkey it
@@ -659,8 +665,9 @@
                                                  ConverterParameter=95}"
                                      Margin="0,1,0,0"
                                      TextAlignment="Center" />
-                        </Panel>
-                      </Grid>
+                          </Panel>
+                        </Grid>
+                      </Border>
                     </Grid>
                   </Button>
                 </DataTemplate>

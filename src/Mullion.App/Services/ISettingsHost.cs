@@ -9,7 +9,13 @@ namespace Mullion.App.Services;
 /// <param name="Row">Grid position, so a rebind knows what it is moving.</param>
 public sealed record BindingEntry(string Key, string Zone, int Row, int Col);
 
-public sealed record RebindResult(bool Success, string Message);
+/// <param name="Cancelled">
+/// The capture was called off rather than failing - Escape, or clicking the
+/// same zone again. Distinct from failure because there is nothing to report:
+/// leaving "that key is not on the surface" on screen after someone backed
+/// out would answer a question they stopped asking.
+/// </param>
+public sealed record RebindResult(bool Success, string Message, bool Cancelled = false);
 
 /// <summary>One display's split, as the settings UI needs to show and change it.</summary>
 /// <param name="Slot">Identifies the place on the desk; see DisplaySlot.</param>

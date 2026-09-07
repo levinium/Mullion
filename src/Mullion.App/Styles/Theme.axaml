@@ -14,6 +14,7 @@
           <SolidColorBrush x:Key="PanelBorder" Color="#333A45" />
           <SolidColorBrush x:Key="Accent" Color="#4C8BF5" />
           <SolidColorBrush x:Key="AccentSoft" Color="#204C8BF5" />
+          <SolidColorBrush x:Key="AccentFaint" Color="#0F4C8BF5" />
           <SolidColorBrush x:Key="AccentMid" Color="#3D4C8BF5" />
           <SolidColorBrush x:Key="Ink" Color="#E8ECF3" />
           <SolidColorBrush x:Key="InkDim" Color="#98A2B3" />
@@ -38,6 +39,7 @@
           <SolidColorBrush x:Key="PanelBorder" Color="#CFD6E0" />
           <SolidColorBrush x:Key="Accent" Color="#2563EB" />
           <SolidColorBrush x:Key="AccentSoft" Color="#1F2563EB" />
+          <SolidColorBrush x:Key="AccentFaint" Color="#0F2563EB" />
           <SolidColorBrush x:Key="AccentMid" Color="#3A2563EB" />
           <SolidColorBrush x:Key="Ink" Color="#131720" />
           <SolidColorBrush x:Key="InkDim" Color="#5A6472" />
@@ -180,9 +182,11 @@
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
-  <Style Selector="Button.zoneTileButton.interactive:pointerover">
-    <Setter Property="Background" Value="{DynamicResource AccentMid}" />
-  </Style>
+  <!-- No fill change on hover. This washed the whole tile whenever the pointer
+       was anywhere inside it - including over one of its halves, so the half
+       lit up and the tile lit up harder, and the stronger signal was the wrong
+       one. The outline says what is being pointed at; a fill that strong just
+       buries the chips and sizes being read to decide. -->
 
   <!-- A zone crossing a physical bezel is unusual enough to look different -->
   <Style Selector="Button.zoneTileButton.spanning">
@@ -253,6 +257,7 @@
   </Style>
 
   <!-- The home-row key reads as the column's main target -->
+
   <Style Selector="Border.keyChip.primaryChip">
     <Setter Property="Background" Value="{DynamicResource Accent}" />
     <Setter Property="Padding" Value="10,3" />
@@ -635,9 +640,9 @@
         <Panel Background="Transparent">
           <Rectangle Classes="subZone" />
           <Border Name="Glow" Opacity="0" CornerRadius="3"
-                  Background="{DynamicResource AccentSoft}"
+                  Background="{DynamicResource AccentFaint}"
                   BorderBrush="{DynamicResource Accent}"
-                  BorderThickness="1" />
+                  BorderThickness="2" />
         </Panel>
       </ControlTemplate>
     </Setter>
@@ -670,11 +675,52 @@
   <!-- The whole column, lit the same way so the two read as one idea at two
        scales rather than as two different kinds of highlight. -->
   <Style Selector="Border.zoneHighlight">
-    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    <Setter Property="Background" Value="{DynamicResource AccentFaint}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="2" />
     <Setter Property="CornerRadius" Value="4" />
     <Setter Property="Margin" Value="2" />
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
+
+  <!-- The whole zone, as its own block
+       The chip, the name and the size together ARE the zone: an outline round
+       them says so, and says they can be pointed at, which was the one thing
+       the tile did not show. Quiet at rest - it is inside a zone that already
+       has a border of its own, and two boxes of equal weight read as two zones. -->
+  <Style Selector="Border.wholeZoneBlock">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="8,4" />
+  </Style>
+
+  <!-- Picked up by the pointer, and by the outline the tile draws round itself
+       at the same moment: the block is the handle, the tile is what it moves. -->
+  <Style Selector="Button.zoneTileButton.interactive Border.wholeZoneBlock">
+    <Setter Property="BorderBrush" Value="{DynamicResource InkFaint}" />
+  </Style>
+
+  <Style Selector="Border.wholeZoneBlock">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.09" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <!-- Waiting for a key
+       The chip goes green with the region around it. It was left accent-blue,
+       which is its ordinary colour, so picking a whole zone looked like nothing
+       had happened - while picking one of its halves turned that chip green.
+       One colour means "this is the one you are binding", wherever it appears.
+
+       Declared late on purpose: styles of equal weight are settled by order,
+       and the plain chip style comes after this one in the file. -->
+  <Style Selector="Button.zoneTileButton.capturing Border.keyChip.primaryChip">
+    <Setter Property="Background" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
 </Styles>
