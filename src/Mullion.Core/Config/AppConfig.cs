@@ -48,6 +48,9 @@ public sealed record GeneralSettings
     public string WinKeySuppression { get; init; } = nameof(Hotkeys.WinKeySuppression.DummyKey);
     public bool IgnoreInjectedInput { get; init; }
     public bool AllowSpanningUnions { get; init; } = true;
+    /// <summary>Modifier every zone hotkey is taken with, e.g. "Win" or "Ctrl+Alt".</summary>
+    public string HotkeyModifier { get; init; } = Hotkeys.ModifierChoice.Default;
+
     public bool DragToSnap { get; init; } = true;
 
     /// <summary>Go straight to the tray even when launched by hand, not just at sign-in.</summary>

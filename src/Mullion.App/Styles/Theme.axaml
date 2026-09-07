@@ -217,6 +217,37 @@
     <Setter Property="Padding" Value="8,2" />
   </Style>
 
+  <!-- Dimmer and smaller than the key: the modifier is the same on every chip,
+       so it is context rather than information, and the letter is what the eye
+       needs to find. -->
+  <Style Selector="Border.keyChip TextBlock.chipModifier">
+    <Setter Property="Opacity" Value="0.65" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0" />
+
+    <!-- The key chips letter-space their text, which after a "+" reads as a
+         space between the modifier and the key rather than as tracking. -->
+    <Setter Property="LetterSpacing" Value="0" />
+  </Style>
+
+  <Style Selector="Border.keyChip > StackPanel > TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    <Setter Property="LetterSpacing" Value="0.6" />
+  </Style>
+
+  <Style Selector="Border.keyChip.primaryChip > StackPanel > TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="Border.keyChip.tierChip > StackPanel > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
+  </Style>
+
   <Style Selector="Border.keyChip > TextBlock">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="SemiBold" />

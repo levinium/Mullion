@@ -111,7 +111,7 @@
       </StackPanel>
 
       <Border Grid.Row="1" Classes="card">
-        <ctl:MonitorDiagram DataContext="{Binding Diagram}" />
+        <ctl:MonitorDiagram DataContext="{Binding Diagram}" ModifierPrefix="{Binding ModifierPrefix}" x:CompileBindings="False" />
       </Border>
     </Grid>
 

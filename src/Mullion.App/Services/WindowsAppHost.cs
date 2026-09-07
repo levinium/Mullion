@@ -55,6 +55,23 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     public bool StartInTray => _config.General.StartInTray;
 
+    /// <summary>The modifier every zone hotkey is taken with.</summary>
+    private ChordModifiers HotkeyModifier => ModifierChoice.Parse(_config.General.HotkeyModifier);
+
+    private string ModifierPrefix => $"{ModifierChoice.Format(HotkeyModifier)}+";
+
+    public void SetHotkeyModifier(string value)
+    {
+        UpdateGeneral(g => g with { HotkeyModifier = value });
+
+        // Applied live, and the conflict list is rebuilt with it: which other
+        // programs collide depends entirely on which modifier is in play.
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
+
+        _conflicts = DetectConflicts();
+        StateChanged?.Invoke();
+    }
+
     private DisplayChangeWatcher? _watcher;
     private ForegroundWatcher? _foreground;
     private string _lastFingerprint = string.Empty;
@@ -329,7 +346,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             catch (IOException) { /* a failed save must not take the app down */ }
         }
 
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
         _conflicts = DetectConflicts();
 
         StateChanged?.Invoke();
@@ -340,7 +357,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         if (_layout is null) return [];
 
         return [.. HookConflictDetector
-            .Detect(_layout.Zones.Select(z => _layout.Surface.ScanCodeAt(z.Position)), ChordModifiers.Win)
+            .Detect(_layout.Zones.Select(z => _layout.Surface.ScanCodeAt(z.Position)), HotkeyModifier)
             .Select(c => new ConflictViewModel
             {
                 Severity = c.Severity.ToString(),
@@ -362,7 +379,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // record of what did fire there is no way to tell them apart after
         // the fact. The zone name and outcome only - never the key pressed.
         var key = _layout is null ? "?" : _layout.Surface.FallbackLabelAt(fired.Position);
-        _log.Info($"Win+{key} -> {fired.ZoneName}: {fired.Result.Outcome} {fired.Result.Achieved}" +
+        _log.Info($"{ModifierChoice.Format(HotkeyModifier)}+{key} -> {fired.ZoneName}: {fired.Result.Outcome} {fired.Result.Achieved}" +
                   (fired.Result.Attempts > 1 ? $" after {fired.Result.Attempts} attempts" : string.Empty));
 
         // Only flash on a successful placement: flashing a zone the window did
@@ -405,7 +422,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         RefreshDragConflict();
 
         return new AppSnapshot(
-            MonitorDiagramViewModel.Build(_displays, _layout),
+            MonitorDiagramViewModel.Build(_displays, _layout, modifierPrefix: ModifierPrefix),
             summary,
             hookStatus,
             privilege,
@@ -445,11 +462,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             Rationale = c.Rationale,
             ZoneCount = c.Layout.Zones.Count,
             KeySummary = SummariseKeys(c.Layout),
-            Preview = MonitorDiagramViewModel.Build(_displays, c.Layout),
+            Preview = MonitorDiagramViewModel.Build(_displays, c.Layout, modifierPrefix: ModifierPrefix),
         }).ToList();
 
         return new WizardSnapshot(
-            MonitorDiagramViewModel.Build(_displays, null),
+            MonitorDiagramViewModel.Build(_displays, null, modifierPrefix: ModifierPrefix),
             _displays.Count == 0
                 ? "No displays detected"
                 : $"{_displays.Count} display{(_displays.Count == 1 ? "" : "s")} · " +
@@ -469,7 +486,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _committedLayout ??= _layout;
         _layout = candidate.Layout;
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
 
         StateChanged?.Invoke();
     }
@@ -481,7 +498,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _layout = candidate.Layout;
         _committedLayout = null;
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
 
         var profile = ProfileResolver.CreateProfile(_displays, _layout);
 
@@ -508,7 +525,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         {
             _layout = _committedLayout;
             _committedLayout = null;
-            if (_layout is not null) _engine?.Apply(_layout, _displays);
+            if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
         }
 
         WizardCloseRequested?.Invoke();
@@ -529,7 +546,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             : _layout.Zones
                 .OrderBy(z => z.Position.Row).ThenBy(z => z.Position.Col)
                 .Select(z => new BindingEntry(
-                    $"Win+{_layout.Surface.FallbackLabelAt(z.Position)}",
+                    $"{ModifierChoice.Format(HotkeyModifier)}+{_layout.Surface.FallbackLabelAt(z.Position)}",
                     z.Name,
                     z.Position.Row,
                     z.Position.Col))
@@ -549,7 +566,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _log.Path_,
             _config.General.DragToSnap,
             _config.General.DragModifier,
-            _config.General.StartInTray);
+            _config.General.StartInTray,
+            ModifierChoice.Format(HotkeyModifier));
     }
 
     public void OpenLogFolder() => OpenFolder(Path.GetDirectoryName(_log.Path_));
@@ -612,7 +630,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _layout = LayoutBuilder.Build(
             _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
 
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }
@@ -660,8 +678,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         if (_layout is null) return new RebindResult(false, "No layout.");
 
-        if (!mods.HasFlag(ChordModifiers.Win))
-            return new RebindResult(false, "Hold Win while pressing the key you want.");
+        if (!mods.HasFlag(HotkeyModifier))
+        {
+            return new RebindResult(false,
+                $"Hold {ModifierChoice.Format(HotkeyModifier)} while pressing the key you want.");
+        }
 
         var target = LayoutEditor.PositionOfScanCode(surface, scan);
         if (target is null)
@@ -675,7 +696,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         if (!outcome.Success) return new RebindResult(false, outcome.Message);
 
         _layout = outcome.Layout;
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
         StateChanged?.Invoke();
 
@@ -683,7 +704,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     }
 
     public MonitorDiagramViewModel BuildInteractiveDiagram(Action<GridPos> onZoneActivated) =>
-        MonitorDiagramViewModel.Build(_displays, _layout, onZoneActivated);
+        MonitorDiagramViewModel.Build(_displays, _layout, onZoneActivated, ModifierPrefix);
 
     public void ResetLayout()
     {
@@ -694,7 +715,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _layout = LayoutBuilder.Build(
             _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
 
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }
@@ -708,7 +729,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _layout = LayoutBuilder.Build(
             _displays, surface, _config.General.Shape.ToTuning(), _config.General.AllowSpanningUnions);
 
-        _engine?.Apply(_layout, _displays);
+        _engine?.Apply(_layout, _displays, HotkeyModifier);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }

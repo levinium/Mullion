@@ -31,6 +31,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isElevated;
 
+
     [ObservableProperty]
     private string? _simulationName;
 
@@ -141,6 +142,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DragConflictDetail = snapshot.DragConflictDetail ?? string.Empty;
         DragConflictAction = snapshot.DragConflictAction;
         IsElevated = snapshot.IsElevated;
+
         BlockedByWindow = snapshot.BlockedByWindow;
         SimulationName = snapshot.SimulationName;
 

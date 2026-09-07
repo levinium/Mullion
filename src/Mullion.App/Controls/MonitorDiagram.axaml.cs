@@ -47,5 +47,18 @@ public partial class MonitorDiagram : UserControl
     private static readonly DirectProperty<MonitorDiagram, Thickness> TierTopMarginProperty =
         AvaloniaProperty.RegisterDirect<MonitorDiagram, Thickness>(nameof(TierTopMargin), o => o.TierTopMargin);
 
+    /// <summary>
+    /// Shown before each key, so a chip reads as the whole chord rather than a
+    /// bare letter nobody can act on without being told the modifier separately.
+    /// </summary>
+    public static readonly StyledProperty<string> ModifierPrefixProperty =
+        AvaloniaProperty.Register<MonitorDiagram, string>(nameof(ModifierPrefix), "Win+");
+
+    public string ModifierPrefix
+    {
+        get => GetValue(ModifierPrefixProperty);
+        set => SetValue(ModifierPrefixProperty, value);
+    }
+
     public MonitorDiagram() => AvaloniaXamlLoader.Load(this);
 }

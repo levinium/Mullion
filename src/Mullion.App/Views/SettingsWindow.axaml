@@ -92,6 +92,12 @@
                     HorizontalAlignment="Stretch" />
 
           <TextBlock Classes="body" Margin="0,6,0,0"
+                     Text="Modifier for every zone hotkey. Win is the default, and the reason Mullion installs a keyboard hook at all — Windows will not let an app claim Win+letter any other way." />
+          <ComboBox ItemsSource="{Binding HotkeyModifiers}"
+                    SelectedItem="{Binding SelectedHotkeyModifier}"
+                    HorizontalAlignment="Stretch" />
+
+          <TextBlock Classes="body" Margin="0,6,0,0"
                      Text="Windows key handling — how Mullion stops the Start menu opening when it takes a Win shortcut. Change this only if the Start menu appears when it should not." />
           <ComboBox ItemsSource="{Binding SuppressionModes}"
                     SelectedItem="{Binding SelectedSuppression}"
@@ -124,7 +130,7 @@
           <!-- The picture is the control: click a zone to rebind it, rather
                than hunting for the matching row in a table below. -->
           <Border Classes="card" Height="230" Padding="10">
-            <ctl:MonitorDiagram DataContext="{Binding Diagram}" />
+            <ctl:MonitorDiagram DataContext="{Binding Diagram}" ModifierPrefix="{Binding ModifierPrefix}" x:CompileBindings="False" />
           </Border>
 
           <TextBlock Classes="body"

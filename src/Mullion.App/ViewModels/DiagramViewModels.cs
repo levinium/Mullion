@@ -222,6 +222,15 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<SpanMeasureViewModel> _spans = [];
 
+    /// <summary>
+    /// Shown before every key, e.g. "Win+". It lives here rather than on the
+    /// window so the control can bind it from its own DataContext: the diagram
+    /// is handed to the control AS the DataContext, so anything bound beside it
+    /// would resolve against the diagram anyway.
+    /// </summary>
+    [ObservableProperty]
+    private string _modifierPrefix = "Win+";
+
     /// <summary>Everything the panel places, monitors and span measures alike.</summary>
     public IEnumerable<DiagramNodeViewModel> Nodes => Displays.Cast<DiagramNodeViewModel>().Concat(Spans);
 
@@ -233,9 +242,10 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
     public static MonitorDiagramViewModel Build(
         IReadOnlyList<DisplayInfo> displays,
         LayoutResult? layout = null,
-        Action<GridPos>? onZoneActivated = null)
+        Action<GridPos>? onZoneActivated = null,
+        string modifierPrefix = "Win+")
     {
-        var vm = new MonitorDiagramViewModel();
+        var vm = new MonitorDiagramViewModel { ModifierPrefix = modifierPrefix };
         if (displays.Count == 0) return vm;
 
         var desk = PxRect.Union(displays.Select(d => d.Bounds));

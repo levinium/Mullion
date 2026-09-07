@@ -72,7 +72,11 @@
                         HorizontalAlignment="Center" Margin="0,0,0,10"
                         IsVisible="{Binding HasUpper}">
               <Border Classes="keyChip tierChip">
-                <TextBlock Text="{Binding UpperKey}" />
+                <StackPanel Orientation="Horizontal">
+                          <TextBlock Classes="chipModifier"
+                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                          <TextBlock Text="{Binding UpperKey}" />
+                        </StackPanel>
               </Border>
               <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
@@ -94,7 +98,11 @@
                    raised so it is centered on the two together. -->
               <Border Grid.Column="0" Classes="keyChip primaryChip spanChip"
                       HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock Text="{Binding KeyLabel}" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="chipModifier"
+                               Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                    <TextBlock Text="{Binding KeyLabel}" />
+                  </StackPanel>
               </Border>
 
               <!-- Beside the chip, not stacked over it, and lifted so it rests
@@ -121,7 +129,11 @@
                         HorizontalAlignment="Center" Margin="0,-3,0,0"
                         IsVisible="{Binding HasLower}">
               <Border Classes="keyChip tierChip">
-                <TextBlock Text="{Binding LowerKey}" />
+                <StackPanel Orientation="Horizontal">
+                          <TextBlock Classes="chipModifier"
+                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                          <TextBlock Text="{Binding LowerKey}" />
+                        </StackPanel>
               </Border>
               <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
@@ -198,7 +210,11 @@
                     Classes="keyChip primaryChip"
                     VerticalAlignment="Top" HorizontalAlignment="Center"
                     IsVisible="{Binding ReadsUpward}">
-              <TextBlock Text="{Binding KeyLabel}" />
+              <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="chipModifier"
+                               Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                    <TextBlock Text="{Binding KeyLabel}" />
+                  </StackPanel>
             </Border>
 
             <!-- Reading top-to-bottom: the mirror image. -->
@@ -206,7 +222,11 @@
                     Classes="keyChip primaryChip"
                     VerticalAlignment="Bottom" HorizontalAlignment="Center"
                     IsVisible="{Binding ReadsDownward}">
-              <TextBlock Text="{Binding KeyLabel}" />
+              <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="chipModifier"
+                               Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                    <TextBlock Text="{Binding KeyLabel}" />
+                  </StackPanel>
             </Border>
 
             <LayoutTransformControl Grid.Column="{Binding LabelColumn}" Grid.Row="1"
@@ -349,7 +369,11 @@
                                   HorizontalAlignment="Center"
                                   IsVisible="{Binding HasUpper}">
                         <Border Classes="keyChip tierChip">
+                          <StackPanel Orientation="Horizontal">
+                          <TextBlock Classes="chipModifier"
+                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
                           <TextBlock Text="{Binding UpperKey}" />
+                        </StackPanel>
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
                                    IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
@@ -362,7 +386,11 @@
                                   HorizontalAlignment="Center"
                                   Spacing="4">
                         <Border Classes="keyChip primaryChip" HorizontalAlignment="Center">
-                          <TextBlock Text="{Binding KeyLabel}" />
+                          <StackPanel Orientation="Horizontal">
+                    <TextBlock Classes="chipModifier"
+                               Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
+                    <TextBlock Text="{Binding KeyLabel}" />
+                  </StackPanel>
                         </Border>
                         <TextBlock Classes="zoneName" Text="{Binding Name}"
                                    IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
@@ -379,7 +407,11 @@
                                   HorizontalAlignment="Center"
                                   IsVisible="{Binding HasLower}">
                         <Border Classes="keyChip tierChip">
+                          <StackPanel Orientation="Horizontal">
+                          <TextBlock Classes="chipModifier"
+                                     Text="{Binding $parent[ctl:MonitorDiagram].ModifierPrefix}" />
                           <TextBlock Text="{Binding LowerKey}" />
+                        </StackPanel>
                         </Border>
                         <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
                                    IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"

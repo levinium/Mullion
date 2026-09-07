@@ -53,6 +53,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _startInTray;
 
+    /// <summary>Win is the default and the reason for the hook; the rest leave it alone.</summary>
+    public IReadOnlyList<string> HotkeyModifiers { get; } = ModifierChoice.All;
+
+    [ObservableProperty]
+    private string _selectedHotkeyModifier = ModifierChoice.Default;
+
     [ObservableProperty]
     private bool _dragToSnap;
 
@@ -153,6 +159,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         ShowZoneFlash = s.ShowZoneFlash;
         AllowSpanningUnions = s.AllowSpanningUnions;
         StartInTray = s.StartInTray;
+        SelectedHotkeyModifier = HotkeyModifiers.FirstOrDefault(
+            x => string.Equals(x, s.HotkeyModifier, StringComparison.OrdinalIgnoreCase))
+            ?? ModifierChoice.Default;
         DragToSnap = s.DragToSnap;
         SelectedDragModifier = DragModifiers.FirstOrDefault(
             x => string.Equals(x, s.DragModifier, StringComparison.OrdinalIgnoreCase)) ?? "Shift";
@@ -186,6 +195,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowZoneFlashChanged(bool value)
     {
         if (!_loading) _host.SetShowZoneFlash(value);
+    }
+
+    partial void OnSelectedHotkeyModifierChanged(string value)
+    {
+        if (!_loading) _host.SetHotkeyModifier(value);
     }
 
     partial void OnStartInTrayChanged(bool value)
@@ -345,7 +359,8 @@ public sealed class DesignSettingsHost : ISettingsHost
         @"%LOCALAPPDATA%\Mullion\logs\mullion.log",
         true,
         "Shift",
-        false);
+        false,
+        "Win");
 
     public string? SetAutoStart(AutoStartMode mode) => null;
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
@@ -358,6 +373,8 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void SetDragToSnap(bool enabled, string modifier) { }
 
     public void SetStartInTray(bool value) { }
+
+    public void SetHotkeyModifier(string value) { }
     public void SetWinKeySuppression(string value) { }
     public void SetKeySurface(string surfaceId) { }
     public void RestartElevated() { }

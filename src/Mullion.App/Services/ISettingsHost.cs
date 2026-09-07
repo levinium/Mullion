@@ -25,7 +25,8 @@ public sealed record SettingsSnapshot(
     string LogPath,
     bool DragToSnap,
     string DragModifier,
-    bool StartInTray);
+    bool StartInTray,
+    string HotkeyModifier);
 
 public interface ISettingsHost
 {
@@ -43,6 +44,9 @@ public interface ISettingsHost
 
     /// <summary>Open straight to the tray even when launched by hand.</summary>
     void SetStartInTray(bool value);
+
+    /// <summary>Which modifier every zone hotkey is taken with.</summary>
+    void SetHotkeyModifier(string value);
 
     void SetWinKeySuppression(string value);
 
