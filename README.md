@@ -41,7 +41,29 @@ On a 5120×1440 that produces:
   Z  1280×696    X  2560×696    C  1280×696
 ```
 
+## Installing
+
+```
+.\tools\Publish.ps1
+```
+
+Produces one self-contained `publish\Mullion.exe` — about 63MB, with the .NET
+runtime inside it. Copy it anywhere and run it; nothing else has to be present
+on the machine and nothing has to be kept in step with it.
+
+Then turn on **Start Mullion when I sign in** in Settings. Auto-start records
+wherever the exe is at that moment, so move it first and set it afterwards.
+
+The publish runs the tests and refuses to produce an exe if any fail. A hotkey
+tool that is broken is worse than one that is absent: it swallows keystrokes on
+their way to whatever you actually wanted.
+
+Not trimmed, deliberately. Avalonia resolves controls, converters and styles by
+name at runtime, so a trimmer that cannot see those uses removes them — and the
+failure is a blank window at launch rather than a build error.
+
 ## Building
+
 
 Requires the .NET 10 SDK (pinned in `global.json`).
 
@@ -170,3 +192,6 @@ a self-contained job rather than a rewrite.
 ## Not yet built
 
 Named layout snapshots and per-app rules.
+
+Drag-to-snap across several monitors has never been exercised: the per-zone
+overlay exists for mixed DPI, which a single display cannot produce.

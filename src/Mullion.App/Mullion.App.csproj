@@ -25,6 +25,34 @@
          numbers. Losing those in exchange for a tidy folder would be a bad
          trade for a background app that fails while nobody is watching. -->
     <DebugType>embedded</DebugType>
+
+    <!-- Publishing
+         One self-contained file, so installing Mullion is copying an exe and
+         running it: no SDK, no runtime, nothing to keep in step. A background
+         app that needs a framework installed first is one people give up on
+         before they find out whether they like it.
+
+         Native libraries are extracted rather than left beside the exe -
+         Avalonia's rendering is native code, and without this the "single file"
+         arrives with a folder of DLLs it cannot start without.
+
+         Deliberately NOT trimmed. Avalonia resolves controls, converters and
+         styles by name at runtime, so a trimmer that cannot see those uses
+         removes them and the failure is a blank window at launch rather than a
+         build error. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Compressed, which costs nothing worth having: measured on this machine
+         it takes the exe from 144MB to 63MB and the window still appears in
+         under a second. Ahead-of-time compilation stays on despite roughly
+         doubling the compressed size, because the alternative saves 15MB and
+         adds noticeably to a start that happens at every sign-in. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
   </PropertyGroup>
 
   <!--
