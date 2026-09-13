@@ -248,6 +248,19 @@ them is.
 
 `tools/Capture-Simulations.ps1` regenerates them.
 
+`tools/Run-Demo.ps1` is the moving equivalent: it fires the hotkeys on a
+countdown, so a screen recording is a repeatable take rather than a matter of
+hitting chords cleanly on camera.
+
+```
+.\tools\Run-Demo.ps1 -Target 'Notepad'
+.\tools\Run-Demo.ps1 -Beat cycle -Target 'Chrome'
+```
+
+Pass `-Target`. Mullion moves whatever has focus, and focus drifts mid-sequence —
+the first snap can hand it back to the console, after which the remaining beats
+move the wrong window and nothing visibly complains.
+
 ### The probe
 
 `tools/Mullion.Probe` exercises the engine with no UI in the way, which is how
