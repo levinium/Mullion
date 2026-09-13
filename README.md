@@ -17,9 +17,11 @@ Nothing to configure before it works.
 
 ![Mullion](docs/screenshots/main-window.png)
 
-https://github.com/user-attachments/assets/f65eecd3-7235-4598-a8ad-1f26c4286d97
+https://github.com/user-attachments/assets/5fe85a6a-55d4-4176-8fed-9c9c5828fe17
 
-Three and a half minutes: installing it, what the keys do, and how it handles
+Three windows into three zones, which is most of the idea.
+**[Watch the full walkthrough](https://www.youtube.com/watch?v=vHH7WOFfPAM)** —
+three and a half minutes on installing it, what the keys do, and how it handles
 whatever monitors you happen to have.
 
 ## Download
