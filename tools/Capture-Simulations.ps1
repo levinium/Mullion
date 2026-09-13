@@ -73,6 +73,9 @@ public class MullionCapture
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hwnd);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
     [DllImport("dwmapi.dll")]
     public static extern int DwmGetWindowAttribute(IntPtr hwnd, uint attribute, out RECT value, int size);
 
@@ -102,6 +105,18 @@ foreach ($preset in $Presets) {
 
     [MullionCapture]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
     Start-Sleep -Milliseconds 900
+
+    # The shot is taken off the screen, so whatever is in front at that instant
+    # is what lands in the file. SetForegroundWindow does not always win - a
+    # full-screen game holds the foreground against it - and without this check
+    # the capture silently saves somebody's desktop under a Mullion filename.
+    # That is not a broken screenshot, it is a screenshot of something private.
+    $front = [MullionCapture]::GetForegroundWindow()
+
+    if ($front -ne $process.MainWindowHandle) {
+        Write-Warning "$preset : Mullion did not come to the front; skipped rather than capturing whatever did."
+        continue
+    }
 
     $bounds = New-Object MullionCapture+RECT
     [MullionCapture]::DwmGetWindowAttribute(
