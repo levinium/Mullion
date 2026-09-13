@@ -41,6 +41,23 @@ never recorded, and what does and does not leave your machine. Every release
 publishes a SHA256 beside the download so you can check you got the file the
 build produced.
 
+---
+
+### If it earns a place on your keyboard
+
+Mullion is free and open source, and will stay that way — no paid version, no nag
+screens, nothing held back, and no feature waiting behind a payment.
+
+If it saves you the price of a licence for something else, you can put something
+toward keeping it working.
+
+[![Sponsor on GitHub](https://img.shields.io/badge/%E2%9D%A4%20%20Sponsor%20on%20GitHub-4C8BF5?style=for-the-badge&labelColor=13294B)](https://github.com/sponsors/levinium)
+
+Not at all expected. Starring the repo, or pointing someone at it the next time
+they complain about dragging windows around, helps just as much.
+
+---
+
 ## Why it exists
 
 Windows gives you `Win`+arrow and nothing else. The good tools that go further —
@@ -176,13 +193,6 @@ trustworthy. Signing the app is what would prove that, and it is not signed yet.
 - **Windows only, for now.** macOS and Linux are not built. Linux would be X11
   only in any case, because Wayland does not allow an app to position windows at
   all.
-
-## Supporting it
-
-Mullion is free and always will be. If it saves you the price of a licence for
-something else and you would like to say thanks, there is a
-[sponsor page](https://github.com/sponsors/levinium) — entirely optional, and the
-app is exactly the same either way.
 
 ---
 
