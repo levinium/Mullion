@@ -129,6 +129,29 @@ public interface ISettingsHost : IZoneEditingHost
     /// <summary>Open the page where a new release is downloaded.</summary>
     void OpenUpdatePage(string? url);
 
+    /// <summary>
+    /// Whether this copy can replace itself, and what to say when it cannot.
+    /// <para>
+    /// Asked before the button is offered rather than after it is pressed, so
+    /// somebody whose Mullion lives in Program Files is told to download it
+    /// themselves instead of watching a download finish and then fail on the
+    /// one step that was never going to work.
+    /// </para>
+    /// </summary>
+    (bool Can, string? Reason) CanSelfUpdate();
+
+    /// <summary>
+    /// Download the newer release and leave it staged beside the app. Changes
+    /// nothing about the installed copy, so it is safe to abandon.
+    /// </summary>
+    Task<InstallResult> DownloadUpdate(IProgress<double>? progress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Put the staged release in place and restart into it.
+    /// </summary>
+    /// <returns>False when nothing was changed and the app should carry on.</returns>
+    bool InstallUpdateAndRestart();
+
 
 
 }

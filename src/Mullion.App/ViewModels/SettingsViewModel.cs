@@ -135,6 +135,93 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void OpenUpdatePage() => _host.OpenUpdatePage(UpdateUrl);
 
+    // ---- installing it -------------------------------------------------------
+    //
+    // Deliberately two steps. The download is slow and can fail in a dozen
+    // ordinary ways; the install is two renames and a restart. Run together,
+    // a failure anywhere reads as "updating is broken" - and worse, the app
+    // would vanish and come back at a moment nobody chose. Split, the download
+    // can be abandoned with nothing changed, and restarting happens when the
+    // person says so.
+
+    /// <summary>Whether replacing the executable is possible at all here.</summary>
+    [ObservableProperty]
+    private bool _canSelfUpdate;
+
+    /// <summary>Why it is not, when it is not. Shown instead of the button.</summary>
+    [ObservableProperty]
+    private string? _selfUpdateBlocked;
+
+    [ObservableProperty]
+    private bool _isDownloadingUpdate;
+
+    /// <summary>0 to 1 while downloading, for the bar.</summary>
+    [ObservableProperty]
+    private double _updateProgress;
+
+    /// <summary>Set once a verified release is sitting on disk, waiting to be installed.</summary>
+    [ObservableProperty]
+    private bool _updateStaged;
+
+    private CancellationTokenSource? _download;
+
+    /// <summary>Offered only when there is something to get and a way to get it.</summary>
+    public bool CanDownloadUpdate => CanSelfUpdate && UpdateUrl is not null && !UpdateStaged;
+
+    partial void OnCanSelfUpdateChanged(bool value) => OnPropertyChanged(nameof(CanDownloadUpdate));
+    partial void OnUpdateStagedChanged(bool value) => OnPropertyChanged(nameof(CanDownloadUpdate));
+    partial void OnUpdateUrlChanged(string? value) => OnPropertyChanged(nameof(CanDownloadUpdate));
+
+    [RelayCommand]
+    private async Task DownloadUpdate()
+    {
+        if (IsDownloadingUpdate) return;
+
+        IsDownloadingUpdate = true;
+        UpdateProgress = 0;
+        UpdateMessage = "Downloading…";
+
+        _download = new CancellationTokenSource();
+
+        try
+        {
+            var progress = new Progress<double>(p => UpdateProgress = p);
+            var result = await _host.DownloadUpdate(progress, _download.Token);
+
+            UpdateStaged = result.IsStaged;
+
+            UpdateMessage = result.Outcome switch
+            {
+                InstallOutcome.Staged => "Downloaded and verified. Restart to finish.",
+                InstallOutcome.Canceled => "Download canceled. Nothing was changed.",
+
+                // Everything else already carries a sentence written for the
+                // person reading it, so it is used rather than restated.
+                _ => result.Detail ?? "The update could not be downloaded.",
+            };
+        }
+        finally
+        {
+            IsDownloadingUpdate = false;
+            _download?.Dispose();
+            _download = null;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelUpdateDownload() => _download?.Cancel();
+
+    [RelayCommand]
+    private void InstallUpdate()
+    {
+        // Returns false only when nothing was changed, so the app carries on
+        // and the message says why rather than leaving a dead button.
+        if (_host.InstallUpdateAndRestart()) return;
+
+        UpdateStaged = false;
+        UpdateMessage = "The update could not be installed. Nothing was changed — see the log.";
+    }
+
     partial void OnCheckForUpdatesChanged(bool value)
     {
         if (_loading) return;
@@ -214,6 +301,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         ConfigPath = s.ConfigPath;
         LogPath = s.LogPath;
         CheckForUpdates = s.CheckForUpdates;
+
+        var (can, reason) = _host.CanSelfUpdate();
+        CanSelfUpdate = can;
+        SelfUpdateBlocked = can ? null : reason;
 
         Surfaces = [.. s.AvailableSurfaces.Select(x => new SurfaceOption(x.Id, x.Name))];
         SelectedSurface = Surfaces.FirstOrDefault(x => x.Id == s.SurfaceId);
@@ -465,6 +556,14 @@ public sealed class DesignSettingsHost : ISettingsHost
         Task.FromResult(new Core.Updates.UpdateVerdict(Core.Updates.UpdateOutcome.UpToDate, default, null));
 
     public void OpenUpdatePage(string? url) { }
+
+    public (bool Can, string? Reason) CanSelfUpdate() => (false, "Design-time host.");
+
+    public Task<InstallResult> DownloadUpdate(
+        IProgress<double>? progress = null, CancellationToken ct = default) =>
+        Task.FromResult(new InstallResult(InstallOutcome.NotPublished));
+
+    public bool InstallUpdateAndRestart() => false;
 }
 
 /// <summary>

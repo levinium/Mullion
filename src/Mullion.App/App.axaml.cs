@@ -75,7 +75,15 @@ public partial class App : Application
 
 #if PLATFORM_WINDOWS
         if (OperatingSystem.IsWindows() && _host is WindowsAppHost rerunHost)
+        {
             WireRerunWizard(rerunHost, ShowWizard);
+
+            // An installed update replaces the executable and starts it; this
+            // process then has to go, and go the same way Quit does - the tray
+            // icon and the keyboard hook both need taking down, or the new
+            // Mullion comes up beside a dead icon and a hook nobody owns.
+            WireQuit(rerunHost, Quit);
+        }
 #endif
 
         _host.Start();
@@ -273,6 +281,10 @@ public partial class App : Application
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void WireRerunWizard(WindowsAppHost host, Action showWizard) =>
         host.RerunWizardRequested = showWizard;
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void WireQuit(WindowsAppHost host, Action quit) =>
+        host.QuitRequested = quit;
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void WireWizardClose(WindowsAppHost host, Window wizard, Action showWindow)

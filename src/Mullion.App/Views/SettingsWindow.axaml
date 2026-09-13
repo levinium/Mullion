@@ -206,14 +206,43 @@
               <Button Content="Check now"
                       Command="{Binding CheckForUpdatesNowCommand}"
                       IsEnabled="{Binding !IsCheckingForUpdates}" />
-              <Button Content="Get the new version"
+
+              <!-- Downloads and verifies; changes nothing yet. -->
+              <Button Content="Download update"
+                      Command="{Binding DownloadUpdateCommand}"
+                      IsVisible="{Binding CanDownloadUpdate}"
+                      IsEnabled="{Binding !IsDownloadingUpdate}" />
+
+              <!-- The step that actually replaces the app, on its own, after
+                   the slow and failable part is already done. -->
+              <Button Content="Restart to finish"
+                      Classes="accent"
+                      Command="{Binding InstallUpdateCommand}"
+                      IsVisible="{Binding UpdateStaged}" />
+
+              <Button Content="Cancel"
+                      Command="{Binding CancelUpdateDownloadCommand}"
+                      IsVisible="{Binding IsDownloadingUpdate}" />
+
+              <!-- Where self-updating is impossible, the manual route is the
+                   only route, so it takes the place of the download button. -->
+              <Button Content="Open the releases page"
                       Command="{Binding OpenUpdatePageCommand}"
-                      IsVisible="{Binding UpdateUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      IsVisible="{Binding !CanSelfUpdate}" />
             </StackPanel>
+
+            <ProgressBar Minimum="0" Maximum="1"
+                         Value="{Binding UpdateProgress}"
+                         Height="4"
+                         IsVisible="{Binding IsDownloadingUpdate}" />
 
             <TextBlock Classes="body"
                        Text="{Binding UpdateMessage}"
                        IsVisible="{Binding UpdateMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <TextBlock Classes="body"
+                       Text="{Binding SelfUpdateBlocked}"
+                       IsVisible="{Binding SelfUpdateBlocked, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
 
           <TextBlock Classes="h2" Text="Configuration file" Margin="0,8,0,0" />

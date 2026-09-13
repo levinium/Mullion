@@ -183,12 +183,63 @@ was written for never find out.
 
 It sends nothing. No identifier, no machine, no version in a query string, no
 record of who asked: it is a GET for a public file, and the answer is compared
-locally. This is the only network request Mullion makes, so turning the setting
-off in Settings → About makes the app silent.
+locally. This is the only network request Mullion makes unless you ask it to
+install something, so turning the setting off in Settings → About makes the app
+silent.
 
 That restraint is the point rather than a detail. This app installs a low-level
 keyboard hook, which is the same mechanism a keylogger uses, and from outside the
 only difference is what the process sends and what it keeps.
+
+### Installing one
+
+Mullion can also replace itself. **Settings → About → Download update** fetches
+the new release and verifies it; **Restart to finish** puts it in place and
+starts it. Nothing happens without both clicks — there is no silent update, and
+no moment where the app decides on its own to vanish and come back.
+
+The two steps are separate because they fail differently. Downloading is slow and
+can go wrong in a dozen ordinary ways, and abandoning it changes nothing.
+Installing is two renames and a restart.
+
+**How the swap works.** Windows will not let a running executable be overwritten,
+but it will let one be *renamed* — which is the whole trick:
+
+```
+Mullion.exe      -> Mullion.exe.old     the running app, still running
+Mullion.exe.new  -> Mullion.exe         the verified download takes the name
+                                        start it, and exit
+```
+
+The new process deletes the backup, because it is the first thing that is able
+to — Windows holds the old file until the process using it goes away. If the
+second rename fails, the first is undone and the app is exactly as it was; the
+window where neither file holds the real name is one rename wide and nothing is
+running from disk during it. The name is preserved on purpose, because auto-start
+and every shortcut anyone made record a path.
+
+**What is checked before anything is replaced.** This is the most dangerous thing
+the app does — it downloads an executable and arranges for the machine to run it
+— so:
+
+- The download is HTTPS, from the release host.
+- Its SHA256 must equal the checksum published beside it. A release with no
+  checksum is refused rather than installed unverified.
+- If the **running** copy carries a valid signature, the replacement must carry a
+  valid one from the same publisher. That does nothing while the build is
+  unsigned, and becomes the real defense the day it is signed — without anyone
+  having to remember to turn it on, and with no way to be downgraded to an
+  unsigned file.
+
+Be clear about what the checksum does and does not buy: it is published from the
+same place as the download, so it proves the file arrived intact, not that the
+release was made by someone you trust. **Signing the binary is what would make
+that claim**, and until it is signed, a self-updater is only as trustworthy as
+the account that publishes the releases.
+
+Mullion will not replace itself where it cannot — a copy in `Program Files`
+without administrator rights, or a build from source with its assemblies loose
+beside it. Both say so and point at the releases page instead.
 
 ## Known limitations
 

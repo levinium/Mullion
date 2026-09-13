@@ -13,17 +13,37 @@ public enum UpdateOutcome
     Unknown,
 }
 
+/// <summary>A file published alongside a release.</summary>
+/// <param name="Name">File name as published, e.g. "Mullion.exe".</param>
+/// <param name="Url">Direct download link.</param>
+/// <param name="Size">Length in bytes, as the feed reports it.</param>
+public sealed record ReleaseAsset(string Name, string Url, long Size);
+
 /// <summary>
-/// A published release, reduced to the four things the decision needs.
+/// A published release, reduced to what the decision and the installer need.
 /// </summary>
 /// <param name="Tag">The tag or release name, e.g. "v1.1.0".</param>
 /// <param name="Url">Where a person goes to get it.</param>
 /// <param name="IsDraft">Unpublished, and visible only to the people who wrote it.</param>
 /// <param name="IsPreRelease">Marked as not ready for general use.</param>
-public sealed record ReleaseInfo(string? Tag, string? Url, bool IsDraft = false, bool IsPreRelease = false);
+/// <param name="Assets">The files attached to it, if any were read.</param>
+public sealed record ReleaseInfo(
+    string? Tag,
+    string? Url,
+    bool IsDraft = false,
+    bool IsPreRelease = false,
+    IReadOnlyList<ReleaseAsset>? Assets = null);
 
-/// <summary>The conclusion, and what to open if someone acts on it.</summary>
-public readonly record struct UpdateVerdict(UpdateOutcome Outcome, ReleaseVersion Version, string? Url)
+/// <summary>The conclusion, and what to open or install if someone acts on it.</summary>
+/// <param name="Release">
+/// The release this verdict is about, carried so an install can reach its
+/// assets without asking again. Null unless one was found and read.
+/// </param>
+public readonly record struct UpdateVerdict(
+    UpdateOutcome Outcome,
+    ReleaseVersion Version,
+    string? Url,
+    ReleaseInfo? Release = null)
 {
     public bool IsAvailable => Outcome == UpdateOutcome.Available;
 }
@@ -76,7 +96,7 @@ public static class UpdateDecision
             return new UpdateVerdict(UpdateOutcome.Unknown, published, latest.Url);
 
         return published.IsNewerThan(running)
-            ? new UpdateVerdict(UpdateOutcome.Available, published, latest.Url)
+            ? new UpdateVerdict(UpdateOutcome.Available, published, latest.Url, latest)
             : new UpdateVerdict(UpdateOutcome.UpToDate, published, latest.Url);
     }
 }

@@ -139,6 +139,101 @@ public class UpdateServiceTests
         (await service.CheckAsync(cts.Token)).Outcome.ShouldBe(UpdateOutcome.Unknown);
     }
 
+    // ---- the files attached to a release -------------------------------------
+
+    /// <summary>The asset shape GitHub really returns, verified against a live response.</summary>
+    private const string WithAssets = """
+        {
+          "tag_name": "v1.2.0",
+          "html_url": "https://github.com/o/r/releases/tag/v1.2.0",
+          "draft": false,
+          "prerelease": false,
+          "assets": [
+            {
+              "name": "Mullion.exe",
+              "state": "uploaded",
+              "size": 67108864,
+              "content_type": "application/octet-stream",
+              "browser_download_url": "https://github.com/o/r/releases/download/v1.2.0/Mullion.exe"
+            },
+            {
+              "name": "Mullion.exe.sha256",
+              "state": "uploaded",
+              "size": 78,
+              "browser_download_url": "https://github.com/o/r/releases/download/v1.2.0/Mullion.exe.sha256"
+            }
+          ]
+        }
+        """;
+
+    [Fact]
+    public void TheAttachedFilesAreRead()
+    {
+        var release = UpdateService.ParseRelease(WithAssets);
+
+        release.ShouldNotBeNull();
+        release.Assets.ShouldNotBeNull();
+        release.Assets.Count.ShouldBe(2);
+
+        var exe = UpdateAssets.Executable(release.Assets);
+        exe.ShouldNotBeNull();
+        exe.Size.ShouldBe(67_108_864);
+        exe.Url.ShouldBe("https://github.com/o/r/releases/download/v1.2.0/Mullion.exe");
+
+        UpdateAssets.Checksum(release.Assets).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void AnAssetStillUploadingIsSkipped()
+    {
+        // GitHub lists an asset from the moment its upload STARTS. Downloading
+        // one of those gets a truncated executable - caught by the checksum,
+        // but only after 60-odd MB and a progress bar that meant nothing.
+        var json = """
+            {
+              "tag_name": "v1.2.0",
+              "assets": [
+                { "name": "Mullion.exe", "state": "starter", "browser_download_url": "https://example.invalid/x" }
+              ]
+            }
+            """;
+
+        UpdateService.ParseRelease(json)!.Assets.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AnAssetWithNoLinkIsSkipped()
+    {
+        var json = """{ "tag_name": "v1.2.0", "assets": [ { "name": "Mullion.exe" } ] }""";
+
+        UpdateService.ParseRelease(json)!.Assets.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AReleaseWithNoAssetsArrayIsStillARelease()
+    {
+        // Every other field is readable, so the update can still be announced -
+        // it just cannot be installed for you.
+        var release = UpdateService.ParseRelease(
+            """{ "tag_name": "v1.2.0", "html_url": "https://example.invalid/x" }""");
+
+        release.ShouldNotBeNull();
+        release.Tag.ShouldBe("v1.2.0");
+        release.Assets.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnAvailableUpdateCarriesTheReleaseSoItCanBeInstalled()
+    {
+        // The verdict has to bring the assets with it, or acting on it means
+        // fetching the feed a second time.
+        var verdict = await Returning(WithAssets).CheckAsync(TestContext.Current.CancellationToken);
+
+        verdict.Outcome.ShouldBe(UpdateOutcome.Available);
+        verdict.Release.ShouldNotBeNull();
+        UpdateAssets.Executable(verdict.Release.Assets).ShouldNotBeNull();
+    }
+
     [Fact]
     public void TheBuildKnowsWhereToLook()
     {

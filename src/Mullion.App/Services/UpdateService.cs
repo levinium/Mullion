@@ -111,7 +111,8 @@ public sealed class UpdateService
                 tag,
                 Text(root, "html_url"),
                 Flag(root, "draft"),
-                Flag(root, "prerelease"));
+                Flag(root, "prerelease"),
+                ReadAssets(root));
         }
         catch (JsonException)
         {
@@ -119,6 +120,46 @@ public sealed class UpdateService
             // and it means exactly what a failed request means.
             return null;
         }
+    }
+
+    /// <summary>
+    /// The files attached to a release.
+    /// </summary>
+    /// <remarks>
+    /// An asset is skipped unless it has a name, a link and a state of
+    /// "uploaded". GitHub lists an asset from the moment an upload STARTS, so a
+    /// release being published right now can advertise a file that is not all
+    /// there yet - and downloading one of those produces a truncated executable
+    /// that fails its checksum, which is the right outcome by the slowest
+    /// possible route.
+    /// </remarks>
+    private static IReadOnlyList<ReleaseAsset> ReadAssets(JsonElement root)
+    {
+        if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var found = new List<ReleaseAsset>();
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.ValueKind != JsonValueKind.Object) continue;
+
+            var name = Text(asset, "name");
+            var url = Text(asset, "browser_download_url");
+
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(url)) continue;
+
+            var state = Text(asset, "state");
+            if (state is not null && !string.Equals(state, "uploaded", StringComparison.Ordinal)) continue;
+
+            var size = asset.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Number
+                ? s.GetInt64()
+                : 0;
+
+            found.Add(new ReleaseAsset(name, url, size));
+        }
+
+        return found;
     }
 
     private static string? Text(JsonElement root, string name) =>

@@ -214,6 +214,39 @@ public class WindowFitTests
 
     [AvaloniaTheory]
     [MemberData(nameof(Screens))]
+    public void TheUpdateControlsFitWhileAnUpdateIsInFlight(string name, double width, double height)
+    {
+        // Every one of these is hidden until an update is actually being
+        // installed, so the ordinary settings-window test measures a row that
+        // never contains them. This is the state nothing else looks at: the
+        // longest the row ever gets, plus the progress bar underneath it.
+        var window = SettingsWindowFor();
+        var vm = (SettingsViewModel)window.DataContext!;
+
+        vm.CanSelfUpdate = true;
+        vm.UpdateUrl = "https://example.invalid/release";
+        vm.UpdateStaged = true;
+        vm.IsDownloadingUpdate = true;
+        vm.UpdateProgress = 0.5;
+        vm.UpdateMessage = "Downloaded and verified. Restart to finish.";
+
+        Lay(window, width, height);
+
+        foreach (var control in Controls(window))
+        {
+            var box = BoundsIn(control, window);
+
+            box.Width.ShouldBeGreaterThan(0, $"{name}: a control collapsed to nothing");
+            box.Right.ShouldBeLessThanOrEqualTo(width + 1,
+                $"{name}: a control runs off the right at {box}");
+
+            ScrollableClippedAway(control, window).ShouldBeLessThan(0.05,
+                $"{name}: a control is cut away by what contains it, at {box}");
+        }
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Screens))]
     public void TheUpdateNoticeFitsToo(string name, double width, double height)
     {
         // The notice is hidden unless a newer release exists, so every other fit

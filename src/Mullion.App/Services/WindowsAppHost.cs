@@ -1210,6 +1210,61 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         StateChanged?.Invoke();
     }
 
+    // ---- installing one ----------------------------------------------------
+
+    private UpdateInstaller? _installer;
+    private UpdateInstaller Installer => _installer ??= new UpdateInstaller(_log);
+
+    /// <summary>Raised when the app has been replaced and this process should end.</summary>
+    public Action? QuitRequested { get; set; }
+
+    public (bool Can, string? Reason) CanSelfUpdate()
+    {
+        // A simulated run is a preview. Replacing the executable is the least
+        // preview-like thing the app can do.
+        if (Simulated is not null) return (false, "Not while simulating an arrangement.");
+
+        var ready = Installer.CanInstall();
+
+        return ready.IsStaged ? (true, null) : (false, ready.Detail);
+    }
+
+    public async Task<InstallResult> DownloadUpdate(
+        IProgress<double>? progress = null, CancellationToken ct = default)
+    {
+        if (Simulated is not null)
+            return new InstallResult(InstallOutcome.NotPublished, "Not while simulating an arrangement.");
+
+        // Re-read the feed rather than trusting what the daily check kept. That
+        // answer may be hours old, and what is about to be downloaded and RUN
+        // should be described by a response fetched for this purpose.
+        var verdict = await Updates.CheckAsync(ct).ConfigureAwait(false);
+
+        if (!verdict.IsAvailable || verdict.Release is null)
+        {
+            Record(verdict);
+
+            return new InstallResult(InstallOutcome.NothingToInstall,
+                verdict.Outcome == UpdateOutcome.UpToDate
+                    ? "This is already the latest version."
+                    : "Could not reach the release feed.");
+        }
+
+        return await Installer.StageAsync(verdict.Release, progress, ct).ConfigureAwait(false);
+    }
+
+    public bool InstallUpdateAndRestart()
+    {
+        if (Simulated is not null) return false;
+
+        // The hook, the watchers and the tray all have to come down before the
+        // replacement starts, or two Mullions briefly share a keyboard.
+        if (!Installer.Apply(startInTray: _config.General.StartInTray)) return false;
+
+        QuitRequested?.Invoke();
+        return true;
+    }
+
     /// <summary>
     /// The daily look, run once at startup and never waited on.
     /// <para>
