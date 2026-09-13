@@ -17,7 +17,7 @@ Nothing to configure before it works.
 
 ![Mullion](docs/screenshots/main-window.png)
 
-https://github.com/user-attachments/assets/5fe85a6a-55d4-4176-8fed-9c9c5828fe17
+https://github.com/user-attachments/assets/b1d8e0dd-72f8-47dc-8a8d-7aa9b7c019db
 
 Three windows into three zones, which is most of the idea.
 **[Watch the full walkthrough](https://www.youtube.com/watch?v=vHH7WOFfPAM)** —
