@@ -17,14 +17,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The build stamps the short commit onto InformationalVersion, so a
           # log line or a bug report names the exact build. A shallow clone
           # still has HEAD, which is all `git rev-parse --short HEAD` needs.
           fetch-depth: 1
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           # Pinned by global.json, so CI and a desk build cannot drift.
           global-json-file: global.json
