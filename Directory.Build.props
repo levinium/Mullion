@@ -25,7 +25,10 @@
     <Company>Mullion</Company>
     <VersionPrefix>1.0.0</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
-    <Copyright>Mullion</Copyright>
+    <Copyright>Copyright (c) 2026 levinium</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/levinium/Mullion</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <!--

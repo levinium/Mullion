@@ -81,6 +81,31 @@ public sealed record GeneralSettings
     public int UndoDepth { get; init; } = 20;
     public string Theme { get; init; } = "system";
     public ShapeTuningRecord Shape { get; init; } = new();
+
+    /// <summary>
+    /// Look once a day for a newer release.
+    /// <para>
+    /// On by default, which is a decision worth writing down rather than
+    /// leaving as a default nobody chose. The app is one file that people copy
+    /// wherever they like: there is no installer to tell them anything, no
+    /// package manager watching, and no reason they would ever revisit the
+    /// page they got it from. Off by default means a fix ships and the people
+    /// it was written for never hear about it.
+    /// </para>
+    /// <para>
+    /// What it costs them is one HTTP GET a day for a public file, carrying no
+    /// identifier of any kind. It is stated plainly in Settings next to the
+    /// switch, and the switch genuinely stops it - nothing else in the app
+    /// makes a network request, so turning this off makes Mullion silent.
+    /// </para>
+    /// </summary>
+    public bool CheckForUpdates { get; init; } = true;
+
+    /// <summary>
+    /// When the last check finished, so a machine that is signed into ten times
+    /// a day still asks once. Null until the first one completes.
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; init; }
 }
 
 /// <summary>The four tuning constants, surfaced so an unusual panel is retuned rather than special-cased.</summary>

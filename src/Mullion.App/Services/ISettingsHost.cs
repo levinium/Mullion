@@ -48,7 +48,10 @@ public sealed record SettingsSnapshot(
     string HotkeyModifier,
 
     /// <summary>The hotkeys that are not zones, as they currently stand.</summary>
-    IReadOnlyList<ActionBindingView> Actions);
+    IReadOnlyList<ActionBindingView> Actions,
+
+    /// <summary>Whether the app looks for a newer release once a day.</summary>
+    bool CheckForUpdates = true);
 
 /// <param name="Command">Which action, for handing back to the host.</param>
 /// <param name="Title">What to call it on screen.</param>
@@ -109,6 +112,22 @@ public interface ISettingsHost : IZoneEditingHost
 
     /// <summary>Put one action back to the key Mullion ships with.</summary>
     void ResetAction(string command);
+
+    /// <summary>Turn the daily look for a newer release on or off.</summary>
+    void SetCheckForUpdates(bool value);
+
+    /// <summary>
+    /// Look right now, regardless of when the last look was.
+    /// <para>
+    /// Deliberately ignores the daily throttle. Someone who presses the button
+    /// is asking the question directly, and answering "not yet, try tomorrow"
+    /// to a direct question is not a throttle, it is a bug.
+    /// </para>
+    /// </summary>
+    Task<Core.Updates.UpdateVerdict> CheckForUpdatesNow(CancellationToken ct = default);
+
+    /// <summary>Open the page where a new release is downloaded.</summary>
+    void OpenUpdatePage(string? url);
 
 
 

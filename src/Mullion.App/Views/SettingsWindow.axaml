@@ -195,6 +195,27 @@
           <TextBlock Classes="h2" Text="About" />
           <TextBlock Classes="body" Text="{Binding VersionLine}" />
 
+          <StackPanel Spacing="6" Margin="0,8,0,0" IsVisible="{Binding CanCheckForUpdates}">
+            <CheckBox Content="Check for updates once a day"
+                      IsChecked="{Binding CheckForUpdates}" />
+
+            <TextBlock Classes="body" Margin="20,0,0,0"
+                       Text="Asks GitHub whether a newer release has been published. Nothing about you, this machine or your layout is sent, and this is the only time Mullion uses the network — turning it off makes the app silent." />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Content="Check now"
+                      Command="{Binding CheckForUpdatesNowCommand}"
+                      IsEnabled="{Binding !IsCheckingForUpdates}" />
+              <Button Content="Get the new version"
+                      Command="{Binding OpenUpdatePageCommand}"
+                      IsVisible="{Binding UpdateUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+
+            <TextBlock Classes="body"
+                       Text="{Binding UpdateMessage}"
+                       IsVisible="{Binding UpdateMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+
           <TextBlock Classes="h2" Text="Configuration file" Margin="0,8,0,0" />
           <TextBlock Classes="zoneSize" Text="{Binding ConfigPath}" TextWrapping="Wrap" />
 

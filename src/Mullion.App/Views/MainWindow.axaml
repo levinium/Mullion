@@ -32,8 +32,20 @@
              icons wide and a fifth item in it would read as another one. Right
              aligned, so it sits above the gear and the block has a straight
              edge down its right side. -->
-        <TextBlock Classes="zoneSize" Text="{Binding Version}"
-                   HorizontalAlignment="Right" Margin="0,0,4,0" />
+        <StackPanel Orientation="Horizontal" Spacing="8"
+                    HorizontalAlignment="Right" Margin="0,0,4,0">
+
+          <!-- Beside the version, because the two are the same fact: this is
+               what you have, that is what there is. Absent entirely when the
+               build is current, which is nearly always. -->
+          <Button Classes="updateLink"
+                  IsVisible="{Binding HasUpdate}"
+                  Command="{Binding OpenUpdatePageCommand}"
+                  Content="{Binding UpdateLine}"
+                  ToolTip.Tip="Open the releases page" />
+
+          <TextBlock Classes="zoneSize" Text="{Binding Version}" />
+        </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
         <!-- Left of every button, so it never lands between two of them and

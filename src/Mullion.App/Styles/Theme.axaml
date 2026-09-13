@@ -566,6 +566,35 @@
     <Setter Property="FontSize" Value="11" />
   </Style>
 
+  <!-- A new release, beside the version it would replace. Written as text
+       rather than drawn as a button because it is news, not a control the
+       window is built around - but it IS clickable, so it takes the hand
+       cursor and lifts on hover. The inert rule covers things that only look
+       interactive; this one genuinely is. Amber, like the hook notice, for the
+       same reason: worth knowing, not urgent. -->
+  <Style Selector="Button.updateLink">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource SpanBorder}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.updateLink /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.updateLink:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
+  <Style Selector="Button.updateLink:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.iconButton">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />

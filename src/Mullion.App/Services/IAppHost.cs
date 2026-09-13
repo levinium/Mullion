@@ -31,7 +31,16 @@ public sealed record AppSnapshot(
     bool DragToSnap,
 
     /// <summary>The modifier that arms a drag, named as a person would say it.</summary>
-    string DragModifierName);
+    string DragModifierName,
+
+    /// <summary>
+    /// A published release newer than this build, e.g. "1.1.0", or null - which
+    /// covers being up to date, having never looked, and not having been able to.
+    /// </summary>
+    string? NewerVersion = null,
+
+    /// <summary>Where that release can be downloaded.</summary>
+    string? NewerVersionUrl = null);
 
 /// <summary>
 /// Everything the UI needs from the platform, behind one interface so the
@@ -41,6 +50,13 @@ public sealed record AppSnapshot(
 public interface IAppHost : IZoneEditingHost
 {
     event Action? StateChanged;
+
+    /// <summary>
+    /// Open the page a new release is downloaded from. Declared here as well as
+    /// on ISettingsHost because both windows can offer it, and the main window
+    /// is the one that will usually be open when a check finds something.
+    /// </summary>
+    void OpenUpdatePage(string? url);
 
     bool Paused { get; set; }
 
@@ -74,6 +90,8 @@ public sealed class DesignAppHost : IAppHost
     public void Start() => StateChanged?.Invoke();
 
     public void RestartElevated() { }
+
+    public void OpenUpdatePage(string? url) { }
 
     public void ResolveDragConflict() { }
 

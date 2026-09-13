@@ -29,7 +29,18 @@ param(
     #
     # An {amount} placeholder turns the ask into a picker, and is only worth
     # including where the destination actually reads the amount out of the URL.
-    [string] $SponsorUrl
+    [string] $SponsorUrl,
+
+    # Where the app looks for a newer release. Unlike SponsorUrl this HAS a
+    # default - the project's own releases - because the two fail in opposite
+    # directions: a donate link left in by accident asks strangers for money,
+    # while an update feed left out is simply never mentioned again. Pass this
+    # to point a fork at its own releases, or "" to build with no check at all.
+    [string] $UpdateFeedUrl,
+
+    # The page a person is sent to when an update is offered. Only meaningful
+    # alongside -UpdateFeedUrl; it defaults to match.
+    [string] $UpdatePageUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,9 +70,31 @@ if ($SponsorUrl) {
     Write-Host '  No support button (pass -SponsorUrl to include one).'
 }
 
+# PSBoundParameters rather than truthiness, because "" is a MEANING here - it
+# is how a fork asks for a build that never checks for updates - and a plain
+# `if ($UpdateFeedUrl)` cannot tell that apart from not passing it at all.
+[string[]] $updates = @()
+
+if ($PSBoundParameters.ContainsKey('UpdateFeedUrl')) {
+    $updates += "-p:UpdateFeedUrl=$UpdateFeedUrl"
+
+    # Kept in step unless told otherwise: a build that checks one repository's
+    # releases and then sends people to another's is worse than not checking.
+    $page = if ($PSBoundParameters.ContainsKey('UpdatePageUrl')) { $UpdatePageUrl } else { $UpdateFeedUrl }
+    $updates += "-p:UpdatePageUrl=$page"
+
+    if ($UpdateFeedUrl) {
+        Write-Host "  Update feed: $UpdateFeedUrl"
+    } else {
+        Write-Host '  Update check disabled for this build.'
+    }
+} else {
+    Write-Host '  Update feed: the project default (pass -UpdateFeedUrl to change it).'
+}
+
 dotnet publish (Join-Path $root 'src\Mullion.App\Mullion.App.csproj') `
     -c Release -r win-x64 --self-contained true `
-    -o $OutputDirectory --nologo -v q @sponsor
+    -o $OutputDirectory --nologo -v q @sponsor @updates
 
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 

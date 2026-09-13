@@ -1,0 +1,79 @@
+# Publish a release when a version tag is pushed.
+#
+#   git tag v1.1.0 && git push origin v1.1.0
+#
+# The tag is what the app's own update check reads, so it has to be the version
+# in Directory.Build.props with a "v" in front. The job checks that rather than
+# trusting it: a tag that disagrees with the build would publish 1.1.0 as an
+# executable reporting 1.0.0, and every installed copy would go on offering the
+# update it had just installed.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Check the tag matches the version in the build
+        shell: pwsh
+        run: |
+          $props = [xml](Get-Content Directory.Build.props)
+          $version = $props.Project.PropertyGroup.VersionPrefix | Where-Object { $_ }
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+
+          if ($version -ne $tag) {
+            throw "Tag $tag does not match VersionPrefix $version. Bump Directory.Build.props, or retag."
+          }
+
+          Write-Host "Version $version matches the tag."
+
+      # Publish runs the tests itself and refuses to produce an exe if any fail,
+      # which is the same guard a desk build gets. A hotkey tool that is broken
+      # is worse than one that is absent.
+      #
+      # SponsorUrl comes from a repository variable, so the official release
+      # carries the support button and a fork building from the same workflow
+      # does not. Unset, the button does not render at all.
+      - name: Publish
+        shell: pwsh
+        run: |
+          $sponsor = "${{ vars.SPONSOR_URL }}"
+
+          if ($sponsor) {
+            .\tools\Publish.ps1 -SponsorUrl $sponsor
+          } else {
+            .\tools\Publish.ps1
+          }
+
+      # The binary is not code-signed, so SmartScreen will warn about it and
+      # some scanners will flag the keyboard hook. A checksum published beside
+      # the download is the one thing that lets a cautious person confirm they
+      # got the file this workflow built.
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash publish\Mullion.exe -Algorithm SHA256).Hash
+          "$hash  Mullion.exe" | Out-File -FilePath publish\Mullion.exe.sha256 -Encoding ascii
+          Write-Host "SHA256: $hash"
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            publish/Mullion.exe
+            publish/Mullion.exe.sha256

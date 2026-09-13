@@ -1,0 +1,39 @@
+# Build and test every push and pull request.
+#
+# Runs on Windows rather than the cheaper Linux runner because that is where
+# the app actually has to work. Mullion.Core is platform neutral and would test
+# fine on Linux, but the App tests - the ones covering the window, the diagram
+# and the host - skip themselves off Windows, so a green Linux run would be
+# reporting on about half the suite while looking like it covered all of it.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The build stamps the short commit onto InformationalVersion, so a
+          # log line or a bug report names the exact build. A shallow clone
+          # still has HEAD, which is all `git rev-parse --short HEAD` needs.
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          # Pinned by global.json, so CI and a desk build cannot drift.
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Mullion.slnx
+
+      - name: Build
+        run: dotnet build Mullion.slnx --no-restore -c Release
+
+      - name: Test
+        run: dotnet test Mullion.slnx --no-build -c Release --verbosity normal

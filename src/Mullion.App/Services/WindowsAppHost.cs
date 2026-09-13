@@ -8,6 +8,7 @@ using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Model;
 using Mullion.Core.Simulation;
+using Mullion.Core.Updates;
 using Mullion.Platform.Windows.Displays;
 using Mullion.Platform.Windows.Hotkeys;
 using Mullion.Platform.Windows.Windows;
@@ -161,6 +162,11 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         }
 
         _engine.Start();
+
+        // After the hook, and never waited on. The hotkeys are the reason the
+        // app exists; a release feed that takes ten seconds to answer must not
+        // hold them up.
+        BeginScheduledUpdateCheck();
 
         // Monitors get plugged in, resolutions change, laptops dock. Without
         // this the app keeps snapping to zones that describe a desk that is no
@@ -567,7 +573,9 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             DescribeDragConflict(),
             DragConflictActionText,
             _config.General.DragToSnap,
-            DragArmingModifier.ToString());
+            DragArmingModifier.ToString(),
+            _update?.Version.ToString(),
+            _update?.Url);
     }
 
     // ---- wizard ------------------------------------------------------------
@@ -694,7 +702,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _config.General.DragModifier,
             _config.General.StartInTray,
             ModifierChoice.Format(HotkeyModifier),
-            DescribeActions());
+            DescribeActions(),
+            _config.General.CheckForUpdates);
     }
 
     /// <summary>
@@ -1108,6 +1117,123 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
               $"It was made for: {string.Join(", ", preview.Missing)}.";
     }
     public void SetStartInTray(bool value) => UpdateGeneral(g => g with { StartInTray = value });
+
+    // ---- updates -----------------------------------------------------------
+
+    private UpdateService? _updates;
+
+    /// <summary>
+    /// Where the update check gets its answer.
+    /// <para>
+    /// Settable so a test can exercise the wiring - check, snapshot, window -
+    /// without a network. A suite that reached api.github.com would be slow,
+    /// flaky offline, and would spend the rate limit of whoever ran it.
+    /// </para>
+    /// <para>
+    /// A simulated arrangement gets a source that answers nothing at all. The
+    /// rule everywhere else in simulation is that nothing touching the real
+    /// machine runs, and an outbound request is exactly that.
+    /// </para>
+    /// </summary>
+    public UpdateService Updates
+    {
+        get => _updates ??= Simulated is null
+            ? new UpdateService(_log)
+            : new UpdateService(_ => Task.FromResult<string?>(null), _log);
+        set => _updates = value;
+    }
+
+    /// <summary>
+    /// The newer release, once one has been found. Held rather than re-fetched
+    /// so the main window can mention it without asking the network every time
+    /// it redraws.
+    /// </summary>
+    private UpdateVerdict? _update;
+
+    public void SetCheckForUpdates(bool value)
+    {
+        UpdateGeneral(g => g with { CheckForUpdates = value });
+
+        // Turning it off clears what a previous check found. Leaving the notice
+        // on screen after being told to stop looking is the opposite of what
+        // the switch says it does.
+        if (!value)
+        {
+            _update = null;
+            StateChanged?.Invoke();
+        }
+    }
+
+    public async Task<UpdateVerdict> CheckForUpdatesNow(CancellationToken ct = default)
+    {
+        var verdict = await Updates.CheckAsync(ct).ConfigureAwait(false);
+
+        Record(verdict);
+        return verdict;
+    }
+
+    public void OpenUpdatePage(string? url)
+    {
+        var target = url ?? UpdateService.PageUrl;
+        if (string.IsNullOrWhiteSpace(target)) return;
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = target,
+
+                // The user's own browser, rather than whatever this process
+                // could launch directly.
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception e)
+        {
+            _log.Info($"Could not open the releases page: {e.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// Files what a check concluded: remembers the answer if it is worth showing,
+    /// and stamps the time so the daily throttle has something to measure from.
+    /// </summary>
+    private void Record(UpdateVerdict verdict)
+    {
+        // Only a definite answer resets the clock. Counting a failed check as
+        // "asked today" means a machine that is offline at the same time each
+        // day would never successfully check at all.
+        if (verdict.Outcome != UpdateOutcome.Unknown)
+            UpdateGeneral(g => g with { LastUpdateCheckUtc = DateTimeOffset.UtcNow });
+
+        _update = verdict.IsAvailable ? verdict : null;
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// The daily look, run once at startup and never waited on.
+    /// <para>
+    /// Deliberately fire-and-forget: nothing in the app depends on the answer,
+    /// and a release feed that hangs must not delay a hook being installed. The
+    /// result arrives through <see cref="StateChanged"/> whenever it arrives.
+    /// </para>
+    /// </summary>
+    private void BeginScheduledUpdateCheck()
+    {
+        if (Simulated is not null) return;
+        if (!_config.General.CheckForUpdates) return;
+        if (!UpdateService.IsAvailable) return;
+        if (!UpdateSchedule.IsDue(_config.General.LastUpdateCheckUtc, DateTimeOffset.UtcNow)) return;
+
+        _ = Task.Run(async () =>
+        {
+            var verdict = await Updates.CheckAsync().ConfigureAwait(false);
+
+            // Back to the UI thread: Record raises StateChanged, and everything
+            // listening to that is a view model.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Record(verdict));
+        });
+    }
 
     public void SetDragToSnap(bool enabled, string modifier)
     {

@@ -214,6 +214,35 @@ public class WindowFitTests
 
     [AvaloniaTheory]
     [MemberData(nameof(Screens))]
+    public void TheUpdateNoticeFitsToo(string name, double width, double height)
+    {
+        // The notice is hidden unless a newer release exists, so every other fit
+        // test measures the row WITHOUT it - which means the one arrangement
+        // that could overflow the top row is the one nothing checks. The text
+        // is as long as it ever gets here.
+        var window = MainWindowFor();
+        var vm = (MainWindowViewModel)window.DataContext!;
+
+        vm.NewerVersion = "10.10.10";
+        vm.NewerVersionUrl = "https://example.invalid/release";
+
+        Lay(window, width, height);
+
+        foreach (var control in Controls(window))
+        {
+            var box = BoundsIn(control, window);
+
+            box.Width.ShouldBeGreaterThan(0, $"{name}: a control collapsed to nothing");
+            box.Right.ShouldBeLessThanOrEqualTo(width + 1,
+                $"{name}: a control runs off the right at {box}");
+
+            ClippedAway(control, window).ShouldBeLessThan(0.05,
+                $"{name}: a control is cut away by what contains it, at {box}");
+        }
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Screens))]
     public void TheEditToolbarSurvivesEveryScreen(string name, double width, double height)
     {
         // The way out of edit mode. Off the bottom of the window it is not

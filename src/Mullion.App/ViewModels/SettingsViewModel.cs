@@ -82,6 +82,69 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Includes the commit, so a bug report identifies the exact build.</summary>
     public string VersionLine => $"Mullion {Services.BuildInfo.Full}";
 
+    // ---- updates -----------------------------------------------------------
+
+    [ObservableProperty]
+    private bool _checkForUpdates = true;
+
+    /// <summary>Whether this build was published with anywhere to look.</summary>
+    public bool CanCheckForUpdates => Services.UpdateService.IsAvailable;
+
+    /// <summary>What the last check concluded, or null before one has run.</summary>
+    [ObservableProperty]
+    private string? _updateMessage;
+
+    /// <summary>Set only when there is a newer release, which is what reveals the button.</summary>
+    [ObservableProperty]
+    private string? _updateUrl;
+
+    [ObservableProperty]
+    private bool _isCheckingForUpdates;
+
+    [RelayCommand]
+    private async Task CheckForUpdatesNow()
+    {
+        if (IsCheckingForUpdates) return;
+
+        IsCheckingForUpdates = true;
+        UpdateMessage = "Checking…";
+        UpdateUrl = null;
+
+        try
+        {
+            var verdict = await _host.CheckForUpdatesNow();
+
+            UpdateUrl = verdict.IsAvailable ? verdict.Url ?? Services.UpdateService.PageUrl : null;
+
+            UpdateMessage = verdict.Outcome switch
+            {
+                Core.Updates.UpdateOutcome.Available => $"Mullion {verdict.Version} is available.",
+                Core.Updates.UpdateOutcome.UpToDate => "This is the latest version.",
+
+                // Not "up to date". The check did not happen, and saying it did
+                // would be a reassurance nobody earned.
+                _ => "Could not check right now.",
+            };
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenUpdatePage() => _host.OpenUpdatePage(UpdateUrl);
+
+    partial void OnCheckForUpdatesChanged(bool value)
+    {
+        if (_loading) return;
+
+        _host.SetCheckForUpdates(value);
+
+        // A check that already found something stays true whether or not the
+        // app keeps looking, so the result is left alone here.
+    }
+
     [ObservableProperty]
     private string? _error;
 
@@ -150,6 +213,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         IsElevated = s.IsElevated;
         ConfigPath = s.ConfigPath;
         LogPath = s.LogPath;
+        CheckForUpdates = s.CheckForUpdates;
 
         Surfaces = [.. s.AvailableSurfaces.Select(x => new SurfaceOption(x.Id, x.Name))];
         SelectedSurface = Surfaces.FirstOrDefault(x => x.Id == s.SurfaceId);
@@ -395,6 +459,12 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void OpenConfigFolder() { }
     public void OpenLogFolder() { }
     public void RerunWizard() { }
+    public void SetCheckForUpdates(bool value) { }
+
+    public Task<Core.Updates.UpdateVerdict> CheckForUpdatesNow(CancellationToken ct = default) =>
+        Task.FromResult(new Core.Updates.UpdateVerdict(Core.Updates.UpdateOutcome.UpToDate, default, null));
+
+    public void OpenUpdatePage(string? url) { }
 }
 
 /// <summary>

@@ -15,7 +15,7 @@ input chain and can take those keys directly. No remap in the chain.
 
 ## The idea
 
-The left-hand key block is already a 2×3 grid, so the display arrangement is
+The left-hand key block is already a grid, so the display arrangement is
 mapped onto it position for position:
 
 ```
@@ -54,6 +54,14 @@ on the machine and nothing has to be kept in step with it.
 Then turn on **Start Mullion when I sign in** in Settings. Auto-start records
 wherever the exe is at that moment, so move it first and set it afterwards.
 
+**The build is not code-signed**, so Windows shows "Windows protected your PC"
+on first run — choose *More info* → *Run anyway*. Some antivirus engines also
+flag it on sight, because a keyboard hook inside a single-file bundle has the
+same shape as a packed keylogger. What separates the two is what the hook does
+with a keystroke, and this one never records them: only the *name* of a chord
+that matched is ever logged, which is a rule the code is built around rather
+than a promise made about it. The source is here to check.
+
 The publish runs the tests and refuses to produce an exe if any fail. A hotkey
 tool that is broken is worse than one that is absent: it swallows keystrokes on
 their way to whatever you actually wanted.
@@ -61,6 +69,32 @@ their way to whatever you actually wanted.
 Not trimmed, deliberately. Avalonia resolves controls, converters and styles by
 name at runtime, so a trimmer that cannot see those uses removes them — and the
 failure is a blank window at launch rather than a build error.
+
+## Updates
+
+Once a day the app asks GitHub whether a newer release exists, and says so on
+the main window if one does. There is no installer and no package manager here
+— one file, copied wherever you like — so without this a fix ships and the
+people it was written for never find out.
+
+It sends nothing. No identifier, no machine, no version in a query string, no
+record of who asked: it is a GET for a public file, and the answer is compared
+locally. This is the only network request Mullion makes, so turning the setting
+off in Settings → About makes the app silent.
+
+That restraint is the point rather than a detail. This app installs a low-level
+keyboard hook, which is the same mechanism a keylogger uses, and from outside
+the only difference is what the process sends and what it keeps.
+
+The feed is a build property, so a fork points it at its own releases — or
+passes an empty string to build a version that never checks at all:
+
+```
+.\tools\Publish.ps1 -UpdateFeedUrl "https://api.github.com/repos/<you>/<repo>/releases/latest" `
+                    -UpdatePageUrl "https://github.com/<you>/<repo>/releases/latest"
+
+.\tools\Publish.ps1 -UpdateFeedUrl ""
+```
 
 ## Building
 
@@ -84,6 +118,34 @@ leave a window somewhere unexpected minutes later.
 Win held, A tapped 3x    1280 -> 2560 -> 5120 wide
 Win released between     1280 each time
 ```
+
+## Subzones
+
+The rows above and below the home row hold each column's subzones, and which
+way a zone is cut follows its shape rather than a fixed rule. A wide zone splits
+into left and right halves, a tall one into upper and lower — so a 16:9 monitor
+in a three-monitor row gives two windows side by side, which is what that shape
+is good for, while a portrait panel still stacks.
+
+Hold **Shift** to get the other orientation for one press, without changing
+anything: `Win+Shift+Q` takes the half that `Win+Q` did not. The diagram draws
+whichever half is not the default as a dotted line, so the alternative is
+visible rather than remembered.
+
+To change it for good, open the zone editor and use the arrows in a zone's
+corner. That pins the axis for that zone, and pinning is an edit like any
+other — it undoes, redoes, and clears with **Reset zones**.
+
+## Other keys
+
+| Binding | Action |
+|---|---|
+| `Win+` `` ` `` | Minimize the focused window |
+| `Win+Backspace` | Undo the last move — including a minimize, which comes back focused |
+
+Both are defaults rather than fixtures: rebind them in Settings, or clear them.
+Any key can be bound, not only the fifteen the layout happens to use — those are
+where the zones *start*, not a limit on what a binding may be.
 
 ## Simulated arrangements
 
@@ -179,7 +241,8 @@ src/Mullion.Core/               no OS calls; all the layout maths and hotkey mat
 src/Mullion.Platform.Windows/   every P/Invoke, and nothing else
 src/Mullion.App/                Avalonia UI, tray, wizard
 tools/Mullion.Probe/            diagnostic CLI
-tests/Mullion.Core.Tests/       132 tests, run on any OS
+tests/Mullion.Core.Tests/       the layout and hotkey maths, run on any OS
+tests/Mullion.App.Tests/        the UI, headless
 ```
 
 `Mullion.Core` references no Windows or Avalonia assemblies. That boundary is
@@ -209,7 +272,15 @@ a self-contained job rather than a rewrite.
 
 ## Not yet built
 
-Named layout snapshots and per-app rules.
+Named layout snapshots and per-app rules. Layouts already export and import as
+a file, from Settings; what that file does not carry is the general settings
+around them.
 
-Drag-to-snap across several monitors has never been exercised: the per-zone
-overlay exists for mixed DPI, which a single display cannot produce.
+Mixed-DPI drag-to-snap is unexercised. Several same-DPI monitors work — that is
+where the overlay was found spilling onto the neighbouring screen, and fixed —
+but the per-zone overlay also exists to handle displays at *different* scalings,
+which no arrangement here can produce.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

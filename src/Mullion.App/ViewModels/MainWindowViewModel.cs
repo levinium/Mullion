@@ -226,6 +226,30 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string HookWarning => $"Hotkeys: {HookStatus}.";
 
+    // ---- a newer release ---------------------------------------------------
+
+    /// <summary>
+    /// Version of a published release newer than this one, or null.
+    /// <para>
+    /// This is the only place an automatic check surfaces. Everything else
+    /// Mullion has to say appears because something is wrong, so a new version
+    /// gets the same treatment: one line, only when there is something to say,
+    /// and gone again once the build is current.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private string? _newerVersion;
+
+    [ObservableProperty]
+    private string? _newerVersionUrl;
+
+    public bool HasUpdate => !string.IsNullOrEmpty(NewerVersion);
+
+    public string UpdateLine => $"Mullion {NewerVersion} available";
+
+    [RelayCommand]
+    private void OpenUpdatePage() => _host.OpenUpdatePage(NewerVersionUrl);
+
     /// <summary>
     /// What pressing the button will DO - a play triangle while paused, a pause
     /// bar while running. Showing the current state instead means the two look
@@ -268,6 +292,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         BlockedByWindow = snapshot.BlockedByWindow;
         SimulationName = snapshot.SimulationName;
+
+        NewerVersion = snapshot.NewerVersion;
+        NewerVersionUrl = snapshot.NewerVersionUrl;
+        OnPropertyChanged(nameof(HasUpdate));
+        OnPropertyChanged(nameof(UpdateLine));
 
         OnPropertyChanged(nameof(HasConflicts));
         OnPropertyChanged(nameof(IsSimulating));
