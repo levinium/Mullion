@@ -19,6 +19,8 @@ Nothing to configure before it works.
 
 [![Watch the walkthrough](docs/video-thumb.png)](https://www.youtube.com/watch?v=vHH7WOFfPAM)
 
+https://github.com/user-attachments/assets/f65eecd3-7235-4598-a8ad-1f26c4286d97
+
 Three and a half minutes: installing it, what the keys do, and how it handles
 whatever monitors you happen to have.
 
