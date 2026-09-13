@@ -34,8 +34,12 @@ then **Run anyway** — or read the source and build it yourself. Some antivirus
 engines flag it on sight too, because a keyboard hook inside a single file has
 the same shape as a packed keylogger. What separates the two is what the hook
 does with a keystroke, and this one never records them: only the *name* of a
-chord that matched is ever written down. Every release publishes a SHA256 beside
-the download.
+chord that matched is ever written down.
+
+[SECURITY.md](SECURITY.md) sets out exactly why the hook is needed, what is
+never recorded, and what does and does not leave your machine. Every release
+publishes a SHA256 beside the download so you can check you got the file the
+build produced.
 
 ## Why it exists
 
