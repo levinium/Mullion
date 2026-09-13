@@ -63,8 +63,16 @@ public sealed class UpdateInstaller
     private readonly Func<string, CancellationToken, Task<Stream>> _open;
     private readonly string? _exe;
 
-    public UpdateInstaller(Log? log = null, string? exePath = null)
-        : this(OpenAsync, log, exePath) { }
+    /// <param name="launch">
+    /// How the replacement is started. Left null it really is started; supplied,
+    /// it is not - which is what lets the live update test download and install
+    /// for real without also launching a second Mullion at the test runner.
+    /// </param>
+    public UpdateInstaller(
+        Log? log = null,
+        string? exePath = null,
+        Func<string, IReadOnlyList<string>, bool>? launch = null)
+        : this(OpenAsync, log, exePath, launch) { }
 
     /// <summary>
     /// Takes the fetch and the executable's own path as arguments, so the rename

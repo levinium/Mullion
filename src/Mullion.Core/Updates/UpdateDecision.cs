@@ -95,8 +95,12 @@ public static class UpdateDecision
         if (!ReleaseVersion.TryParse(currentVersion, out var running))
             return new UpdateVerdict(UpdateOutcome.Unknown, published, latest.Url);
 
+        // Carried on both answers, not just the interesting one. The field says
+        // what release the verdict is ABOUT, and that is just as true of "you
+        // already have it" - a caller asking what the latest release contains
+        // should not have to fetch the feed again to find out.
         return published.IsNewerThan(running)
             ? new UpdateVerdict(UpdateOutcome.Available, published, latest.Url, latest)
-            : new UpdateVerdict(UpdateOutcome.UpToDate, published, latest.Url);
+            : new UpdateVerdict(UpdateOutcome.UpToDate, published, latest.Url, latest);
     }
 }
