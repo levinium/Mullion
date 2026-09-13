@@ -29,7 +29,7 @@ public class ZoneUndoTests
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "The Windows host is not available here.");
 
-        var host = new WindowsAppHost(SimulatedTopologies.Find(topologyId));
+        var host = new WindowsAppHost(SimulatedTopologies.Find(topologyId), TestConfig.Path());
         host.Start();
         return host;
     }
@@ -162,5 +162,144 @@ public class ZoneUndoTests
         host.ResetLayout();
 
         Shape(host).ShouldBe(shaped);
+    }
+    // ---- Pinning a zone's subzone axis --------------------------------------
+
+    /// <summary>Which way each zone's subzones are cut, as the diagram shows it.</summary>
+    private static IReadOnlyList<bool> Axes(WindowsAppHost host) =>
+    [
+        .. host.BuildInteractiveDiagram(null, null, null, null)
+            .Displays.SelectMany(d => d.Cells)
+            .Select(c => c.IsSideBySide)
+    ];
+
+    [Fact]
+    public void FlippingASubzoneAxisCanBeUndoneAndRedone()
+    {
+        // Pinning an axis is an edit like any other, so it owes the same round
+        // trip. It writes to the same override record as the zone count, and the
+        // history compares those records - so a change the comparison could not
+        // see would be one undo silently skipped over.
+        using var host = Host("single-32-9");
+
+        var slot = host.GetCustomizations()[0].Slot;
+        var before = Axes(host);
+
+        host.FlipSubzoneAxis(slot, 0);
+        var flipped = Axes(host);
+
+        flipped.ShouldNotBe(before, "the flip should have changed the diagram");
+
+        host.UndoZones();
+        Axes(host).ShouldBe(before);
+
+        host.RedoZones();
+        Axes(host).ShouldBe(flipped);
+    }
+
+    [Fact]
+    public void FlippingBackAndForthLandsWhereItStarted()
+    {
+        // The value stored is the axis wanted, not a toggle flag, so flipping
+        // twice has to arrive back at the derived answer rather than drift.
+        using var host = Host("single-32-9");
+
+        var slot = host.GetCustomizations()[0].Slot;
+        var before = Axes(host);
+
+        host.FlipSubzoneAxis(slot, 0);
+        host.FlipSubzoneAxis(slot, 0);
+
+        Axes(host).ShouldBe(before);
+    }
+
+    [Fact]
+    public void APinnedAxisIsSomethingToReset()
+    {
+        // The reset button asks whether the desk differs from its default. An
+        // axis pinned against the shape rule is a difference, and one the button
+        // has to be able to undo or it stays lit with nothing to do.
+        using var host = Host("single-32-9");
+
+        var slot = host.GetCustomizations()[0].Slot;
+        host.FlipSubzoneAxis(slot, 0);
+
+        host.HasCustomZones.ShouldBeTrue();
+
+        host.ResetAllOverrides();
+
+        host.HasCustomZones.ShouldBeFalse();
+    }
+
+    // ---- Whether "reset zones" has anything to reset ------------------------
+    //
+    // It used to count override RECORDS, and a record is not a difference: a
+    // stored "three columns" for a display the engine already splits into three
+    // is a choice that happens to agree with the default. The button was lit for
+    // it and did nothing when pressed.
+
+    [Fact]
+    public void ADeskNobodyHasTouchedHasNothingToReset()
+    {
+        using var host = Host("single-32-9");
+
+        host.HasCustomZones.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AnOverrideThatAgreesWithTheDefaultIsNotACustomization()
+    {
+        // The exact state found in a real config: the derived count, written
+        // down. Stepping up and back down leaves precisely that.
+        using var host = Host("single-32-9");
+        var slot = host.GetCustomizations()[0].Slot;
+        var derived = host.GetCustomizations()[0].Columns;
+
+        host.SetDisplayColumns(slot, derived + 1);
+        host.SetDisplayColumns(slot, derived);
+
+        host.GetCustomizations()[0].IsCustom
+            .ShouldBeTrue("an override record should still exist to make this test meaningful");
+
+        host.HasCustomZones
+            .ShouldBeFalse("the zones match the defaults, whatever the bookkeeping says");
+    }
+
+    [Fact]
+    public void AZoneCountThatDiffersIsACustomization()
+    {
+        using var host = Host("single-32-9");
+        var slot = host.GetCustomizations()[0].Slot;
+
+        host.SetDisplayColumns(slot, host.GetCustomizations()[0].Columns + 1);
+
+        host.HasCustomZones.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ADraggedSeamIsACustomizationEvenAtTheSameCount()
+    {
+        // Same number of zones, different sizes. Counting records would have
+        // caught this one too; comparing shapes is what makes it certain.
+        using var host = Host("single-32-9");
+        var slot = host.GetCustomizations()[0].Slot;
+
+        host.SetDisplayWeights(slot, [0.5, 0.3, 0.2]);
+
+        host.HasCustomZones.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ResettingLeavesNothingLeftToReset()
+    {
+        using var host = Host("single-32-9");
+        var slot = host.GetCustomizations()[0].Slot;
+
+        host.SetDisplayColumns(slot, host.GetCustomizations()[0].Columns + 1);
+        host.HasCustomZones.ShouldBeTrue();
+
+        host.ResetAllOverrides();
+
+        host.HasCustomZones.ShouldBeFalse();
     }
 }

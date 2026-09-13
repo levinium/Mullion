@@ -38,9 +38,21 @@ public static class ZoneFit
         Math.Abs(window.Bottom - zone.Bottom) <= Tolerance;
 
     /// <summary>
+    /// Whether two rectangles are the same size, wherever they happen to be.
+    /// <para>
+    /// The distinction the size memory turns on. Mullion sets a window's
+    /// position and its size together; a user who has since dragged it has
+    /// changed only the first, and has chosen no new size to come back to.
+    /// </para>
+    /// </summary>
+    public static bool SameSize(PxRect a, PxRect b) =>
+        Math.Abs(a.Width - b.Width) <= Tolerance &&
+        Math.Abs(a.Height - b.Height) <= Tolerance;
+
+    /// <summary>
     /// A remembered size, put back inside the zone it is being restored into.
     /// <para>
-    /// Centred rather than returned to where it originally was: the window is
+    /// Centered rather than returned to where it originally was: the window is
     /// being dropped HERE, so here is where it should stay. A window that has
     /// since grown larger than the zone is capped, or restoring it would throw
     /// it outside the zone it was dropped in.
@@ -56,4 +68,33 @@ public static class ZoneFit
 
         return PxRect.FromLtrb(left, top, left + width, top + height);
     }
+
+    /// <summary>
+    /// What dropping a window into a zone should do, given where it is now and
+    /// the last size its owner chose for it.
+    /// <para>
+    /// Decided here rather than in the drop handler so the probe that verifies
+    /// the toggle against a real window is exercising the same rule the app
+    /// runs, not a second copy of it that could drift.
+    /// </para>
+    /// </summary>
+    /// <param name="current">Where the window is, or null if it could not be read.</param>
+    /// <param name="chosen">The last size not set by Mullion, or null if unknown.</param>
+    public static DropPlan Plan(PxRect? current, PxRect? chosen, PxRect zone)
+    {
+        // Restoring needs all three: the window has to be filling the zone (or
+        // there is nothing to come back from), a remembered size has to exist,
+        // and it has to differ from the zone - otherwise "restoring" would put
+        // the window exactly where it already is and read as a dead gesture.
+        var restoring =
+            current is { } now && chosen is { } size &&
+            Fills(now, zone) && !Fills(size, zone);
+
+        return restoring
+            ? new DropPlan(Restore(chosen!.Value, zone), true)
+            : new DropPlan(zone, false);
+    }
 }
+
+/// <summary>Where a dropped window should go, and whether that is the way back.</summary>
+public readonly record struct DropPlan(PxRect Target, bool Restoring);

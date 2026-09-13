@@ -22,10 +22,12 @@ public interface IZoneEditingHost
     MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos>? onZoneActivated,
         Action<string, IReadOnlyList<double>>? onSplitChanged,
-        Action<string, int>? onZoneCountChanged);
+        Action<string, int>? onZoneCountChanged,
+        Action<string, int>? onSubzoneAxisFlipped);
 
     /// <summary>Set how many zones a display splits into, by hand.</summary>
     void SetDisplayColumns(string slot, int columns);
+    void FlipSubzoneAxis(string slot, int zone);
 
     /// <summary>Set the relative sizes of a display's zones.</summary>
     void SetDisplayWeights(string slot, IReadOnlyList<double> weights);
@@ -42,7 +44,7 @@ public interface IZoneEditingHost
     /// <summary>Put everything back to where the session started.</summary>
     void CancelZoneEdit();
 
-    /// <summary>Whether any zone shape has been customised, so a reset has a job to do.</summary>
+    /// <summary>Whether any zone shape has been customized, so a reset has a job to do.</summary>
     bool HasCustomZones { get; }
 
     /// <summary>The same question for the keys, which reset separately.</summary>

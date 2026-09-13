@@ -17,7 +17,12 @@ public readonly record struct KeyEvent(
     bool IsKeyUp,
     bool IsInjected,
     bool IsOurInjection,
-    long TimestampMs);
+    long TimestampMs,
+    bool IsExtended = false)
+{
+    /// <summary>The key this event is about, as a binding identifies it.</summary>
+    public KeyStroke Key => new(ScanCode, IsExtended);
+}
 
 [Flags]
 public enum HookAction
@@ -83,10 +88,23 @@ public sealed class HotkeyStateMachine(
 
     private readonly HashSet<ushort> _modifiersDown = [];
 
-    private Dictionary<(ChordModifiers Mods, ushort Scan), HotkeyAction> _bindings = [];
-    private Dictionary<(ChordModifiers Mods, ushort Scan), IReadOnlyList<HotkeyAction>> _rings = [];
+    private Dictionary<(ChordModifiers Mods, KeyStroke Key), HotkeyAction> _bindings = [];
+    private Dictionary<(ChordModifiers Mods, KeyStroke Key), IReadOnlyList<HotkeyAction>> _rings = [];
 
-    private ushort _activeScan;
+    private KeyStroke _activeKey;
+
+    /// <summary>
+    /// The chord the active cycle belongs to, not merely the key.
+    /// <para>
+    /// Both halves are needed. Win+Shift+Q and Win+Q are different hotkeys landing
+    /// on the same physical key, so with the scan code alone the second looked
+    /// exactly like a repeat of the first and advanced the ring - releasing Shift
+    /// and pressing Q again skipped the size that press was asking for, because
+    /// the machine believed it had already been shown.
+    /// </para>
+    /// </summary>
+    private ChordModifiers _activeMods;
+
     private int _cycleIndex;
     private bool _winConsumed;
     private bool _capturing;
@@ -97,7 +115,7 @@ public sealed class HotkeyStateMachine(
 
     public bool IgnoreInjected { get; set; } = ignoreInjected;
 
-    public event Action<ChordModifiers, ushort>? ChordCaptured;
+    public event Action<ChordModifiers, KeyStroke>? ChordCaptured;
 
     /// <summary>
     /// Escape ended the capture without a chord.
@@ -108,11 +126,11 @@ public sealed class HotkeyStateMachine(
     /// while the UI went on saying it was waiting for a key.
     /// </para>
     /// </summary>
-    public event Action? CaptureCancelled;
+    public event Action? CaptureCanceled;
 
     public void SetBindings(
-        IReadOnlyDictionary<(ChordModifiers, ushort), HotkeyAction> bindings,
-        IReadOnlyDictionary<(ChordModifiers, ushort), IReadOnlyList<HotkeyAction>>? rings = null)
+        IReadOnlyDictionary<(ChordModifiers, KeyStroke), HotkeyAction> bindings,
+        IReadOnlyDictionary<(ChordModifiers, KeyStroke), IReadOnlyList<HotkeyAction>>? rings = null)
     {
         _bindings = bindings.ToDictionary(kv => kv.Key, kv => kv.Value);
         _rings = rings?.ToDictionary(kv => kv.Key, kv => kv.Value) ?? [];
@@ -122,6 +140,35 @@ public sealed class HotkeyStateMachine(
     public void BeginCapture() { _capturing = true; }
 
     public void EndCapture() { _capturing = false; }
+
+    /// <summary>
+    /// Let go of any modifier the keyboard says is not actually held.
+    /// <para>
+    /// Only ever drops. A modifier we believe is down and physically is not can
+    /// only cause harm - it fires hotkeys nobody asked for and swallows the keys
+    /// they were typing. The opposite mismatch is ordinary and momentary: the
+    /// key-down being processed right now is physically down before this machine
+    /// has been told about it, and adding it here would be racing the very event
+    /// that is about to do it properly.
+    /// </para>
+    /// <para>
+    /// Checked on every event, but only paid for when something is believed held:
+    /// with nothing down - which is the whole of ordinary typing - this reads one
+    /// field and returns.
+    /// </para>
+    /// </summary>
+    private void DropStuckModifiers()
+    {
+        if (PhysicalModifiers is null || _modifiersDown.Count == 0) return;
+
+        var believed = CurrentModifiers;
+        if (believed == ChordModifiers.None) return;
+
+        var physical = PhysicalModifiers();
+        if ((believed & ~physical) == 0) return;
+
+        ResyncModifiers(physical);
+    }
 
     /// <summary>
     /// Re-read which modifiers are physically down. Called after a re-hook, a
@@ -137,7 +184,8 @@ public sealed class HotkeyStateMachine(
         if (actuallyDown.HasFlag(ChordModifiers.Alt)) _modifiersDown.Add(VkLMenu);
         if (actuallyDown.HasFlag(ChordModifiers.Win)) _modifiersDown.Add(VkLWin);
 
-        _activeScan = 0;
+        _activeKey = KeyStroke.None;
+        _activeMods = ChordModifiers.None;
         _cycleIndex = 0;
         _winConsumed = false;
     }
@@ -145,7 +193,8 @@ public sealed class HotkeyStateMachine(
     public void Reset()
     {
         _modifiersDown.Clear();
-        _activeScan = 0;
+        _activeKey = KeyStroke.None;
+        _activeMods = ChordModifiers.None;
         _cycleIndex = 0;
         _winConsumed = false;
     }
@@ -167,6 +216,25 @@ public sealed class HotkeyStateMachine(
         }
     }
 
+    /// <summary>
+    /// How to read the keyboard's ACTUAL modifier state, set by the platform.
+    /// <para>
+    /// Modifier tracking is built from the key events the hook is handed, which
+    /// assumes every key-down is eventually followed by its key-up. Windows
+    /// breaks that assumption whenever the desktop changes underneath a held key:
+    /// press Win+L, or let a UAC prompt take the secure desktop, and the key-up
+    /// is delivered somewhere this hook cannot see. The modifier is then held
+    /// forever as far as Mullion is concerned, and the next bare Q moves a
+    /// window - which is exactly what it looks like from the outside, a machine
+    /// that starts firing hotkeys nobody pressed after signing in.
+    /// </para>
+    /// <para>
+    /// A delegate rather than a call into the platform, so Core stays free of
+    /// Win32 and the recovery can be tested without a keyboard.
+    /// </para>
+    /// </summary>
+    public Func<ChordModifiers>? PhysicalModifiers { get; set; }
+
     public HookDecision Process(in KeyEvent e)
     {
         // 1. Our own injected events must never be reprocessed, or the dummy key
@@ -174,6 +242,8 @@ public sealed class HotkeyStateMachine(
         //    guard holds even while paused.
         if (e.IsOurInjection) return HookDecision.Pass;
         if (e.IsInjected && IgnoreInjected) return HookDecision.Pass;
+
+        DropStuckModifiers();
 
         // 2. Paused: cheapest possible path back out.
         if (!Enabled && !_capturing) return HookDecision.Pass;
@@ -189,7 +259,8 @@ public sealed class HotkeyStateMachine(
                 {
                     // Cycling resets when the modifier is released - the whole
                     // point of gating on hold rather than on a timer.
-                    _activeScan = 0;
+                    _activeKey = KeyStroke.None;
+                    _activeMods = ChordModifiers.None;
                     _cycleIndex = 0;
 
                     if (_winConsumed)
@@ -217,28 +288,28 @@ public sealed class HotkeyStateMachine(
                 if (e.VirtualKey == VkEscape)
                 {
                     _capturing = false;
-                    CaptureCancelled?.Invoke();
+                    CaptureCanceled?.Invoke();
                     return new HookDecision(HookAction.Swallow);
                 }
-                ChordCaptured?.Invoke(CurrentModifiers, e.ScanCode);
+                ChordCaptured?.Invoke(CurrentModifiers, e.Key);
             }
 
             return new HookDecision(HookAction.Swallow);
         }
 
         var mods = CurrentModifiers;
-        var key = (mods, e.ScanCode);
+        var key = (mods, e.Key);
 
         // 5. Key-up of the key we consumed: swallow so no orphan reaches the app.
         if (e.IsKeyUp)
         {
-            if (e.ScanCode == _activeScan) return new HookDecision(HookAction.Swallow);
+            if (e.Key == _activeKey) return new HookDecision(HookAction.Swallow);
             return HookDecision.Pass;
         }
 
         // 6. Auto-repeat. Repeats must be swallowed as well as the original, or
         //    holding the key streams characters into the focused app.
-        if (e.ScanCode == _activeScan && _bindings.ContainsKey(key))
+        if (e.Key == _activeKey && mods == _activeMods && _bindings.ContainsKey(key))
         {
             var repeated = Advance(key);
             return new HookDecision(SwallowWith(mods), repeated);
@@ -247,10 +318,13 @@ public sealed class HotkeyStateMachine(
         // 7. Match. Strict modifier equality, so Win+Shift+A never fires Win+A.
         if (!_bindings.TryGetValue(key, out var action)) return HookDecision.Pass;
 
-        if (_activeScan != e.ScanCode)
+        if (_activeKey != e.Key || _activeMods != mods)
         {
-            // A different anchor resets the cycle, as specified.
-            _activeScan = e.ScanCode;
+            // A different anchor resets the cycle, as specified - and so does the
+            // same anchor under a different chord, which is a different hotkey
+            // asking for its own first size rather than the next one along.
+            _activeKey = e.Key;
+            _activeMods = mods;
             _cycleIndex = 0;
         }
 
@@ -261,7 +335,7 @@ public sealed class HotkeyStateMachine(
     }
 
     /// <summary>Step to the next entry in this key's ring, wrapping at the end.</summary>
-    private HotkeyAction? Advance((ChordModifiers Mods, ushort Scan) key)
+    private HotkeyAction? Advance((ChordModifiers Mods, KeyStroke Key) key)
     {
         if (_rings.TryGetValue(key, out var ring) && ring.Count > 0)
         {

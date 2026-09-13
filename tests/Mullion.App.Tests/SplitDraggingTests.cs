@@ -610,14 +610,14 @@ public class SeamRenderingTests
 
         var cell = diagram.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
 
-        cell.UpperPosition.ShouldNotBeNull();
-        cell.LowerPosition.ShouldNotBeNull();
+        cell.FirstPosition.ShouldNotBeNull();
+        cell.SecondPosition.ShouldNotBeNull();
 
-        cell.ActivateUpperCommand.Execute(null);
-        cell.ActivateLowerCommand.Execute(null);
+        cell.ActivateFirstCommand.Execute(null);
+        cell.ActivateSecondCommand.Execute(null);
         cell.ActivateCommand.Execute(null);
 
-        asked.ShouldBe([cell.UpperPosition!.Value, cell.LowerPosition!.Value, cell.Position]);
+        asked.ShouldBe([cell.FirstPosition!.Value, cell.SecondPosition!.Value, cell.Position]);
 
         // And they really are three different zones.
         asked.Distinct().Count().ShouldBe(3);
@@ -636,14 +636,14 @@ public class SeamRenderingTests
 
         var cell = diagram.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
 
-        diagram.SetCapturing(cell.UpperPosition);
+        diagram.SetCapturing(cell.FirstPosition);
 
-        cell.IsUpperCapturing.ShouldBeTrue();
+        cell.IsFirstCapturing.ShouldBeTrue();
         cell.IsCapturing.ShouldBeFalse("the whole column is not the thing being rebound");
-        cell.IsLowerCapturing.ShouldBeFalse();
+        cell.IsSecondCapturing.ShouldBeFalse();
 
         diagram.SetCapturing(null);
-        cell.IsUpperCapturing.ShouldBeFalse();
+        cell.IsFirstCapturing.ShouldBeFalse();
     }
 
     [AvaloniaFact]
@@ -655,7 +655,7 @@ public class SeamRenderingTests
         var diagram = MonitorDiagramViewModel.Build(topology.Displays, layout);
 
         diagram.Displays.SelectMany(d => d.Cells)
-            .ShouldAllBe(c => !c.IsUpperInteractive && !c.IsLowerInteractive);
+            .ShouldAllBe(c => !c.IsFirstInteractive && !c.IsSecondInteractive);
     }
 
 
@@ -714,7 +714,7 @@ public class SeamRenderingTests
         window.MouseMove(new Point(box.Center.X, box.Y + box.Height * 0.15));
         Dispatcher.UIThread.RunJobs();
         vm.HoverHint.ShouldNotBeNull();
-        vm.HoverHint.ShouldContain(cell.UpperName!);
+        vm.HoverHint.ShouldContain(cell.FirstName!);
 
         window.MouseMove(new Point(box.Center.X, box.Center.Y));
         Dispatcher.UIThread.RunJobs();
@@ -813,8 +813,8 @@ public class SeamRenderingTests
             Dispatcher.UIThread.RunJobs();
 
             var hovered =
-                regions.Count > 0 && regions[0].IsPointerOver ? cell.UpperPosition :
-                regions.Count > 1 && regions[1].IsPointerOver ? cell.LowerPosition :
+                regions.Count > 0 && regions[0].IsPointerOver ? cell.FirstPosition :
+                regions.Count > 1 && regions[1].IsPointerOver ? cell.SecondPosition :
                 highlight.IsVisible ? cell.Position : null;
 
             asked.Clear();
@@ -832,8 +832,8 @@ public class SeamRenderingTests
             var third = (at.Y - box.Y) / box.Height;
 
             var expected =
-                third < 0.36 ? cell.UpperPosition :
-                third > 0.64 ? cell.LowerPosition : cell.Position;
+                third < 0.36 ? cell.FirstPosition :
+                third > 0.64 ? cell.SecondPosition : cell.Position;
 
             hovered.ShouldNotBeNull($"{name}: nothing lit up under the pointer");
             clicked.ShouldNotBeNull($"{name}: the click went nowhere");
@@ -881,8 +881,8 @@ public class SeamRenderingTests
         var vm = (MonitorDiagramViewModel)diagram.DataContext!;
         var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
 
-        cell.UpperPosition.ShouldNotBeNull();
-        cell.LowerPosition.ShouldNotBeNull();
+        cell.FirstPosition.ShouldNotBeNull();
+        cell.SecondPosition.ShouldNotBeNull();
 
         var tile = diagram.GetVisualDescendants().OfType<Button>()
             .Where(b => b.Classes.Contains("zoneTileButton"))
@@ -900,9 +900,9 @@ public class SeamRenderingTests
 
         foreach (var (downs, wanted, what) in new[]
                  {
-                     (upper, cell.UpperPosition!.Value, "the upper half"),
+                     (upper, cell.FirstPosition!.Value, "the upper half"),
                      (whole, cell.Position, "the whole column"),
-                     (lower, cell.LowerPosition!.Value, "the lower half"),
+                     (lower, cell.SecondPosition!.Value, "the lower half"),
                  })
         {
             foreach (var down in downs)
@@ -960,8 +960,8 @@ public class SeamRenderingTests
         var vm = (MonitorDiagramViewModel)diagram.DataContext!;
         var cell = vm.Displays.Single().Cells.OrderBy(c => c.Area.X).First();
 
-        cell.UpperPosition.ShouldNotBeNull();
-        cell.LowerPosition.ShouldNotBeNull();
+        cell.FirstPosition.ShouldNotBeNull();
+        cell.SecondPosition.ShouldNotBeNull();
 
         var tile = diagram.GetVisualDescendants().OfType<Button>()
             .Where(b => b.Classes.Contains("zoneTileButton"))
@@ -980,8 +980,8 @@ public class SeamRenderingTests
 
         var wanted = expected switch
         {
-            "upper" => cell.UpperPosition!.Value,
-            "lower" => cell.LowerPosition!.Value,
+            "upper" => cell.FirstPosition!.Value,
+            "lower" => cell.SecondPosition!.Value,
             _ => cell.Position,
         };
 

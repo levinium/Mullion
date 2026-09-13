@@ -175,7 +175,7 @@ public sealed class VirtualScreenPanel : Panel
         var height = double.IsInfinity(availableSize.Height) ? bounds.Height : availableSize.Height;
 
         var headroom = TopHeadroom;
-        var scale = Scale(width - inserted, height - below - headroom, bounds);
+        var scale = Scale(Budget(width, inserted), Budget(height, below + headroom), bounds);
 
         // Displays are measured at the size they will be ARRANGED at. Measured
         // unconstrained they size to content, and arrange cannot take that back:
@@ -204,8 +204,8 @@ public sealed class VirtualScreenPanel : Panel
         var below = BottomExtent();
 
         var headroom = TopHeadroom;
-        var deskWidth = finalSize.Width - inserted;
-        var deskHeight = finalSize.Height - below - headroom;
+        var deskWidth = Budget(finalSize.Width, inserted);
+        var deskHeight = Budget(finalSize.Height, below + headroom);
         var scale = Scale(deskWidth, deskHeight, bounds);
 
         CurrentScale = scale;
@@ -271,13 +271,29 @@ public sealed class VirtualScreenPanel : Panel
     private static double Scale(double width, double height, Rect bounds)
     {
         var scale = Math.Min(width / bounds.Width, height / bounds.Height);
-        return double.IsInfinity(scale) || scale <= 0 ? 1 : scale;
+        return double.IsInfinity(scale) ? 1 : Math.Max(scale, 0);
     }
+
+    /// <summary>
+    /// What is left for the desk on one axis after the annotations have taken
+    /// their share - and never less than half of it.
+    /// <para>
+    /// An annotation's thickness is whatever it measures, which on a thumbnail
+    /// can exceed the entire box. Subtracted plainly that leaves the desk a
+    /// negative budget, and a scale computed from one is worse than useless:
+    /// the old guard read "scale &lt;= 0" as "unconstrained" and fell back to 1,
+    /// so the one arrangement whose annotations overflowed drew a 5120px desk
+    /// inside a 270px card. Whatever else is true, the desk is the subject and
+    /// keeps half the room.
+    /// </para>
+    /// </summary>
+    private static double Budget(double available, double claimed) =>
+        available - Math.Min(Math.Max(claimed, 0), Math.Max(available, 0) / 2);
 
     /// <summary>Vertical gutters in the order they open across the desk.</summary>
     private List<(Control Child, double Anchor, double Thickness)> Gutters() =>
         [.. Children
-            .Where(c => GetLane(c) == DiagramLane.VerticalGutter)
+            .Where(c => GetLane(c) == DiagramLane.VerticalGutter && Draws(c))
             .Select(c => (
                 Child: c,
                 Anchor: GetLaneAnchor(c),
@@ -291,7 +307,7 @@ public sealed class VirtualScreenPanel : Panel
 
         foreach (var child in Children)
         {
-            if (GetLane(child) != DiagramLane.Bottom) continue;
+            if (GetLane(child) != DiagramLane.Bottom || !Draws(child)) continue;
             total += BottomThickness(child) + LaneGap;
         }
 
@@ -304,7 +320,7 @@ public sealed class VirtualScreenPanel : Panel
 
         foreach (var child in Children)
         {
-            if (GetLane(child) != DiagramLane.Bottom) continue;
+            if (GetLane(child) != DiagramLane.Bottom || !Draws(child)) continue;
             if (GetLaneSlot(child) >= slot) continue;
             total += BottomThickness(child) + LaneGap;
         }
@@ -314,4 +330,17 @@ public sealed class VirtualScreenPanel : Panel
 
     private static double BottomThickness(Control child) =>
         Math.Max(GetLaneThickness(child), child.DesiredSize.Height);
+
+    /// <summary>
+    /// Whether an annotation has anything to show, and so deserves a lane.
+    /// <para>
+    /// Asked of what it measured rather than of IsVisible, because the child in
+    /// a lane is the item container and it is the content inside that is
+    /// hidden - the container stays visible and measures to nothing. Lane
+    /// thickness is a FLOOR, so without this an annotation drawing nothing went
+    /// on reserving its minimum from a desk it contributed nothing to.
+    /// </para>
+    /// </summary>
+    private static bool Draws(Control child) =>
+        child.DesiredSize.Width > 0 && child.DesiredSize.Height > 0;
 }

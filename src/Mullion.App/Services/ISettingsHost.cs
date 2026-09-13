@@ -7,15 +7,13 @@ namespace Mullion.App.Services;
 /// <param name="Key">Display label, e.g. "Win+A".</param>
 /// <param name="Zone">What that key moves the window to.</param>
 /// <param name="Row">Grid position, so a rebind knows what it is moving.</param>
-public sealed record BindingEntry(string Key, string Zone, int Row, int Col);
-
-/// <param name="Cancelled">
+/// <param name="Canceled">
 /// The capture was called off rather than failing - Escape, or clicking the
 /// same zone again. Distinct from failure because there is nothing to report:
 /// leaving "that key is not on the surface" on screen after someone backed
 /// out would answer a question they stopped asking.
 /// </param>
-public sealed record RebindResult(bool Success, string Message, bool Cancelled = false);
+public sealed record RebindResult(bool Success, string Message, bool Canceled = false);
 
 /// <summary>One display's split, as the settings UI needs to show and change it.</summary>
 /// <param name="Slot">Identifies the place on the desk; see DisplaySlot.</param>
@@ -42,13 +40,21 @@ public sealed record SettingsSnapshot(
     string WinKeySuppression,
     string SurfaceId,
     IReadOnlyList<(string Id, string Name)> AvailableSurfaces,
-    IReadOnlyList<BindingEntry> Bindings,
     string ConfigPath,
     string LogPath,
     bool DragToSnap,
     string DragModifier,
     bool StartInTray,
-    string HotkeyModifier);
+    string HotkeyModifier,
+
+    /// <summary>The hotkeys that are not zones, as they currently stand.</summary>
+    IReadOnlyList<ActionBindingView> Actions);
+
+/// <param name="Command">Which action, for handing back to the host.</param>
+/// <param name="Title">What to call it on screen.</param>
+/// <param name="Chord">The chord it answers to, spelled out.</param>
+/// <param name="IsCustom">Whether it has been moved off what Mullion ships with.</param>
+public sealed record ActionBindingView(string Command, string Title, string Chord, bool IsCustom);
 
 public interface ISettingsHost : IZoneEditingHost
 {
@@ -70,13 +76,10 @@ public interface ISettingsHost : IZoneEditingHost
     /// <summary>Which modifier every zone hotkey is taken with.</summary>
     void SetHotkeyModifier(string value);
 
-    /// <summary>The displays and their splits, for the customisation UI.</summary>
+    /// <summary>The displays and their splits, and whether each is customized.</summary>
     IReadOnlyList<DisplayCustomization> GetCustomizations();
 
-    /// <summary>Forget one display's customisation, or all of them.</summary>
-    void ResetDisplayOverride(string slot);
-
-    /// <summary>The current customisations as a portable document.</summary>
+    /// <summary>The current customizations as a portable document.</summary>
     string ExportLayout(string name);
 
     /// <summary>Apply a document. Returns an error to show, or null on success.</summary>
@@ -93,6 +96,19 @@ public interface ISettingsHost : IZoneEditingHost
     void OpenLogFolder();
 
     void RerunWizard();
+
+    /// <summary>
+    /// Listen for the next chord and give it to an action.
+    /// <para>
+    /// The same capture the zone diagram uses, and for the same reason it has to
+    /// go through the hook: a chord with Win in it never reaches a window, so no
+    /// amount of listening in the UI would ever see one.
+    /// </para>
+    /// </summary>
+    void BeginActionRebind(string command, Action<RebindResult> completed);
+
+    /// <summary>Put one action back to the key Mullion ships with.</summary>
+    void ResetAction(string command);
 
 
 

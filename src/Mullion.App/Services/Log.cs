@@ -15,7 +15,7 @@ namespace Mullion.App.Services;
 /// It records what Mullion DID - hook reinstalls, move outcomes, config
 /// problems - and never what was typed. Only the names of chords that matched a
 /// binding are written. A global keyboard hook attracts enough scrutiny without
-/// also keeping a record of keystrokes, and that is far easier to honour from
+/// also keeping a record of keystrokes, and that is far easier to honor from
 /// the start than to retrofit.
 /// </para>
 /// </summary>

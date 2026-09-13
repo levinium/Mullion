@@ -94,6 +94,43 @@ public sealed class ScratchWindow : IDisposable
         if (Handle != 0) WindowClass.SetForegroundWindow(Handle);
     }
 
+    /// <summary>
+    /// Move and size the window from the outside, standing in for a person
+    /// dragging its edge.
+    /// <para>
+    /// It has to come from here rather than from the probe: this is the one
+    /// call in the whole exercise that Mullion must NOT recognize as its own,
+    /// and the only way to be sure of that is for it not to go through the
+    /// window manager at all.
+    /// </para>
+    /// </summary>
+    public void ResizeByHand(int x, int y, int width, int height)
+    {
+        if (Handle == 0) return;
+
+        Win.SetWindowPos(Handle, 0, x, y, width, height, Win.SWP_NOZORDER | Win.SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// Slide the window without touching its size, standing in for a person
+    /// dragging it by the title bar.
+    /// <para>
+    /// Separate from <see cref="ResizeByHand"/> because the difference is the
+    /// whole point: a drag moves a window and chooses no new size for it, and a
+    /// stand-in that changed the size by even a pixel would be testing the
+    /// other case.
+    /// </para>
+    /// </summary>
+    public void DragByHand(int dx, int dy)
+    {
+        if (Handle == 0 || !Win.GetWindowRect(Handle, out var rect)) return;
+
+        Win.SetWindowPos(
+            Handle, 0, rect.Left + dx, rect.Top + dy,
+            rect.Right - rect.Left, rect.Bottom - rect.Top,
+            Win.SWP_NOZORDER | Win.SWP_NOACTIVATE);
+    }
+
     public void Dispose()
     {
         if (Handle != 0)

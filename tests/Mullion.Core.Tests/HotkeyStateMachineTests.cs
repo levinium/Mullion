@@ -18,21 +18,30 @@ public class HotkeyStateMachineTests
     private static KeyEvent Down(ushort scan, ushort vk) => new(scan, vk, false, false, false, 0);
     private static KeyEvent Up(ushort scan, ushort vk) => new(scan, vk, true, false, false, 0);
 
+    /// <param name="flipA">
+    /// What Win+Shift+A does - the subzone flip the engine binds on the same key.
+    /// Present so the tests can exercise two chords sharing one physical key,
+    /// which is where the cycle's identity stops being just the key.
+    /// </param>
     private static HotkeyStateMachine Machine(
         WinKeySuppression suppression = WinKeySuppression.DummyKey,
-        IReadOnlyList<HotkeyAction>? ringA = null)
+        IReadOnlyList<HotkeyAction>? ringA = null,
+        HotkeyAction? flipA = null)
     {
         var sm = new HotkeyStateMachine(suppression);
 
-        var bindings = new Dictionary<(ChordModifiers, ushort), HotkeyAction>
+        var bindings = new Dictionary<(ChordModifiers, KeyStroke), HotkeyAction>
         {
-            [(ChordModifiers.Win, ScanA)] = new("zone-a"),
-            [(ChordModifiers.Win, ScanS)] = new("zone-s"),
-            [(ChordModifiers.Win, ScanD)] = new("zone-d"),
+            [(ChordModifiers.Win, KeyStroke.Plain(ScanA))] = new("zone-a"),
+            [(ChordModifiers.Win, KeyStroke.Plain(ScanS))] = new("zone-s"),
+            [(ChordModifiers.Win, KeyStroke.Plain(ScanD))] = new("zone-d"),
         };
 
-        var rings = new Dictionary<(ChordModifiers, ushort), IReadOnlyList<HotkeyAction>>();
-        if (ringA is not null) rings[(ChordModifiers.Win, ScanA)] = ringA;
+        if (flipA is not null)
+            bindings[(ChordModifiers.Win | ChordModifiers.Shift, KeyStroke.Plain(ScanA))] = flipA;
+
+        var rings = new Dictionary<(ChordModifiers, KeyStroke), IReadOnlyList<HotkeyAction>>();
+        if (ringA is not null) rings[(ChordModifiers.Win, KeyStroke.Plain(ScanA))] = ringA;
 
         sm.SetBindings(bindings, rings);
         return sm;
@@ -132,6 +141,69 @@ public class HotkeyStateMachineTests
     }
 
     [Fact]
+    public void DroppingShiftAndPressingAgainStartsThatKeysOwnRing()
+    {
+        // Win+Shift+A and Win+A are different hotkeys that happen to share a key.
+        // Letting go of Shift and pressing A is therefore a first press of Win+A,
+        // and it must give that zone - not the second entry of its ring.
+        //
+        // Tracking the scan code alone, the machine could not tell this from
+        // holding A down: it had already "shown" A, so it moved on, and the size
+        // the press was actually asking for was skipped.
+        var ring = new HotkeyAction[] { new("a-third"), new("a-half") };
+        var sm = Machine(ringA: ring, flipA: new HotkeyAction("a-flipped"));
+
+        sm.Process(Down(0, VkLWin));
+        sm.Process(Down(VkLShift, VkLShift));
+
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-flipped");
+        sm.Process(Up(ScanA, VkA));
+
+        // Shift goes; Win stays down.
+        sm.Process(Up(VkLShift, VkLShift));
+
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-third",
+            "the plain chord has not been seen yet, so it starts at its first size");
+    }
+
+    [Fact]
+    public void TheRingStillAdvancesAfterThatFirstPlainPress()
+    {
+        // The other half of the pair: resetting on a chord change must not leave
+        // the ring stuck at its first entry for the rest of the Win press.
+        var ring = new HotkeyAction[] { new("a-third"), new("a-half") };
+        var sm = Machine(ringA: ring, flipA: new HotkeyAction("a-flipped"));
+
+        sm.Process(Down(0, VkLWin));
+        sm.Process(Down(VkLShift, VkLShift));
+        sm.Process(Down(ScanA, VkA));
+        sm.Process(Up(ScanA, VkA));
+        sm.Process(Up(VkLShift, VkLShift));
+
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-third");
+        sm.Process(Up(ScanA, VkA));
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-half");
+    }
+
+    [Fact]
+    public void TakingShiftBackUpStartsTheFlipAgainToo()
+    {
+        // Symmetric: the flipped chord is equally entitled to its own first
+        // press, so going back to it must not inherit the plain ring's position.
+        var ring = new HotkeyAction[] { new("a-third"), new("a-half") };
+        var sm = Machine(ringA: ring, flipA: new HotkeyAction("a-flipped"));
+
+        sm.Process(Down(0, VkLWin));
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-third");
+        sm.Process(Up(ScanA, VkA));
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-half");
+        sm.Process(Up(ScanA, VkA));
+
+        sm.Process(Down(VkLShift, VkLShift));
+        sm.Process(Down(ScanA, VkA)).Fire!.Id.ShouldBe("a-flipped");
+    }
+
+    [Fact]
     public void PressingADifferentAnchorResetsTheCycle()
     {
         var ring = new HotkeyAction[] { new("a-third"), new("a-half") };
@@ -219,9 +291,9 @@ public class HotkeyStateMachineTests
     {
         var sm = Machine();
         ChordModifiers? mods = null;
-        ushort scan = 0;
+        var key = KeyStroke.None;
 
-        sm.ChordCaptured += (m, s) => { mods = m; scan = s; };
+        sm.ChordCaptured += (m, k) => { mods = m; key = k; };
         sm.BeginCapture();
 
         sm.Process(Down(0, VkLWin));
@@ -229,7 +301,7 @@ public class HotkeyStateMachineTests
         sm.Process(Down(ScanS, VkS)).Action.ShouldBe(HookAction.Swallow);
 
         mods.ShouldBe(ChordModifiers.Win | ChordModifiers.Shift);
-        scan.ShouldBe(ScanS);
+        key.ShouldBe(KeyStroke.Plain(ScanS));
     }
 
     [Fact]
@@ -270,16 +342,16 @@ public class HotkeyStateMachineTests
         var machine = Machine();
 
         var captured = 0;
-        var cancelled = 0;
+        var canceled = 0;
 
         machine.ChordCaptured += (_, _) => captured++;
-        machine.CaptureCancelled += () => cancelled++;
+        machine.CaptureCanceled += () => canceled++;
 
         machine.BeginCapture();
 
         var decision = machine.Process(new KeyEvent(0x01, 0x1B, false, false, false, 0));
 
-        cancelled.ShouldBe(1);
+        canceled.ShouldBe(1);
         captured.ShouldBe(0, "Escape is not a chord to bind");
         decision.Action.ShouldBe(HookAction.Swallow, "the key must not reach whatever has focus");
     }
@@ -291,12 +363,12 @@ public class HotkeyStateMachineTests
         // focus - swallowing it would break every dialog on the machine.
         var machine = Machine();
 
-        var cancelled = 0;
-        machine.CaptureCancelled += () => cancelled++;
+        var canceled = 0;
+        machine.CaptureCanceled += () => canceled++;
 
         var decision = machine.Process(new KeyEvent(0x01, 0x1B, false, false, false, 0));
 
-        cancelled.ShouldBe(0);
+        canceled.ShouldBe(0);
         decision.Action.ShouldBe(HookAction.PassThrough);
     }
 }

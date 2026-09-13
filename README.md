@@ -145,7 +145,25 @@ mullion-probe --inject Q             inject Win+Q at an already-running Mullion
 mullion-probe --snap S --delay 3     snap the foreground window
 mullion-probe --undo                 restore the last move
 mullion-probe --drag-test            log which apps report a drag, and the zone under the cursor
+mullion-probe --rebind-survives      verify a rebind outlives the next layout rebuild
 ```
+
+## Supporting it
+
+Release builds can carry a "Support Mullion" button; a build from a clean
+checkout cannot. The destination is a build property, empty in this repository,
+and with nothing set the button does not render at all — so a fork ships no ask,
+and there is nothing to remember to strip out.
+
+```
+.\tools\Publish.ps1 -SponsorUrl "https://github.com/sponsors/<user>"
+```
+
+Include an `{amount}` placeholder and the ask becomes a picker — $3 / $5 / $10 /
+$25 and Other, defaulting to $5 — with the chosen sum substituted into the link.
+Only worth doing where the destination actually reads an amount out of the URL:
+offering a choice that the payment page never hears about is worse than not
+asking.
 
 ## The icon
 

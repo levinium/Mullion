@@ -43,7 +43,7 @@ public static class ModifierChoice
             };
         }
 
-        // An unrecognised name must not silently unbind every hotkey: a chord
+        // An unrecognized name must not silently unbind every hotkey: a chord
         // with no modifier would fire on a bare letter, which is far worse than
         // ignoring the setting.
         return mods == ChordModifiers.None ? ChordModifiers.Win : mods;
@@ -56,7 +56,7 @@ public static class ModifierChoice
 
         var parts = new List<string>(4);
 
-        // Ordered the way keyboards are labelled, not the way the flags happen
+        // Ordered the way keyboards are labeled, not the way the flags happen
         // to be numbered.
         if (modifiers.HasFlag(ChordModifiers.Win)) parts.Add("Win");
         if (modifiers.HasFlag(ChordModifiers.Control)) parts.Add("Ctrl");

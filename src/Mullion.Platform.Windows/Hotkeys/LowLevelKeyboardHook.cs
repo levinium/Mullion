@@ -64,6 +64,14 @@ public sealed class LowLevelKeyboardHook : IDisposable
     {
         _machine = machine;
 
+        // So the machine can notice a modifier it thinks is held that the
+        // keyboard says is not. Win+L is the everyday way to produce one: the
+        // lock screen takes the key-up, and Win stays down here for the rest of
+        // the session. GetAsyncKeyState reads a state Windows already maintains,
+        // so this is cheap enough for the hook's hot path - and the machine only
+        // calls it while it believes something is held.
+        _machine.PhysicalModifiers = ReadPhysicalModifiers;
+
         _dummyInput[0] = new INPUT
         {
             type = Hooks.INPUT_KEYBOARD,
@@ -215,6 +223,7 @@ public sealed class LowLevelKeyboardHook : IDisposable
                 VirtualKey: (ushort)kb.vkCode,
                 IsKeyUp: message is Hooks.WM_KEYUP or Hooks.WM_SYSKEYUP,
                 IsInjected: (kb.flags & Hooks.LLKHF_INJECTED) != 0,
+                IsExtended: (kb.flags & Hooks.LLKHF_EXTENDED) != 0,
                 IsOurInjection: kb.dwExtraInfo == Hooks.SentinelExtraInfo,
                 TimestampMs: kb.time);
 

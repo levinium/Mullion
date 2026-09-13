@@ -177,6 +177,29 @@
   <Style Selector="Button.spanMeasure.capturing Rectangle.measureCap">
     <Setter Property="Fill" Value="{DynamicResource CaptureBorder}" />
   </Style>
+  <!-- Nothing in the diagram flinches when it is pressed.
+
+       Fluent shrinks a pressed Button to 0.98, which is good feedback on a
+       control and wrong here twice over. On a diagram drawn to scale it is a
+       lie: the one thing every tile is claiming is that its size means
+       something. And outside edit mode there is no command behind the tile at
+       all, so the flinch was the whole of what a click did - a zone that looked
+       like it was doing something and was not.
+
+       The states that mean something say so in color instead: accent while
+       pointed at, green while waiting for a key. -->
+  <Style Selector="Button.zoneTileButton:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <Style Selector="Button.subZoneRegion:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <Style Selector="Button.spanMeasure:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
   <!-- Only an interactive diagram invites clicking -->
   <Style Selector="Button.zoneTileButton.interactive">
     <Setter Property="Cursor" Value="Hand" />
@@ -289,6 +312,56 @@
     <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
   </Style>
 
+  <!-- Thumbnail chips.
+
+       A zone in a wizard card is about fifty pixels tall and has to hold three
+       of these stacked - the column's key with its two halves above and below -
+       so at full size they simply sat on top of one another and none of the
+       three could be read. Everything else compact mode meets it drops; these
+       it cannot, because the keys are the whole of what the card is choosing
+       between.
+
+       After the base chip styles rather than merged into them: Avalonia settles
+       selectors of equal weight by declaration order, so these have to come
+       last to win. -->
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip">
+    <Setter Property="Padding" Value="5,0" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip TextBlock">
+    <Setter Property="FontSize" Value="9" />
+  </Style>
+
+  <!-- Still the largest thing in its column, because that is what it means. -->
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip.primaryChip">
+    <Setter Property="Padding" Value="6,1" />
+  </Style>
+
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip.primaryChip TextBlock">
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip.tierChip">
+    <Setter Property="Padding" Value="4,0" />
+  </Style>
+
+  <Style Selector="ctl|MonitorDiagram.compact Border.keyChip.tierChip TextBlock">
+    <Setter Property="FontSize" Value="9" />
+  </Style>
+
+  <!-- The outline round the zone's key is chrome, and on a thumbnail it costs
+       more than what it frames: ten pixels of border and padding around a chip
+       that has about fourteen to live in, all of it taken from the band between
+       the tier chips. It exists to say "this is a thing you can point at", and
+       a wizard card is not hit-testable at all.
+
+       Declared here rather than beside the base style so it wins on order. -->
+  <Style Selector="ctl|MonitorDiagram.compact Border.wholeZoneBlock">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
   <Style Selector="TextBlock.zoneName">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
@@ -305,7 +378,7 @@
        that lifts it can land its bottom edge exactly on the bezel's top. -->
   <!-- Two lines, not one. Side by side the name and the resolution made a tab
        far wider than a portrait monitor, and on a row of them each tab ran under
-       its neighbour and was cut off mid-word. Stacked, the tab is only as wide
+       its neighbor and was cut off mid-word. Stacked, the tab is only as wide
        as its longer line, which fits above the monitor it belongs to. -->
   <Style Selector="Border.monitorLabel">
     <Setter Property="MinHeight" Value="34" />
@@ -360,6 +433,72 @@
     <Setter Property="Padding" Value="16" />
   </Style>
 
+  <!-- A section of a card that folds away.
+
+       Stripped back to a heading with a chevron. Fluent's Expander brings a
+       background, a border, a corner radius and a touch-sized header of its
+       own, and inside a card that reads as a second card sitting in the first -
+       a box in a box, for something that is not a separate thing at all but one
+       of the card's own sections.
+
+       Done with the theme's own resources rather than by setting Background on
+       the header. The header's fill does not come from the ToggleButton's
+       Background property at all, so overriding that changed nothing and the
+       pointer still painted a black slab across the heading. These are the keys
+       the template actually reads. -->
+  <Style Selector="Expander.cardSection">
+    <Style.Resources>
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrushPressed" Color="Transparent" />
+
+      <SolidColorBrush x:Key="ExpanderChevronBackground" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderChevronBackgroundPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderChevronBackgroundPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderChevronBorderBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderChevronBorderBrushPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderChevronBorderBrushPressed" Color="Transparent" />
+
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="Transparent" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="Transparent" />
+
+      <!-- The header is one line of text standing where a card's heading
+           stands, so it takes a heading's room and no more. Fluent sizes it for
+           a touch target, which left the collapsed card twice as tall as the
+           line in it. -->
+      <Thickness x:Key="ExpanderHeaderPadding">0</Thickness>
+      <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+      <x:Double x:Key="ExpanderMinHeight">0</x:Double>
+    </Style.Resources>
+
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+
+    <!-- Across the card, not around the word. Sized to its content the header
+         was as wide as "Hotkeys" while it was shut and as wide as the key list
+         once it was open, so the chevron jumped from beside the heading to the
+         far edge on the way. -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="Expander.cardSection /template/ ToggleButton">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <!-- The header is a bare string, so it arrives as a TextBlock the theme
+       would otherwise leave at body weight. -->
+  <Style Selector="Expander.cardSection /template/ ToggleButton TextBlock">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+  </Style>
+
   <!-- Layout choice cards -->
   <Style Selector="RadioButton.choiceCard">
     <Setter Property="Padding" Value="14" />
@@ -397,7 +536,7 @@
   </Style>
 
   <!-- A square, quiet icon button. No border or fill until hovered, so it sits
-       beside labelled buttons without competing with them. -->
+       beside labeled buttons without competing with them. -->
   <!-- Icon buttons
        No chrome at all: the icon IS the button. A backing plate behind every one
        of them made the row read as a strip of tiles rather than as a set of
@@ -406,8 +545,27 @@
        dim at rest, bright under the pointer, faint when there is nothing to
        press, accent while a toggle is holding its state on.
 
-       Meaning is left to the shape and the tooltip, never to a colour one button
-       has and its neighbour does not. -->
+       Meaning is left to the shape and the tooltip, never to a color one button
+       has and its neighbor does not. -->
+  <!-- An icon standing beside a line of prose rather than inside a button, so it
+       takes the same brush the prose does and is not mistaken for something
+       clickable. Stretch=None for the reason every icon here uses it: each glyph
+       keeps the proportions it was drawn with. -->
+  <Style Selector="Path.noteIcon">
+    <Setter Property="Fill" Value="{DynamicResource InkDim}" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="None" />
+  </Style>
+
+  <!-- A word about the hotkeys beside the pause button, and only when there is
+       something wrong. Amber rather than red: the hook coming back is a fact
+       worth knowing, not a failure to act on. -->
+  <Style Selector="TextBlock.hookWarning">
+    <Setter Property="Foreground" Value="{DynamicResource SpanBorder}" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+
   <Style Selector="Button.iconButton">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
@@ -458,6 +616,54 @@
   <!-- Holding something on, which is a different thing from being hovered. -->
   <Style Selector="Button.iconButton.active > Path">
     <Setter Property="Fill" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <!-- The heart at the top of the ask. Larger than a toolbar icon and in the
+       accent, because it is the only decoration in the window and the thing
+       that says at a glance what the window is for. -->
+  <Style Selector="Path.sponsorMark">
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="None" />
+  </Style>
+
+  <!-- An amount, as a chip rather than a radio button. The choice is between
+       four numbers and a text box; radio circles would add a column of
+       furniture to a row that reads perfectly well as buttons, one of which is
+       pressed. -->
+  <Style Selector="Button.amountChip">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="16,7" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.amountChip:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ChipBack}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMid}" />
+  </Style>
+
+  <!-- Declared after the hover rule so a chosen chip stays chosen while the
+       pointer is over it. -->
+  <Style Selector="Button.amountChip.chosen /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Accent}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <Style Selector="Button.amountChip.chosen">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <!-- Nothing in this window flinches when pressed; the chips report by
+       staying lit, which is the state that matters. -->
+  <Style Selector="Button.amountChip:pressed">
+    <Setter Property="RenderTransform" Value="none" />
   </Style>
 
   <Style Selector="Button.accent">
@@ -569,6 +775,80 @@
     <Setter Property="Opacity" Value="0.35" />
   </Style>
 
+  <!-- Turn a zone.s subzones through a right angle. Quiet at rest and only
+       ever present while editing, so it never competes with the chips it shares
+       a tile with; it is a control on a picture, and the picture is the point. -->
+  <!-- A chord that is also the control for changing it. The thing you want to
+       change is the thing you click, which beats a button beside it labelled
+       "change". Monospaced so a row of them lines up down the column. -->
+  <Style Selector="Button.chordButton">
+    <Setter Property="MinWidth" Value="140" />
+    <Setter Property="FontFamily" Value="Consolas, Menlo, monospace" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.chordButton.capturing">
+    <Setter Property="Foreground" Value="{DynamicResource CaptureBorder}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CaptureBorder}" />
+  </Style>
+
+  <Style Selector="Button.zoneFlipButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="Width" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.zoneFlipButton /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Fluent shrinks a pressed button, which on a control this size reads as a
+       flinch rather than as feedback. The color change is the feedback. -->
+  <Style Selector="Button.zoneFlipButton:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <!-- No plate behind it on hover. A filled square appearing under a mark this
+       small is a bigger change than the mark itself, and it lands right where
+       the zone.s own dashed outline runs. The arrow brightening to the accent is
+       the whole feedback, and it is the arrow that is being pointed at. -->
+  <!-- Sized to the whole 24x24 the icon is drawn in, not to the ink in it.
+       A Path measures its geometry's bounds, and this arrow's bounds are wider
+       than they are tall - so the box's centre and the arrow's centre are not the
+       same point, and rotating about the box moved the arrow. Claiming the full
+       square makes the two coincide, which is what lets the upright form sit
+       exactly where the flat one did. -->
+  <Style Selector="Path.zoneFlipMark">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="Fill" Value="{DynamicResource InkFaint}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Fill" Duration="0:0:0.09" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.zoneFlipButton:pointerover Path.zoneFlipMark">
+    <Setter Property="Fill" Value="{DynamicResource Accent}" />
+  </Style>
+
+  <!-- Already split side by side, so the offer is to stand the arrow up. Avalonia
+       takes RenderTransformOrigin from the middle by default, which is the whole
+       reason this is a rotation and not a second icon: the centre cannot move. -->
+  <Style Selector="Button.zoneFlipButton.upright Viewbox">
+    <Setter Property="RenderTransform">
+      <RotateTransform Angle="90" />
+    </Setter>
+  </Style>
+
   <Style Selector="Border.zoneStepper TextBlock.stepperCount">
     <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
     <Setter Property="FontSize" Value="11" />
@@ -579,12 +859,55 @@
 
   <!-- A message from the editor: an outcome, or what it is waiting for. Given a
        surface of its own so a sentence can be read rather than trimmed. -->
-  <Style Selector="Border.editorMessage">
+  <!-- Everything the zone editor says, in one voice.
+
+       There were two: a tinted card above the diagram for instructions, and
+       bare accent text in the toolbar for confirmations. Two looks for two
+       things that are the same thing - the editor talking - and the card is the
+       better of them, so the card won and moved inline.
+
+       Padding is set against the toolbar's icon buttons: 30px tall, and this
+       has to fit inside that or it starts pushing again. Text plus 4 top and
+       bottom plus the border comes to about 25. -->
+  <Style Selector="Border.editorNotice">
     <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentMid}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Padding" Value="9,4" />
+  </Style>
+
+  <!-- The wrapper that makes the transient one dismissable. Nothing of the
+       button shows: the notice inside it is the whole appearance. -->
+  <Style Selector="Button.editorNoticeButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.editorNoticeButton /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.editorNoticeButton:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.editorNoticeButton:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Fluent shrinks a pressed button, which on a notice that is about to
+       vanish reads as a glitch rather than as feedback. -->
+  <Style Selector="Button.editorNoticeButton:pressed">
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <Style Selector="Button.editorNoticeButton:pointerover Border.editorNotice">
+    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
   </Style>
 
   <!-- A tier chip is its own target
@@ -687,9 +1010,9 @@
   </Style>
   <!-- Waiting for a key
        The chip goes green with the region around it. It was left accent-blue,
-       which is its ordinary colour, so picking a whole zone looked like nothing
+       which is its ordinary color, so picking a whole zone looked like nothing
        had happened - while picking one of its halves turned that chip green.
-       One colour means "this is the one you are binding", wherever it appears.
+       One color means "this is the one you are binding", wherever it appears.
 
        Declared late on purpose: styles of equal weight are settled by order,
        and the plain chip style comes after this one in the file. -->
@@ -707,22 +1030,33 @@
     <Setter Property="BorderThickness" Value="2" />
   </Style>
 
-  <!-- Pointed at
+  <!-- Pointed at, and only while there is something to point at
        Hovering the middle band lifts its outline and its words together, so the
        block reads as one thing being pointed at rather than a box that happens
        to have text in it. A half does the same to its chip and size, which sit
        in a layer of their own above it - no selector reaches across, so they
-       carry the half's hover as a class instead. -->
-  <Style Selector="Border.wholeZoneBand:pointerover Border.wholeZoneBlock">
+       carry the half's hover as a class instead.
+
+       Gated on .interactive, like every other hover in this diagram. Ungated,
+       these three were the last thing outside edit mode that answered to a
+       pointer: the outline went accent and thickened by a pixel, which nudged
+       the chip and the name as it grew, so the one part of a picture that
+       twitched under the cursor was the part that does nothing until Edit is
+       pressed. A diagram that is only being read must be inert everywhere -
+       the hover hint is text about the hotkey, not an offer to click. -->
+  <!-- Declaration order carries the gate: Avalonia settles equally-weighted
+       styles by order rather than specificity, so these have to stay after the
+       plain wholeZoneBlock rules they override. -->
+  <Style Selector="Button.zoneTileButton.interactive Border.wholeZoneBand:pointerover Border.wholeZoneBlock">
     <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     <Setter Property="BorderThickness" Value="2" />
   </Style>
 
-  <Style Selector="Border.wholeZoneBand:pointerover TextBlock.zoneName">
+  <Style Selector="Button.zoneTileButton.interactive Border.wholeZoneBand:pointerover TextBlock.zoneName">
     <Setter Property="Foreground" Value="{DynamicResource Ink}" />
   </Style>
 
-  <Style Selector="Border.wholeZoneBand:pointerover TextBlock.zoneSize">
+  <Style Selector="Button.zoneTileButton.interactive Border.wholeZoneBand:pointerover TextBlock.zoneSize">
     <Setter Property="Foreground" Value="{DynamicResource InkDim}" />
   </Style>
 

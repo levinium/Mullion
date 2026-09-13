@@ -51,6 +51,28 @@ public sealed record Zone
     /// <summary>The chord this zone actually answers to, given a default.</summary>
     public Hotkeys.ChordModifiers ChordWith(Hotkeys.ChordModifiers fallback) => Modifier ?? fallback;
 
+    /// <summary>
+    /// The physical key this zone answers to, when it is not the one its place
+    /// on the surface implies.
+    /// <para>
+    /// The same arrangement as <see cref="Modifier"/>, and for the same reason.
+    /// Position says where a zone sits in the grid - which is what the diagram
+    /// draws and what identifies the zone across a rebuild - while this says
+    /// which key reaches it. They were the same thing for as long as a binding
+    /// could only land on the key surface, so a zone could be moved to F5 or to
+    /// the tilde key only by not being movable there at all.
+    /// </para>
+    /// <para>
+    /// Null means "whatever my position implies", so changing the key surface
+    /// still moves every zone that has not been given a key of its own.
+    /// </para>
+    /// </summary>
+    public Hotkeys.KeyStroke? Key { get; init; }
+
+    /// <summary>The key this zone answers to, given the surface it sits on.</summary>
+    public Hotkeys.KeyStroke KeyOn(Hotkeys.KeySurface surface) =>
+        Key ?? Hotkeys.KeyStroke.Plain(surface.ScanCodeAt(Position));
+
     /// <summary>True when the zone crosses a physical bezel.</summary>
     public bool SpansDisplays => Parts.Select(p => p.DisplayKey).Distinct().Count() > 1;
 

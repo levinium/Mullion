@@ -36,6 +36,16 @@ public sealed class ConfigStore
         "Mullion",
         "config.json");
 
+    /// <summary>
+    /// Where a simulated desk keeps its settings: beside the real config, never
+    /// in it. Kept in their own folder so the real one is the only file at the
+    /// top level and nobody has to work out which of a dozen is theirs.
+    /// </summary>
+    public static string ForSimulation(string topologyId) => Path.Combine(
+        Path.GetDirectoryName(DefaultPath)!,
+        "simulations",
+        $"{topologyId}.json");
+
     public string Path_ => _path;
 
     /// <summary>Diagnostics from the most recent load, e.g. a fallback to backup.</summary>

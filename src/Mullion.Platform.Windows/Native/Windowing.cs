@@ -104,6 +104,25 @@ internal static partial class Win
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetForegroundWindow(nint hwnd);
+
+    /// <summary>
+    /// Join another thread's input queue to ours for the length of a call.
+    /// <para>
+    /// Windows only lets the process owning the foreground window hand focus
+    /// away, so SetForegroundWindow from a background app usually flashes the
+    /// taskbar button instead of raising the window. Attaching to the foreground
+    /// thread makes us count as part of it for as long as the attachment lasts,
+    /// which is the long-standing way to make the call actually work.
+    /// </para>
+    /// </summary>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool AttachThreadInput(
+        uint attachTo, uint attachFrom, [MarshalAs(UnmanagedType.Bool)] bool attach);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetWindowPlacement(nint hwnd, ref WINDOWPLACEMENT placement);
 
     [LibraryImport("user32.dll", SetLastError = true)]

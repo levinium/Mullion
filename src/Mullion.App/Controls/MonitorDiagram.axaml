@@ -20,7 +20,8 @@
 
     <ItemsControl.ItemsPanel>
       <ItemsPanelTemplate>
-        <ctl:VirtualScreenPanel VirtualBounds="{Binding VirtualBounds}" Gap="10" TopHeadroom="46" />
+        <ctl:VirtualScreenPanel VirtualBounds="{Binding VirtualBounds}" Gap="10"
+                                TopHeadroom="{Binding $parent[ctl:MonitorDiagram].Headroom}" />
       </ItemsPanelTemplate>
     </ItemsControl.ItemsPanel>
 
@@ -68,9 +69,11 @@
            a measured width anywhere. -->
       <DataTemplate x:DataType="vm:HorizontalSpanViewModel">
         <Button Classes="spanMeasure"
+                IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                 Classes.capturing="{Binding IsCapturing}"
                 Classes.interactive="{Binding IsInteractive}"
                 IsHitTestVisible="{Binding IsInteractive}"
+                Focusable="{Binding IsInteractive}"
                 Command="{Binding ActivateCommand}"
                 PointerEntered="OnSpanEntered"
                 PointerExited="OnHoverLeft">
@@ -82,15 +85,15 @@
                  look alike and say nothing about which was which. -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6"
                         HorizontalAlignment="Center" Margin="0,0,0,10"
-                        IsVisible="{Binding HasUpper}">
+                        IsVisible="{Binding HasFirst}">
               <Border Classes="keyChip tierChip">
                 <StackPanel Orientation="Horizontal">
                           <TextBlock Classes="chipModifier"
-                                     Text="{Binding UpperModifierPrefix}" />
-                          <TextBlock Text="{Binding UpperKey}" />
+                                     Text="{Binding FirstModifierPrefix}" />
+                          <TextBlock Text="{Binding FirstKey}" />
                         </StackPanel>
               </Border>
-              <TextBlock Classes="zoneSize" Text="{Binding UpperSize}"
+              <TextBlock Classes="zoneSize" Text="{Binding FirstSize}"
                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                          VerticalAlignment="Center" />
             </StackPanel>
@@ -139,15 +142,15 @@
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6"
                         HorizontalAlignment="Center" Margin="0,-3,0,0"
-                        IsVisible="{Binding HasLower}">
+                        IsVisible="{Binding HasSecond}">
               <Border Classes="keyChip tierChip">
                 <StackPanel Orientation="Horizontal">
                           <TextBlock Classes="chipModifier"
-                                     Text="{Binding LowerModifierPrefix}" />
-                          <TextBlock Text="{Binding LowerKey}" />
+                                     Text="{Binding SecondModifierPrefix}" />
+                          <TextBlock Text="{Binding SecondKey}" />
                         </StackPanel>
               </Border>
-              <TextBlock Classes="zoneSize" Text="{Binding LowerSize}"
+              <TextBlock Classes="zoneSize" Text="{Binding SecondSize}"
                          IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                          VerticalAlignment="Center" />
             </StackPanel>
@@ -180,9 +183,11 @@
            DataContext a compiled binding needs does not reach it. -->
       <DataTemplate x:DataType="vm:VerticalSpanViewModel">
         <Button Classes="spanMeasure"
+                IsVisible="{Binding $parent[ctl:MonitorDiagram].Detailed}"
                 Classes.capturing="{Binding IsCapturing}"
                 Classes.interactive="{Binding IsInteractive}"
                 IsHitTestVisible="{Binding IsInteractive}"
+                Focusable="{Binding IsInteractive}"
                 Command="{Binding ActivateCommand}"
                 PointerEntered="OnSpanEntered"
                 PointerExited="OnHoverLeft">
@@ -424,10 +429,15 @@
                   <!-- A Button so the tile is clickable where the diagram is
                        interactive; templated flat so it reads as a zone, not a
                        control. Non-interactive diagrams leave the command null. -->
+                  <!-- Out of the tab order while there is nothing behind it.
+                       A zone with no command is not a control, and tabbing
+                       through nine of them on the way to the settings gear is
+                       the keyboard's version of a click that does nothing. -->
                   <Button Classes="zoneTileButton"
                           Classes.spanning="{Binding SpansDisplays}"
                           Classes.capturing="{Binding IsCapturing}"
                           Classes.interactive="{Binding IsInteractive}"
+                          Focusable="{Binding IsInteractive}"
                           Command="{Binding ActivateCommand}"
                           PointerEntered="OnTileEntered"
                           PointerExited="OnHoverLeft">
@@ -445,9 +455,9 @@
                           <MultiBinding Converter="{x:Static BoolConverters.And}">
                             <Binding Path="IsInteractive" />
                             <Binding Path="$parent[Button].IsPointerOver" />
-                            <Binding ElementName="UpperRegion" Path="IsPointerOver"
+                            <Binding ElementName="FirstRegion" Path="IsPointerOver"
                                      Converter="{x:Static BoolConverters.Not}" />
-                            <Binding ElementName="LowerRegion" Path="IsPointerOver"
+                            <Binding ElementName="SecondRegion" Path="IsPointerOver"
                                      Converter="{x:Static BoolConverters.Not}" />
                           </MultiBinding>
                         </Border.IsVisible>
@@ -462,23 +472,29 @@
                            it: the thing being pointed at has to be the thing
                            that changes, or the diagram is a picture with a few
                            small hidden buttons scattered over it. -->
-                      <Grid RowDefinitions="*,*" Margin="3">
-                        <Button Grid.Row="0" Name="UpperRegion" Classes="subZoneRegion"
-                                IsVisible="{Binding HasUpper}"
-                                Classes.capturing="{Binding IsUpperCapturing}"
-                                Classes.interactive="{Binding IsUpperInteractive}"
-                                IsHitTestVisible="{Binding IsUpperInteractive}"
-                                Command="{Binding ActivateUpperCommand}"
-                                PointerEntered="OnUpperEntered"
+                      <Grid RowDefinitions="*,*" ColumnDefinitions="*,*" Margin="3">
+                        <Button Name="FirstRegion" Classes="subZoneRegion"
+                                Grid.Row="{Binding FirstRow}" Grid.Column="{Binding FirstColumn}"
+                                Grid.RowSpan="{Binding TierRowSpan}" Grid.ColumnSpan="{Binding TierColumnSpan}"
+                                Focusable="{Binding IsFirstInteractive}"
+                                IsVisible="{Binding HasFirst}"
+                                Classes.capturing="{Binding IsFirstCapturing}"
+                                Classes.interactive="{Binding IsFirstInteractive}"
+                                IsHitTestVisible="{Binding IsFirstInteractive}"
+                                Command="{Binding ActivateFirstCommand}"
+                                PointerEntered="OnFirstEntered"
                                 PointerExited="OnHoverLeft" />
 
-                        <Button Grid.Row="1" Name="LowerRegion" Classes="subZoneRegion"
-                                IsVisible="{Binding HasLower}"
-                                Classes.capturing="{Binding IsLowerCapturing}"
-                                Classes.interactive="{Binding IsLowerInteractive}"
-                                IsHitTestVisible="{Binding IsLowerInteractive}"
-                                Command="{Binding ActivateLowerCommand}"
-                                PointerEntered="OnLowerEntered"
+                        <Button Name="SecondRegion" Classes="subZoneRegion"
+                                Grid.Row="{Binding SecondRow}" Grid.Column="{Binding SecondColumn}"
+                                Grid.RowSpan="{Binding TierRowSpan}" Grid.ColumnSpan="{Binding TierColumnSpan}"
+                                Focusable="{Binding IsSecondInteractive}"
+                                IsVisible="{Binding HasSecond}"
+                                Classes.capturing="{Binding IsSecondCapturing}"
+                                Classes.interactive="{Binding IsSecondInteractive}"
+                                IsHitTestVisible="{Binding IsSecondInteractive}"
+                                Command="{Binding ActivateSecondCommand}"
+                                PointerEntered="OnSecondEntered"
                                 PointerExited="OnHoverLeft" />
                       </Grid>
 
@@ -493,63 +509,106 @@
                            half's own button underneath: layering targets over it
                            gave one rectangle two owners that disagreed about
                            both hover and click. -->
-                      <Grid RowDefinitions="*,*" ColumnDefinitions="*" Margin="6"
+                      <!-- Dropped whole when the tile is too short to hold them
+                           and the zone's own key: below that the three chips
+                           land on each other and none of them can be read. -->
+                      <!-- Two guards, nested rather than combined, because they
+                           ask about different axes and a MultiBinding cannot
+                           take another MultiBinding as one of its values. The
+                           outer one is the width a side-by-side pair needs to
+                           clear the whole-zone block; the inner is the height a
+                           stacked pair has always needed. -->
+                                            <Grid RowDefinitions="*,*" ColumnDefinitions="*,*"
+                            Margin="{Binding $parent[ctl:MonitorDiagram].TierInsetMargin}"
                             IsHitTestVisible="False">
+                        <Grid.IsVisible>
+                          <MultiBinding Converter="{x:Static ctl:AtLeastConverter.Instance}">
+                            <Binding Path="$parent[Button].Bounds.Height" />
+                            <Binding Path="TiersNeedHeight" />
+                          </MultiBinding>
+                        </Grid.IsVisible>
                         <!-- The Viewbox wraps the ROW, not the chip. A horizontal
                              StackPanel measures its children with infinite
                              width, so a Viewbox inside one is never told it has
                              to shrink; out here the width is the tile's. -->
-                        <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="DownOnly"
-                                 HorizontalAlignment="Stretch"
-                                 MaxHeight="20" IsVisible="{Binding HasUpper}"
-                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
+                        <Viewbox x:Name="FirstTierBox"
+                                 VerticalAlignment="Center"
+                                 Grid.Row="0" Grid.Column="0"
+                                 Grid.ColumnSpan="{Binding ChipColumnSpan}"
+                                 Stretch="Uniform" StretchDirection="DownOnly"
+                                 HorizontalAlignment="{Binding ChipHorizontalAlignment}"
+                                 MaxHeight="{Binding TierChipMaxHeight}" IsVisible="{Binding HasFirst}"
+                                 MaxWidth="{Binding #FirstRegion.Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Grid.RowSpan>
+                            <MultiBinding Converter="{x:Static ctl:CentredChipFitsConverter.Instance}">
+                              <Binding Path="IsSideBySide" />
+                              <Binding Path="$parent[Button].Bounds.Width" />
+                              <Binding ElementName="WholeBlock" Path="Bounds.Width" />
+                              <Binding ElementName="FirstTierBox" Path="Bounds.Width" />
+                            </MultiBinding>
+                          </Grid.RowSpan>
+                          <StackPanel Orientation="{Binding ChipContentOrientation}" Spacing="4"
+                                        HorizontalAlignment="Center">
                             <Border Classes="keyChip tierChip"
-                                    Classes.hot="{Binding #UpperRegion.IsPointerOver}"
-                                    Classes.capturing="{Binding IsUpperCapturing}">
+                                    HorizontalAlignment="Center"
+                                    Classes.hot="{Binding #FirstRegion.IsPointerOver}"
+                                    Classes.capturing="{Binding IsFirstCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
                                              TextAlignment="Center"
-                                             Text="{Binding UpperModifierPrefix}" />
-                                  <TextBlock Text="{Binding UpperKey}" />
+                                             Text="{Binding FirstModifierPrefix}" />
+                                  <TextBlock Text="{Binding FirstKey}" />
                                 </StackPanel>
                             </Border>
                             <TextBlock Classes="zoneSize"
-                                       Classes.hot="{Binding #UpperRegion.IsPointerOver}"
-                                       Text="{Binding UpperSize}"
-                                       IsVisible="{Binding $parent[Button].Bounds.Width,
+                                       Classes.hot="{Binding #FirstRegion.IsPointerOver}"
+                                       Text="{Binding FirstSize}"
+                                       IsVisible="{Binding #FirstRegion.Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
                                                    ConverterParameter=170}"
-                                       VerticalAlignment="Center" />
+                                       VerticalAlignment="Center" HorizontalAlignment="Center" />
                           </StackPanel>
                         </Viewbox>
 
-                        <Viewbox Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly"
-                                 HorizontalAlignment="Stretch"
-                                 MaxHeight="20" IsVisible="{Binding HasLower}"
-                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
+                        <Viewbox x:Name="SecondTierBox" Stretch="Uniform" StretchDirection="DownOnly"
+                                 VerticalAlignment="Center"
+                                 Grid.Row="{Binding ChipSecondRow}" Grid.Column="{Binding ChipSecondColumn}"
+                                 Grid.ColumnSpan="{Binding ChipColumnSpan}"
+                                 HorizontalAlignment="{Binding ChipHorizontalAlignment}"
+                                 MaxHeight="{Binding TierChipMaxHeight}" IsVisible="{Binding HasSecond}"
+                                 MaxWidth="{Binding #SecondRegion.Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18;64}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
+                          <Grid.RowSpan>
+                            <MultiBinding Converter="{x:Static ctl:CentredChipFitsConverter.Instance}">
+                              <Binding Path="IsSideBySide" />
+                              <Binding Path="$parent[Button].Bounds.Width" />
+                              <Binding ElementName="WholeBlock" Path="Bounds.Width" />
+                              <Binding ElementName="SecondTierBox" Path="Bounds.Width" />
+                            </MultiBinding>
+                          </Grid.RowSpan>
+                          <StackPanel Orientation="{Binding ChipContentOrientation}" Spacing="4"
+                                        HorizontalAlignment="Center">
                             <Border Classes="keyChip tierChip"
-                                    Classes.hot="{Binding #LowerRegion.IsPointerOver}"
-                                    Classes.capturing="{Binding IsLowerCapturing}">
+                                    HorizontalAlignment="Center"
+                                    Classes.hot="{Binding #SecondRegion.IsPointerOver}"
+                                    Classes.capturing="{Binding IsSecondCapturing}">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Classes="chipModifier" TextWrapping="Wrap"
                                              TextAlignment="Center"
-                                             Text="{Binding LowerModifierPrefix}" />
-                                  <TextBlock Text="{Binding LowerKey}" />
+                                             Text="{Binding SecondModifierPrefix}" />
+                                  <TextBlock Text="{Binding SecondKey}" />
                                 </StackPanel>
                             </Border>
                             <TextBlock Classes="zoneSize"
-                                       Classes.hot="{Binding #LowerRegion.IsPointerOver}"
-                                       Text="{Binding LowerSize}"
-                                       IsVisible="{Binding $parent[Button].Bounds.Width,
+                                       Classes.hot="{Binding #SecondRegion.IsPointerOver}"
+                                       Text="{Binding SecondSize}"
+                                       IsVisible="{Binding #SecondRegion.Bounds.Width,
                                                    Converter={x:Static ctl:WiderThanConverter.Instance},
                                                    ConverterParameter=170}"
-                                       VerticalAlignment="Center" />
+                                       VerticalAlignment="Center" HorizontalAlignment="Center" />
                           </StackPanel>
                         </Viewbox>
                       </Grid>
@@ -594,7 +653,7 @@
                               Background="Transparent"
                               PointerEntered="OnWholeEntered"
                               PointerExited="OnHoverLeft">
-                        <Border Classes="wholeZoneBlock"
+                        <Border Classes="wholeZoneBlock" x:Name="WholeBlock"
                                 HorizontalAlignment="Center"
                                 MaxWidth="{Binding $parent[Button].Bounds.Width,
                                            Converter={x:Static ctl:InsetConverter.Instance},
@@ -630,10 +689,22 @@
                              the floor the scale comes off a width that already has the
                              inset taken out of it. -->
                         <Viewbox Grid.Row="0" x:Name="ChipBox" Stretch="Uniform" StretchDirection="DownOnly"
-                                 MaxHeight="{Binding ChipMaxHeight}"
                                  MaxWidth="{Binding $parent[Button].Bounds.Width,
                                             Converter={x:Static ctl:InsetConverter.Instance},
                                             ConverterParameter=18}">
+                          <!-- What the chord is allowed, capped by what the tile
+                               has spare between its tier chips. A constant here
+                               let the chip and the two tiers occupy the same
+                               pixels on any tile short enough. -->
+                          <Viewbox.MaxHeight>
+                            <MultiBinding Converter="{x:Static ctl:ChipHeightConverter.Instance}">
+                              <Binding Path="$parent[Button].Bounds.Height" />
+                              <Binding Path="ChipMaxHeight" />
+                              <Binding ElementName="FirstTierBox" Path="Bounds.Height" />
+                              <Binding Path="$parent[ctl:MonitorDiagram].TierInset" />
+                            </MultiBinding>
+                          </Viewbox.MaxHeight>
+
                           <Border Classes="keyChip primaryChip"
                                   MaxWidth="{Binding $parent[Button].Bounds.Width,
                                              Converter={x:Static ctl:InsetConverter.Instance},
@@ -699,6 +770,51 @@
                           </Grid>
                         </Border>
                       </Border>
+
+                      <!-- Turn this zone's subzones through a right angle.
+                           In the corner rather than beside the chips: the chips
+                           are what the zone SAYS, and a control among them reads
+                           as part of the label. The corner is where a control
+                           belongs, and it is the one part of a tile nothing else
+                           claims at any size.
+
+                           Present only while editing, since CanFlipAxis is false
+                           with nothing listening - the same rule the rest of the
+                           diagram follows, so a zone being looked at stays a
+                           picture with nothing to press. -->
+                      <!-- No ToolTip.Tip, deliberately: a tooltip is a window of
+                           its own and takes the pointer, which is why nothing in
+                           this diagram uses one. It reports through the same
+                           floating hint every other target here does. -->
+                      <Button Classes="zoneFlipButton"
+                              Classes.upright="{Binding IsSideBySide}"
+                              IsVisible="{Binding CanFlipAxis}"
+                              Command="{Binding FlipAxisCommand}"
+                              PointerEntered="OnFlipEntered"
+                              PointerExited="OnHoverLeft"
+                              HorizontalAlignment="Left" VerticalAlignment="Top"
+                              Margin="9,9,0,0">
+                        <!-- The arrow lies along the axis pressing it WOULD give,
+                             not the one the zone has: it is an offer, not a status
+                             light, and the zone's own seam already says which way
+                             it is cut. So a stacked zone offers the sideways
+                             arrow. -->
+                        <!-- One arrow, turned on its side by a style when the zone
+                             is already split side by side. Two geometries cannot
+                             share a centre: they have different bounding boxes,
+                             and every way of fitting a geometry into a box works
+                             from those bounds, so the mark hopped diagonally as it
+                             swapped however it was aligned. Rotation about the
+                             middle leaves the centre where it was by definition.
+
+                             RenderTransform, not LayoutTransform: nothing here
+                             needs to re-measure, and the square box means the
+                             turned arrow occupies exactly the space the flat one
+                             did. -->
+                        <Viewbox Width="15" Height="15" Stretch="Uniform">
+                          <Path Classes="zoneFlipMark" Data="{x:Static ctl:Icons.ArrowsLeftRight}" />
+                        </Viewbox>
+                      </Button>
                     </Grid>
                   </Button>
                 </DataTemplate>

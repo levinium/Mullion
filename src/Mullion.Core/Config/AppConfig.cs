@@ -16,12 +16,31 @@ public sealed record DisplaySnapshot(
 
 public sealed record ZonePartRecord(string DisplayKey, NormRect Area);
 
+/// <param name="Modifier">
+/// The chord this zone is taken with, when it is not the configured default -
+/// "Ctrl+Shift", and so on. Null means "whatever the default is", so a zone
+/// nobody has rebound follows that setting when it changes.
+/// <para>
+/// Optional, and absent from files written before it existed: those zones read
+/// back as null, which is exactly what they were. No migration needed.
+/// </para>
+/// </param>
 public sealed record ZoneRecord(
     string Name,
     int Row,
     int Col,
     IReadOnlyList<ZonePartRecord> Parts,
-    string Kind);
+    string Kind,
+    string? Modifier = null,
+
+    /// <param name="Key">
+    /// The key this zone was put on by hand, when it is not the one its place on
+    /// the surface implies. Written as the scan code, with "e" in front for the
+    /// E0-prefixed keys - the arrows and the navigation cluster, which share
+    /// codes with the numpad and are otherwise indistinguishable from it.
+    /// Absent for every zone nobody has moved, which is nearly all of them.
+    /// </param>
+    string? Key = null);
 
 public sealed record ProfileRecord
 {
@@ -103,7 +122,26 @@ public sealed record AppConfig
     /// decided for themselves and expects to survive.
     /// </summary>
     public IReadOnlyList<DisplayOverride> Overrides { get; init; } = [];
+
+    /// <summary>
+    /// The hotkeys that are not zones - undo, minimize - where they have been
+    /// changed from what Mullion ships with.
+    /// <para>
+    /// Only the changed ones. An empty list means "the defaults", so a new
+    /// action added in a later version reaches everybody instead of only the
+    /// people who have never opened the settings screen.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<ActionRecord> Actions { get; init; } = [];
 }
+
+/// <param name="Command">Which action: see <see cref="Hotkeys.GlobalAction"/>.</param>
+/// <param name="Key">The physical key, written as <see cref="Hotkeys.KeyText"/> does.</param>
+/// <param name="Modifier">
+/// Its own chord, or null to follow the configured default - the same rule zones
+/// follow, so changing the default modifier moves everything nobody has pinned.
+/// </param>
+public sealed record ActionRecord(string Command, string Key, string? Modifier = null);
 
 [JsonSourceGenerationOptions(
     WriteIndented = true,

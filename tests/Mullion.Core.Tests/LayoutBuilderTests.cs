@@ -114,8 +114,24 @@ public class LayoutBuilderTests
         Project(r, 1, 1, work).ShouldBe(new PxRect(1280, 0, 2560, 1392));
         Project(r, 1, 2, work).ShouldBe(new PxRect(3840, 0, 1280, 1392));
 
-        Project(r, 0, 1, work).ShouldBe(new PxRect(1280, 0, 2560, 696));
-        Project(r, 2, 1, work).ShouldBe(new PxRect(1280, 696, 2560, 696));
+        // Subzones cut whichever way leaves two usable windows, so this one desk
+        // answers both ways at once - which is the case that rules out any global
+        // "tier direction" setting.
+        //
+        // The centre is 2560x1392. Stacked it would give 2560x696, an aspect of
+        // 3.68 against a ZoneAspectMax of 2.20 - a pair of letterboxes the engine
+        // refuses outright when they are zones. Side by side gives 1280x1392.
+        Project(r, 0, 1, work).ShouldBe(new PxRect(1280, 0, 1280, 1392));
+        Project(r, 2, 1, work).ShouldBe(new PxRect(2560, 0, 1280, 1392));
+
+        // The sides are 1280x1392, where the answer is the other one: stacked
+        // gives 1280x696 (1.84, inside the band) and side by side would give
+        // 640x1392 (0.46, below the 0.62 floor).
+        Project(r, 0, 0, work).ShouldBe(new PxRect(0, 0, 1280, 696));
+        Project(r, 2, 0, work).ShouldBe(new PxRect(0, 696, 1280, 696));
+
+        Project(r, 0, 2, work).ShouldBe(new PxRect(3840, 0, 1280, 696));
+        Project(r, 2, 2, work).ShouldBe(new PxRect(3840, 696, 1280, 696));
     }
 
     private static PxRect Project(LayoutResult r, int row, int col, PxRect work) =>
@@ -197,7 +213,7 @@ public class LayoutBuilderTests
     /// <summary>
     /// The span column spends its spare rows the way every other column does.
     /// Without this the middle column bound one key of three while each
-    /// neighbour bound all three - the same surplus, treated inconsistently.
+    /// neighbor bound all three - the same surplus, treated inconsistently.
     /// </summary>
     [Fact]
     public void TheSpanColumnAlsoGetsUpperAndLowerHalves()

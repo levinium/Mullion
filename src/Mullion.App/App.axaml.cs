@@ -35,6 +35,7 @@ public partial class App : Application
 
         var mainViewModel = new MainWindowViewModel(_host);
         mainViewModel.ShowSettingsRequested = ShowSettings;
+        mainViewModel.ShowSponsorRequested = ShowSponsor;
 
         _window = new MainWindow
         {
@@ -50,7 +51,14 @@ public partial class App : Application
         // OnMainWindowClose rather than OnLastWindowClose: the zone-flash
         // overlay is a real Window that stays open between flashes, so
         // "last window" would never be reached and the app still could not exit.
-        desktop.MainWindow = _window;
+        //
+        // MainWindow is deliberately NOT assigned here. Avalonia's desktop
+        // lifetime shows whatever is in MainWindow itself, the moment this
+        // method returns - so assigning it up front puts the window on screen
+        // whatever we decide below, which is what made --tray do nothing on
+        // every auto-start. ShowMainWindow assigns it at the point of showing
+        // instead; OnMainWindowClose still works because the lifetime compares
+        // by reference when a window closes, not when it starts.
         desktop.ShutdownMode = hasTray
             ? ShutdownMode.OnExplicitShutdown
             : ShutdownMode.OnMainWindowClose;
@@ -76,15 +84,30 @@ public partial class App : Application
         // hand-launch to behave the same way. Both need somewhere to go: with no
         // tray icon, hiding the window would leave the app unreachable.
         var wantsTray = desktop.Args?.Contains("--tray") == true || _host.StartInTray;
-        var startHidden = wantsTray && hasTray;
 
-        if (ShouldRunWizard() && !IsSimulating())
+        // --show outranks both, and has to outrank the setting rather than just
+        // the flag. It marks a relaunch the user asked for from a window they
+        // were looking at - restarting as administrator - where disappearing
+        // into the tray reads as the app having failed to come back. "Always
+        // start in the tray" is about starting, and this is a continuation.
+        var startHidden = wantsTray && hasTray && desktop.Args?.Contains("--show") != true;
+
+        // --wizard opens setup on demand, for the same reason --settings exists:
+        // it otherwise appears only on a machine that has never run Mullion, so
+        // it is the one screen no capture could reach. Ahead of the simulation
+        // check deliberately - the arrangements worth reviewing it against are
+        // exactly the ones nobody here can plug in.
+        if (desktop.Args?.Contains("--wizard") == true)
+        {
+            ShowWizard();
+        }
+        else if (ShouldRunWizard() && !IsSimulating())
         {
             ShowWizard();
         }
         else if (!startHidden || IsSimulating())
         {
-            _window.Show();
+            ShowMainWindow();
         }
 
         // --settings opens straight onto the settings window. It exists so the
@@ -96,6 +119,14 @@ public partial class App : Application
         // and partial: you see one state of one icon at a time, and the question
         // is always how it sits beside the others.
         if (desktop.Args?.Contains("--icons") == true) IconGallery.Create().Show();
+        // --drag-preview holds the drag overlay open in its restoring state. It
+        // is drawn only while a window is actually in the air, which is exactly
+        // when nothing can be captured.
+        if (desktop.Args?.Contains("--drag-preview") == true &&
+            OperatingSystem.IsWindows() && _host is WindowsAppHost previewHost)
+        {
+            previewHost.PreviewDragOverlay();
+        }
 
         desktop.Exit += (_, _) =>
         {
@@ -124,9 +155,27 @@ public partial class App : Application
     {
         if (_window is null) return;
 
-        _window.Show();
+        ShowMainWindow();
         _window.WindowState = WindowState.Normal;
         _window.Activate();
+    }
+
+    /// <summary>
+    /// Put the main window on screen, and only then hand it to the lifetime.
+    /// <para>
+    /// The order is the whole point. Avalonia shows whatever is assigned to
+    /// MainWindow as soon as startup finishes, so a window handed over early is
+    /// a window that appears - which is why a hidden start could not stay
+    /// hidden. Assigning it here means the lifetime learns which window is the
+    /// main one at the first moment that is true, and never before.
+    /// </para>
+    /// </summary>
+    private void ShowMainWindow()
+    {
+        if (_window is null) return;
+
+        if (_desktop is not null) _desktop.MainWindow = _window;
+        _window.Show();
     }
 
     private static WindowIcon? LoadWindowIcon()
@@ -139,6 +188,24 @@ public partial class App : Application
     }
 
     private SettingsWindow? _settings;
+
+    /// <summary>
+    /// The ask, as a dialog owned by the main window rather than a window of
+    /// its own in the taskbar: it is a question with two answers and no reason
+    /// to outlive the moment it was asked in.
+    /// </summary>
+    private void ShowSponsor()
+    {
+        if (_window is null) return;
+
+        var sponsor = new SponsorWindow
+        {
+            DataContext = new SponsorViewModel(),
+            Icon = LoadWindowIcon(),
+        };
+
+        sponsor.ShowDialog(_window);
+    }
 
     private void ShowSettings()
     {

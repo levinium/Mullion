@@ -23,17 +23,32 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     /// <summary>Non-null when previewing a fake arrangement rather than real hardware.</summary>
     public SimulatedTopology? Simulated { get; }
 
-    public WindowsAppHost(SimulatedTopology? simulated = null)
+    /// <summary>
+    /// A pretend desk keeps its config to itself.
+    /// <para>
+    /// Sharing the real one was destructive rather than untidy. A simulated
+    /// topology cannot match the fingerprint of the actual monitors, so the host
+    /// generated a fresh profile and saved it over the one belonging to the real
+    /// desk - taking the key surface and every zone edit with it. The test suite
+    /// builds these by the dozen, so a test run quietly reset the configuration
+    /// of whoever ran it, and so did every --simulate screenshot pass.
+    /// </para>
+    /// </summary>
+    public WindowsAppHost(SimulatedTopology? simulated = null, string? configPath = null)
     {
         Simulated = simulated;
         _displayProvider = simulated is null
             ? new WindowsDisplayProvider()
             : new SimulatedDisplayProvider(simulated);
+
+        _configStore = new ConfigStore(
+            configPath ?? (simulated is null ? null : ConfigStore.ForSimulation(simulated.Id)));
     }
-    private readonly ConfigStore _configStore = new();
+
+    private readonly ConfigStore _configStore;
     private readonly Log _log = new();
 
-    // Constructed once config is loaded, so UndoDepth is actually honoured
+    // Constructed once config is loaded, so UndoDepth is actually honored
     // rather than silently defaulting.
     private WindowManager? _windowsManager;
 
@@ -56,6 +71,17 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
     public bool StartInTray => _config.General.StartInTray;
 
+    /// <summary>
+    /// The actions that are not zones, defaults with any stored changes over them.
+    /// </summary>
+    private IReadOnlyList<GlobalAction> Actions =>
+        GlobalAction.Resolve(_config.Actions.Select(a =>
+            (a.Command,
+             KeyText.Read(a.Key),
+             string.IsNullOrWhiteSpace(a.Modifier)
+                 ? (ChordModifiers?)null
+                 : ModifierChoice.Parse(a.Modifier))));
+
     /// <summary>The modifier every zone hotkey is taken with.</summary>
     private ChordModifiers HotkeyModifier => ModifierChoice.Parse(_config.General.HotkeyModifier);
 
@@ -67,7 +93,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         // Applied live, and the conflict list is rebuilt with it: which other
         // programs collide depends entirely on which modifier is in play.
-        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
 
         _conflicts = DetectConflicts();
         StateChanged?.Invoke();
@@ -96,7 +122,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _config = _configStore.Load();
 
         // Seeded so the first edit has somewhere to go back to.
-        _history = new LayoutHistory(_config.Overrides);
+        _history = new LayoutHistory(Now);
 
         _log.Info($"Mullion {BuildInfo.Full} starting. Config: {_configStore.Path_}");
         foreach (var note in _configStore.LoadNotes) _log.Warn(note);
@@ -114,6 +140,13 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         _engine.Diagnostic += m => _log.Info(m);
 
         Rescan();
+
+        // Seeded here rather than at the top of Start, because this is the
+        // first moment there is a layout to seed it with. Seeded before that,
+        // the state undo returns to had no keys on it at all - and a rebind,
+        // which changes nothing but keys, compared equal to it and was never
+        // recorded.
+        _history.Reset(Now);
 
         // In simulation nothing that touches the real machine runs. The zones
         // describe monitors that are not there, so a hotkey would fling a real
@@ -156,19 +189,21 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     private readonly DragZoneOverlay _dragOverlay = new();
     private IReadOnlyList<DropTarget> _dropTargets = [];
     private DropTarget? _dropHover;
-    /// <summary>
-    /// What a window looked like before Mullion filled a zone with it, so
-    /// dropping it into the same zone again can put it back.
-    /// <para>
-    /// Keyed by handle, which Windows recycles - so entries are dropped once
-    /// the window is gone rather than kept until some later window inherits the
-    /// number and a stale size with it.
-    /// </para>
-    /// </summary>
-    private readonly Dictionary<nint, PxRect> _beforeFill = [];
-
     private int _dragStartWidth;
     private int _dragStartHeight;
+
+    /// <summary>
+    /// Where the window was when it was picked up.
+    /// <para>
+    /// The question the toggle turns on is whether the window was ALREADY
+    /// filling the zone it is being dropped into, and by the time it is dropped
+    /// it is wherever the pointer left it - several hundred pixels from the
+    /// zone it started in, and no longer matching it at all. Asked of the drop
+    /// position, the answer was always no and the gesture always just refilled
+    /// the zone, which is exactly what it looked like from the outside.
+    /// </para>
+    /// </summary>
+    private PxRect? _dragStartBounds;
     private bool _dragArmed;
 
     private FancyZonesState _fancyZones = new(false, false, false, false);
@@ -246,6 +281,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         _dragStartWidth = state.Width;
         _dragStartHeight = state.Height;
+        _dragStartBounds = Windows.BoundsOf(state.Hwnd);
         _dragArmed = false;
         _dropHover = null;
     }
@@ -271,7 +307,44 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         if (ReferenceEquals(hit, _dropHover)) return;
 
         _dropHover = hit;
-        _dragOverlay.Show(_dropTargets, hit);
+
+        // Shown as the pointer moves, not worked out again at the drop: the
+        // overlay is a promise about what letting go will do, and one made from
+        // different inputs than the drop uses is a promise that can be broken.
+        var plan = PlanDropInto(state.Hwnd, hit);
+
+        _dragOverlay.Show(_dropTargets, hit, plan?.Target);
+    }
+
+    /// <summary>
+    /// What letting go over this zone would do, or null when there is no zone
+    /// under the pointer.
+    /// </summary>
+    private DropPlan? PlanDropInto(nint hwnd, DropTarget? hit) =>
+        hit is null
+            ? null
+            : ZoneFit.Plan(_dragStartBounds, Windows.ChosenSizeOf(hwnd), hit.Bounds);
+
+    /// <summary>
+    /// Put the drag overlay on screen in the state that only exists halfway
+    /// through a gesture, so it can be looked at and photographed.
+    /// <para>
+    /// Reachable no other way: what it draws depends on a window having been
+    /// picked up, a zone being under the pointer, and a remembered size to go
+    /// back to, and all three are gone the instant the mouse button comes up.
+    /// </para>
+    /// </summary>
+    public void PreviewDragOverlay()
+    {
+        if (_layout is null) return;
+
+        var targets = DropTargets.Build(_layout, _displays);
+        if (targets.Count == 0) return;
+
+        var hit = targets[targets.Count / 2];
+        var window = new PxRect(0, 0, hit.Bounds.Width / 2, hit.Bounds.Height / 2);
+
+        _dragOverlay.Show(targets, hit, ZoneFit.Restore(window, hit.Bounds));
     }
 
     private void OnDragEnded(DragState state)
@@ -293,26 +366,19 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         Dispatcher.UIThread.Post(() =>
         {
-            var current = Windows.BoundsOf(state.Hwnd);
+            // Dropped on the zone it was already filling. That used to accept
+            // the gesture and do nothing; it is the way back now - out to fill
+            // the zone, then back to the size it had before, then out again.
+            //
+            // The size to go back to is the window manager's to answer, because
+            // it sees every move Mullion makes. Remembered here instead, it
+            // would only have covered windows dropped into zones by hand, and a
+            // window filled with a hotkey had nothing to return to.
+            var plan = PlanDropInto(state.Hwnd, hit)!.Value;
 
-            // Dropped where it already is. That used to accept the gesture and
-            // do nothing; it is the way back now - out to fill the zone, then
-            // back to the size it had before, then out again.
-            var restoring =
-                current is not null &&
-                ZoneFit.Fills(current.Value, hit.Bounds) &&
-                _beforeFill.TryGetValue(state.Hwnd, out var remembered);
+            var result = Windows.MoveWindowTo(state.Hwnd, plan.Target);
 
-            var target = restoring
-                ? ZoneFit.Restore(_beforeFill[state.Hwnd], hit.Bounds)
-                : hit.Bounds;
-
-            if (restoring) _beforeFill.Remove(state.Hwnd);
-            else if (current is not null) Remember(state.Hwnd, current.Value);
-
-            var result = Windows.MoveWindowTo(state.Hwnd, target);
-
-            _lastAction = restoring
+            _lastAction = plan.Restoring
                 ? $"Restored in {hit.Zone.Name}: {result.Outcome} {result.Achieved}"
                 : $"Dropped into {hit.Zone.Name}: {result.Outcome} {result.Achieved}";
 
@@ -322,25 +388,6 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             StateChanged?.Invoke();
         });
     }
-
-    /// <summary>
-    /// Note a window's size, and forget any whose windows have closed.
-    /// <para>
-    /// Swept on write rather than on a timer: the only thing that grows this is
-    /// dropping windows into zones, so that is the only moment it can need
-    /// tidying, and there is no cost at all while nobody is dragging.
-    /// </para>
-    /// </summary>
-    private void Remember(nint hwnd, PxRect bounds)
-    {
-        _beforeFill[hwnd] = bounds;
-
-        if (_beforeFill.Count <= 32) return;
-
-        foreach (var stale in _beforeFill.Keys.Where(h => Windows.BoundsOf(h) is null).ToList())
-            _beforeFill.Remove(stale);
-    }
-
 
     private void OnDisplaysChanged()
     {
@@ -371,13 +418,13 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // that is not there. An open edit session goes the same way, and is
         // kept rather than dropped: its baseline describes the old desk too.
         CommitZoneEdit();
-        _history.Reset(_config.Overrides);
+        _history.Reset(Now);
         if (_displays.Count == 0) return;
 
         _lastFingerprint = TopologyFingerprint.GeometrySignature(_displays);
 
         // Simulation always shows what a FIRST launch would produce. Matching a
-        // stored profile would show a customised layout instead, which is the
+        // stored profile would show a customized layout instead, which is the
         // opposite of what a preview of the defaults is for.
         var resolution = Simulated is null
             ? ProfileResolver.Resolve(_config, _displays)
@@ -409,8 +456,16 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             catch (IOException) { /* a failed save must not take the app down */ }
         }
 
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         _conflicts = DetectConflicts();
+
+        // Rescan is the button people press after changing something outside
+        // Mullion, and that is at least as often another app as it is a monitor.
+        // Clearing the throttle makes the next snapshot re-read PowerToys rather
+        // than answer from a reading taken up to two seconds ago - so switching
+        // FancyZones off and pressing rescan clears the banner, which is what
+        // pressing it plainly promises.
+        _fancyZonesCheckedAt = DateTime.MinValue;
 
         StateChanged?.Invoke();
     }
@@ -441,7 +496,13 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // and "it did not fire at all" are different faults, and without a
         // record of what did fire there is no way to tell them apart after
         // the fact. The zone name and outcome only - never the key pressed.
-        var key = _layout is null ? "?" : _layout.Surface.FallbackLabelAt(fired.Position);
+        // Named by the key it actually answers to, not by where it sits on the
+        // grid. A zone moved onto F5 still lives at the "A" cell, so the surface
+        // label reported "Win+A" for a press of Win+F5.
+        var zone = _layout?.Zones.FirstOrDefault(z => z.Position == fired.Position);
+        var key = _layout is null || zone is null
+            ? "?"
+            : KeyNames.Of(zone.KeyOn(_layout.Surface));
         _log.Info($"{ModifierChoice.Format(HotkeyModifier)}+{key} -> {fired.ZoneName}: {fired.Result.Outcome} {fired.Result.Achieved}" +
                   (fired.Result.Attempts > 1 ? $" after {fired.Result.Attempts} attempts" : string.Empty));
 
@@ -498,14 +559,15 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             hookStatus,
             privilege,
             Paused,
-            _lastAction,
             _conflicts,
             Elevation.IsCurrentProcessElevated,
             _reach.Reachable ? null : _reach.WindowTitle,
             Simulated?.Name,
             _fancyZones.Collides,
             DescribeDragConflict(),
-            DragConflictActionText);
+            DragConflictActionText,
+            _config.General.DragToSnap,
+            DragArmingModifier.ToString());
     }
 
     // ---- wizard ------------------------------------------------------------
@@ -557,7 +619,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _committedLayout ??= _layout;
         _layout = candidate.Layout;
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
 
         StateChanged?.Invoke();
     }
@@ -569,7 +631,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _layout = candidate.Layout;
         _committedLayout = null;
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
 
         var profile = ProfileResolver.CreateProfile(_displays, _layout);
 
@@ -583,8 +645,13 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             ActiveProfileId = profile.Id,
         };
 
-        try { _configStore.Save(_config); }
-        catch (IOException) { /* a failed save must not take the app down */ }
+        // Save(), not the store directly. Writing straight through skipped the
+        // two refusals every other write in this class honors: a simulated desk
+        // must never reach the real config, since its profiles describe monitors
+        // that do not exist, and an open edit session holds writes back so
+        // cancelling restores nothing from disk. Finishing the wizard was the
+        // one path that bypassed both.
+        Save();
 
         StateChanged?.Invoke();
     }
@@ -596,7 +663,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         {
             _layout = _committedLayout;
             _committedLayout = null;
-            if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
+            if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         }
 
         WizardCloseRequested?.Invoke();
@@ -612,17 +679,6 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     {
         var status = _autoStart.GetStatus();
 
-        var bindings = _layout is null
-            ? []
-            : _layout.Zones
-                .OrderBy(z => z.Position.Row).ThenBy(z => z.Position.Col)
-                .Select(z => new BindingEntry(
-                    $"{ModifierChoice.Format(HotkeyModifier)}+{_layout.Surface.FallbackLabelAt(z.Position)}",
-                    z.Name,
-                    z.Position.Row,
-                    z.Position.Col))
-                .ToList();
-
         return new SettingsSnapshot(
             status.Mode,
             Elevation.IsCurrentProcessElevated,
@@ -632,13 +688,104 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _config.General.WinKeySuppression,
             _layout?.Surface.Id ?? KeySurface.LeftHandBlock.Id,
             [.. KeySurface.All.Select(s => (s.Id, s.Name))],
-            bindings,
             _configStore.Path_,
             _log.Path_,
             _config.General.DragToSnap,
             _config.General.DragModifier,
             _config.General.StartInTray,
-            ModifierChoice.Format(HotkeyModifier));
+            ModifierChoice.Format(HotkeyModifier),
+            DescribeActions());
+    }
+
+    /// <summary>
+    /// The non-zone hotkeys as the settings screen shows them: what each is
+    /// called, the chord it answers to, and whether it has been moved off the
+    /// key Mullion ships with.
+    /// </summary>
+    private IReadOnlyList<ActionBindingView> DescribeActions()
+    {
+        var defaults = GlobalAction.Defaults.ToDictionary(a => a.Command, StringComparer.Ordinal);
+
+        return
+        [
+            .. Actions.Select(a => new ActionBindingView(
+                a.Command,
+                a.Title,
+                $"{ModifierChoice.Format(a.ChordWith(HotkeyModifier))}+{KeyNames.Of(a.Key)}",
+                !defaults.TryGetValue(a.Command, out var shipped)
+                    || shipped.Key != a.Key
+                    || a.Modifier is not null))
+        ];
+    }
+
+    public void BeginActionRebind(string command, Action<RebindResult> completed)
+    {
+        if (_engine is null)
+        {
+            completed(new RebindResult(false, "Hotkeys are not running."));
+            return;
+        }
+
+        _engine.BeginCapture(
+            (mods, key) => Dispatcher.UIThread.Post(() => completed(ApplyActionRebind(command, mods, key))),
+            () => Dispatcher.UIThread.Post(
+                () => completed(new RebindResult(false, string.Empty, Canceled: true))));
+    }
+
+    private RebindResult ApplyActionRebind(string command, ChordModifiers mods, KeyStroke key)
+    {
+        // Same rule as a zone: any modifier will do, but a bare key would fire
+        // while typing.
+        if (mods == ChordModifiers.None)
+        {
+            return new RebindResult(false,
+                "Hold at least one modifier - Win, Ctrl, Alt or Shift - while pressing the key.");
+        }
+
+        if (!KeyNames.IsBindable(key))
+            return new RebindResult(false, "That key cannot be used for a hotkey.");
+
+        var title = GlobalAction.Describe(command);
+
+        // An action landing on a zone's chord would be a hotkey that does two
+        // things, and the zone would quietly win - the engine binds those first.
+        if (_layout is not null)
+        {
+            var clash = _layout.Zones.FirstOrDefault(z =>
+                z.KeyOn(_layout.Surface) == key && z.ChordWith(HotkeyModifier) == mods);
+
+            if (clash is not null)
+            {
+                return new RebindResult(false,
+                    $"{ModifierChoice.Format(mods)}+{KeyNames.Of(key)} already goes to \"{clash.Name}\".");
+            }
+        }
+
+        var chosen = mods == HotkeyModifier ? null : ModifierChoice.Format(mods);
+
+        _config = _config with
+        {
+            Actions =
+            [
+                .. _config.Actions.Where(a => a.Command != command),
+                new ActionRecord(command, KeyText.Write(key)!, chosen),
+            ],
+        };
+
+        Save();
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
+        StateChanged?.Invoke();
+
+        return new RebindResult(true, $"{title} is now {ModifierChoice.Format(mods)}+{KeyNames.Of(key)}.");
+    }
+
+    public void ResetAction(string command)
+    {
+        _config = _config with { Actions = [.. _config.Actions.Where(a => a.Command != command)] };
+
+        Save();
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
+        StateChanged?.Invoke();
     }
 
     public void OpenLogFolder() => OpenFolder(Path.GetDirectoryName(_log.Path_));
@@ -740,21 +887,33 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         StateChanged?.Invoke();
     }
 
+    /// <summary>The state as it stands: zone shapes, and the keys on them.</summary>
+    private LayoutSnapshot Now => new(_config.Overrides, _layout);
+
     public bool CanUndoZones => _history.CanUndo;
 
     public bool CanRedoZones => _history.CanRedo;
 
-    public void UndoZones() => ApplyOverrides(_history.Undo());
+    public void UndoZones() => Restore(_history.Undo());
 
-    public void RedoZones() => ApplyOverrides(_history.Redo());
+    public void RedoZones() => Restore(_history.Redo());
 
-    private void ApplyOverrides(IReadOnlyList<DisplayOverride>? overrides)
+    /// <summary>
+    /// Put a remembered state back: the shapes from its override set, and the
+    /// keys from the layout it was taken with.
+    /// <para>
+    /// The keys have to come from the snapshot rather than from the layout as
+    /// it now stands, or undoing a rebind would rebuild the shapes and then
+    /// carry the very rebind being undone straight back onto them.
+    /// </para>
+    /// </summary>
+    private void Restore(LayoutSnapshot? snapshot)
     {
-        if (overrides is null) return;
+        if (snapshot is null) return;
 
-        _config = _config with { Overrides = [.. overrides] };
+        _config = _config with { Overrides = [.. snapshot.Overrides] };
         Save();
-        Regenerate();
+        RegenerateFrom(snapshot.Layout);
     }
 
     public void SetDisplayColumns(string slot, int columns)
@@ -816,7 +975,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         // The undone states describe a layout that is being thrown away, so
         // undo after a cancel would walk back into edits the user just
         // discarded.
-        _history.Reset(_config.Overrides);
+        _history.Reset(Now);
 
         _editing = false;
         _writePending = false;
@@ -825,7 +984,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         // Nothing to write: not writing during the session is exactly what
         // leaves the file already holding this.
-        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier);
+        if (_layout is not null) _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
 
         StateChanged?.Invoke();
     }
@@ -861,25 +1020,44 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         }
     }
 
-    public bool HasCustomZones => _config.Overrides.Count > 0;
+    /// <summary>
+    /// Whether the zones differ from the ones the engine would derive on its
+    /// own - asked by generating those and comparing, exactly as
+    /// <see cref="HasCustomKeys"/> does.
+    /// <para>
+    /// It used to count override records instead, and an override is not the
+    /// same thing as a difference: a stored "three columns" on a display the
+    /// engine already splits into three is a record of a choice that happens to
+    /// agree with the default. The reset button was lit for it and did nothing
+    /// when pressed.
+    /// </para>
+    /// </summary>
+    public bool HasCustomZones
+    {
+        get
+        {
+            if (_layout is null || _displays.Count == 0) return false;
+
+            var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout.Surface.Id)
+                          ?? KeySurface.LeftHandBlock;
+
+            var derived = LayoutBuilder.Build(
+                _displays, surface, _config.General.Shape.ToTuning(),
+                _config.General.AllowSpanningUnions);
+
+            return !LayoutEditor.SameZoneShapes(_layout, derived);
+        }
+    }
 
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights)
     {
         UpdateOverride(slot, o => new DisplayOverride(slot, weights.Count, [.. weights]));
     }
 
-    public void ResetDisplayOverride(string slot)
-    {
-        _config = _config with { Overrides = [.. _config.Overrides.Where(o => o.Slot != slot)] };
-        _history.Record(_config.Overrides);
-        Save();
-        Regenerate();
-    }
-
     public void ResetAllOverrides()
     {
         _config = _config with { Overrides = [] };
-        _history.Record(_config.Overrides);
+        _history.Record(Now);
         Save();
         Regenerate();
     }
@@ -892,7 +1070,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         replaced.Add(change(existing));
 
         _config = _config with { Overrides = replaced };
-        _history.Record(_config.Overrides);
+        _history.Record(Now);
         Save();
         Regenerate();
     }
@@ -970,14 +1148,24 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
             _displays, surface, _config.General.Shape.ToTuning(),
             _config.General.AllowSpanningUnions, _config.Overrides);
 
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Come back elevated, and come back visible.
+    /// <para>
+    /// --show rather than --tray: this is only ever reached by pressing a button
+    /// in a window that is open, so the app vanishing into the tray looks like
+    /// the restart failed. It was --tray for a while with no visible effect,
+    /// because the flag itself was being overruled at startup and every launch
+    /// showed its window regardless.
+    /// </para>
+    /// </summary>
     public void RestartElevated()
     {
-        if (Elevation.TryRestartElevated("--tray")) Environment.Exit(0);
+        if (Elevation.TryRestartElevated("--show")) Environment.Exit(0);
     }
 
     public void OpenConfigFolder() => OpenFolder(Path.GetDirectoryName(_configStore.Path_));
@@ -1007,22 +1195,22 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         var surface = _layout.Surface;
 
-        _engine.BeginCapture((mods, scan) => Dispatcher.UIThread.Post(() =>
+        _engine.BeginCapture((mods, key) => Dispatcher.UIThread.Post(() =>
         {
-            completed(ApplyRebind(row, col, mods, scan, surface));
+            completed(ApplyRebind(row, col, mods, key, surface));
         }),
 
             // Escape. It never reaches the UI - a capture is armed, so the hook
             // takes it first and swallows it - which is why the state machine
             // has to say so rather than the window listening for a key.
             () => Dispatcher.UIThread.Post(
-                () => completed(new RebindResult(false, string.Empty, Cancelled: true))));
+                () => completed(new RebindResult(false, string.Empty, Canceled: true))));
     }
 
     public void CancelRebind() => _engine?.EndCapture();
 
     private RebindResult ApplyRebind(
-        int row, int col, ChordModifiers mods, ushort scan, KeySurface surface)
+        int row, int col, ChordModifiers mods, KeyStroke key, KeySurface surface)
     {
         if (_layout is null) return new RebindResult(false, "No layout.");
 
@@ -1036,24 +1224,37 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
                 "Hold at least one modifier - Win, Ctrl, Alt or Shift - while pressing the key.");
         }
 
-        var target = LayoutEditor.PositionOfScanCode(surface, scan);
-        if (target is null)
+        if (!KeyNames.IsBindable(key))
         {
             return new RebindResult(false,
-                $"That key is not part of the {surface.Name} block. Choose a different key surface " +
-                "if you want keys outside it.");
+                "That key cannot be used for a hotkey. Escape cancels, and a modifier " +
+                "on its own is half a chord rather than a key.");
         }
 
         // Recorded as its own chord only when it differs from the default, so a
         // zone left on the default still follows it if the default changes.
         var chosen = mods == HotkeyModifier ? (ChordModifiers?)null : mods;
 
-        var outcome = LayoutEditor.Rebind(
-            _layout, new GridPos(row, col), target.Value, chosen, HotkeyModifier);
+        // A key that IS on the surface moves the zone to that cell, which keeps
+        // the grid describing the desk. Anything else stays where it is and
+        // simply answers to a different key - the surface is a set of defaults,
+        // not a list of the only keys allowed.
+        var onSurface = key.Extended ? null : LayoutEditor.PositionOfScanCode(surface, key.ScanCode);
+
+        var outcome = onSurface is not null
+            ? LayoutEditor.Rebind(_layout, new GridPos(row, col), onSurface.Value, chosen, HotkeyModifier)
+            : LayoutEditor.RebindToKey(_layout, new GridPos(row, col), key, chosen, HotkeyModifier);
+
         if (!outcome.Success) return new RebindResult(false, outcome.Message);
 
         _layout = outcome.Layout;
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+
+        // The one edit in the editor that was not recorded, so Undo stayed grey
+        // after it and there was no way back from a key you had just changed.
+        // The history carries the keys now, so this is all it takes.
+        _history.Record(Now);
+
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         PersistCurrentLayout();
         StateChanged?.Invoke();
 
@@ -1063,11 +1264,87 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     public MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos>? onZoneActivated,
         Action<string, IReadOnlyList<double>>? onSplitChanged,
-        Action<string, int>? onZoneCountChanged) =>
+        Action<string, int>? onZoneCountChanged,
+        Action<string, int>? onSubzoneAxisFlipped) =>
         MonitorDiagramViewModel.Build(
             _displays, _layout, onZoneActivated,
-            onSplitChanged, onZoneCountChanged,
+            onSplitChanged, onZoneCountChanged, onSubzoneAxisFlipped,
             _config.General.Shape.ToTuning(), _config.General.SnapSplits, HotkeyModifier);
+
+    /// <summary>
+    /// Turn one zone's subzones through a right angle and pin them there.
+    /// <para>
+    /// Written as the axis it is NOT currently using rather than as a toggle
+    /// flag, so the stored value keeps meaning the same thing when the zone is
+    /// later resized into a shape the rule would answer differently for. A toggle
+    /// would silently invert itself the first time that happened.
+    /// </para>
+    /// </summary>
+    public void FlipSubzoneAxis(string slot, int zone)
+    {
+        if (_layout is null || zone < 0) return;
+
+        var display = _displays.FirstOrDefault(d => DisplaySlot.Of(d) == slot);
+        if (display is null) return;
+
+        var now = CurrentSubzoneAxis(display, zone);
+        if (now is null) return;
+
+        var wanted = now == Axis.Vertical ? Axis.Horizontal : Axis.Vertical;
+
+        var existing = _config.Overrides.FirstOrDefault(o => o.Slot == slot)
+                       ?? new DisplayOverride(slot);
+
+        var axes = new List<string?>(existing.SubzoneAxes ?? []);
+        while (axes.Count <= zone) axes.Add(null);
+        axes[zone] = DisplayOverride.Word(wanted);
+
+        var updated = existing with { SubzoneAxes = axes };
+
+        _config = _config with
+        {
+            Overrides = [.. _config.Overrides.Where(o => o.Slot != slot), updated],
+        };
+
+        Regenerate();
+        Save();
+        _history.Record(Now);
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Which way a zone's subzones are cut right now - read off the layout rather
+    /// than recomputed, so a hand-pinned axis flips from where it actually is.
+    /// </summary>
+    private Axis? CurrentSubzoneAxis(DisplayInfo display, int zone)
+    {
+        var whole = _layout!.Zones
+            .Where(z => z.Parts.Any(p => p.DisplayKey == display.StableKey))
+            .Where(z => SubzoneFlip.Of(z, _layout) is null)
+            .OrderBy(z => z.Parts[0].Area.X)
+            .ThenBy(z => z.Parts[0].Area.Y)
+            .Skip(zone)
+            .FirstOrDefault();
+
+        if (whole is null) return null;
+
+        var half = _layout.Zones.FirstOrDefault(z =>
+            !ReferenceEquals(z, whole) &&
+            SubzoneFlip.Of(z, _layout) is not null &&
+            z.Parts[0].DisplayKey == display.StableKey &&
+            Inside(z.Parts[0].Area, whole.Parts[0].Area));
+
+        if (half is null) return null;
+
+        // Keeping the parent's full width means the pair is stacked.
+        return Math.Abs(half.Parts[0].Area.W - whole.Parts[0].Area.W) <= 1e-6
+            ? Axis.Vertical
+            : Axis.Horizontal;
+    }
+
+    private static bool Inside(NormRect inner, NormRect outer) =>
+        inner.X >= outer.X - 1e-6 && inner.Y >= outer.Y - 1e-6 &&
+        inner.Right <= outer.Right + 1e-6 && inner.Bottom <= outer.Bottom + 1e-6;
 
     public void ResetLayout()
     {
@@ -1075,26 +1352,49 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
 
-        _layout = LayoutBuilder.Build(
+        var fresh = LayoutBuilder.Build(
             _displays, surface, _config.General.Shape.ToTuning(),
             _config.General.AllowSpanningUnions, _config.Overrides);
 
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        // Taken as it comes, with no keys carried over: this is the one place
+        // that is meant to throw them away. Everywhere else rebuilds and puts
+        // them back, which is the difference between regenerating and
+        // resetting - and for a while these two methods were the same code.
+        _layout = fresh;
+
+        // Recorded, so resetting the keys can be undone like any other edit.
+        // It throws away every rebind at once, which is the change most worth
+        // being able to take back.
+        _history.Record(Now);
+
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }
 
-    private void Regenerate()
+    private void Regenerate() => RegenerateFrom(_layout);
+
+    private void RegenerateFrom(LayoutResult? keysFrom)
     {
         if (_displays.Count == 0) return;
 
         var surface = KeySurface.All.FirstOrDefault(s => s.Id == _layout?.Surface.Id) ?? KeySurface.LeftHandBlock;
 
-        _layout = LayoutBuilder.Build(
+        var fresh = LayoutBuilder.Build(
             _displays, surface, _config.General.Shape.ToTuning(),
             _config.General.AllowSpanningUnions, _config.Overrides);
 
-        _engine?.Apply(_layout, _displays, HotkeyModifier);
+        // The builder is told about displays, a surface and zone shapes, and is
+        // never told which chord a zone was bound to - so without this every
+        // rebuild hands back the allocator's own answer and a rebind lasts only
+        // until the next zone is resized, counted or undone.
+        //
+        // The keys come from the caller rather than from _layout, because undo
+        // has to rebuild the shapes and then put back the keys as they were
+        // BEFORE the edit, not as they stand now.
+        _layout = LayoutEditor.CarryKeysOver(fresh, keysFrom);
+
+        _engine?.Apply(_layout, _displays, HotkeyModifier, Actions);
         PersistCurrentLayout();
         StateChanged?.Invoke();
     }

@@ -1,6 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ctl="using:Mullion.App.Controls"
         xmlns:vm="using:Mullion.App.ViewModels"
         x:Class="Mullion.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
@@ -10,6 +9,10 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Surface}">
 
+  <!-- Ordered by how often anyone comes here for it, and holding only what has
+       nowhere else to live. Keys are bound on the main window by clicking the
+       zone that wears them; a second list of the same bindings here was one more
+       thing to keep in step, and it did not keep in step. -->
   <ScrollViewer>
     <StackPanel Margin="24" Spacing="16">
 
@@ -50,79 +53,6 @@
         </StackPanel>
       </Border>
 
-      <!-- Layout -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="Layout" />
-
-          <TextBlock Classes="body" Text="Key surface — which block of keys zones are mapped onto." />
-          <ComboBox ItemsSource="{Binding Surfaces}"
-                    SelectedItem="{Binding SelectedSurface}"
-                    HorizontalAlignment="Stretch" />
-
-          <CheckBox Content="Allow zones that span two monitors"
-                    IsChecked="{Binding AllowSpanningUnions}" />
-          <TextBlock Classes="body" Margin="24,0,0,0"
-                     Text="Only offered when the monitors form a clean rectangle — adjacent, aligned, and at the same scaling." />
-
-          <Button Content="Re-run setup wizard…"
-                  Command="{Binding RerunWizardCommand}"
-                  HorizontalAlignment="Left"
-                  Margin="0,6,0,0" />
-        </StackPanel>
-      </Border>
-
-      <!-- Custom splits -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="Splits" />
-          <TextBlock Classes="body"
-                     Text="How many zones each display divides into. Mullion derives this from the display's shape; set it yourself where you would rather it did not." />
-
-          <Border Classes="warning" IsVisible="{Binding LayoutMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Classes="body" Text="{Binding LayoutMessage}" TextWrapping="Wrap" />
-          </Border>
-
-          <ItemsControl ItemsSource="{Binding Splits}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:DisplaySplitViewModel">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,4">
-                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Classes="body" Text="{Binding Name}" />
-                    <TextBlock Classes="zoneSize" Text="{Binding Detail}" />
-                  </StackPanel>
-
-                  <Button Grid.Column="1" Content="−" MinWidth="36"
-                          Command="{Binding RemoveCommand}"
-                          IsEnabled="{Binding CanRemove}" />
-
-                  <TextBlock Grid.Column="2" Classes="body" Text="{Binding Summary}"
-                             MinWidth="70" TextAlignment="Center"
-                             VerticalAlignment="Center" Margin="8,0" />
-
-                  <Button Grid.Column="3" Content="+" MinWidth="36"
-                          Command="{Binding AddCommand}"
-                          IsEnabled="{Binding CanAdd}" />
-
-                  <!-- Only offered where there is something to undo. -->
-                  <Button Grid.Column="4" Content="Reset" MinWidth="70" Margin="8,0,0,0"
-                          Command="{Binding ResetCommand}"
-                          IsVisible="{Binding IsCustom}" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
-          <TextBlock Classes="body" Margin="0,6,0,0" TextWrapping="Wrap"
-                     Text="Undo, reset, and the drag handles for resizing zones are on the diagram under Hotkeys below." />
-
-          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-            <Button Content="Export layout…" Command="{Binding ExportLayoutCommand}" />
-            <Button Content="Import layout…" Command="{Binding ImportLayoutCommand}" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
       <!-- Behavior -->
       <Border Classes="card">
         <StackPanel Spacing="10">
@@ -147,8 +77,100 @@
           <ComboBox ItemsSource="{Binding HotkeyModifiers}"
                     SelectedItem="{Binding SelectedHotkeyModifier}"
                     HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Border>
 
-          <TextBlock Classes="body" Margin="0,6,0,0"
+      <!-- Layout -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Layout" />
+
+          <TextBlock Classes="body" Text="Key surface — which block of keys zones are mapped onto." />
+          <ComboBox ItemsSource="{Binding Surfaces}"
+                    SelectedItem="{Binding SelectedSurface}"
+                    HorizontalAlignment="Stretch" />
+
+          <CheckBox Content="Allow zones that span two monitors"
+                    IsChecked="{Binding AllowSpanningUnions}" />
+          <TextBlock Classes="body" Margin="24,0,0,0"
+                     Text="Only offered when the monitors form a clean rectangle — adjacent, aligned, and at the same scaling." />
+
+          <Button Content="Re-run setup wizard…"
+                  Command="{Binding RerunWizardCommand}"
+                  HorizontalAlignment="Left"
+                  Margin="0,6,0,0" />
+
+          <!-- The whole layout as a file: zone shapes, counts and key
+               bindings. Here rather than on a card of its own, which is what
+               was left of "Splits" once the diagram grew its own stepper. -->
+          <TextBlock Classes="body" Margin="0,10,0,0" TextWrapping="Wrap"
+                     Text="A layout file carries the zone shapes and how each display is split, so an arrangement worked out on one machine can be moved to another." />
+
+          <Border Classes="warning" IsVisible="{Binding LayoutMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Classes="body" Text="{Binding LayoutMessage}" TextWrapping="Wrap" />
+          </Border>
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Export layout…" Command="{Binding ExportLayoutCommand}" />
+            <Button Content="Import layout…" Command="{Binding ImportLayoutCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- The hotkeys that are not zones.
+
+           Here rather than on the diagram because there is nothing to point at:
+           they act on whatever has focus, so no rectangle on the desk stands for
+           one. Zone keys stay on the diagram, where the picture says which key
+           goes where far better than a list could. -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Actions" />
+
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="Hotkeys that act on the focused window rather than sending it somewhere. They sit outside the key surface on purpose — the allocator may claim any surface key when a monitor is plugged in, and an action bound there would stop working." />
+
+          <ItemsControl ItemsSource="{Binding Actions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ActionRowViewModel">
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4,0,0">
+                  <TextBlock Grid.Column="0" Classes="body" Text="{Binding Title}"
+                             VerticalAlignment="Center" />
+
+                  <!-- The chord doubles as the button that changes it: the thing
+                       you want to change is the thing you click, and it is the
+                       only part of the row worth pointing at. -->
+                  <Button Grid.Column="1" Classes="chordButton"
+                          Classes.capturing="{Binding IsCapturing}"
+                          Content="{Binding Display}"
+                          Command="{Binding RebindCommand}"
+                          Margin="8,0,0,0" />
+
+                  <Button Grid.Column="2" Content="Reset"
+                          Command="{Binding ResetCommand}"
+                          IsVisible="{Binding IsCustom}"
+                          Margin="8,0,0,0" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="body" TextWrapping="Wrap"
+                     Text="{Binding ActionMessage}"
+                     IsVisible="{Binding ActionMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Advanced.
+
+           On its own card because its one setting says, in its own text, to
+           change it only when something is already wrong. Beside a checkbox
+           about a flash animation it read as an ordinary preference. -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="Advanced" />
+
+          <TextBlock Classes="body" TextWrapping="Wrap"
                      Text="Windows key handling — how Mullion stops the Start menu opening when it takes a Win shortcut. Change this only if the Start menu appears when it should not." />
           <ComboBox ItemsSource="{Binding SuppressionModes}"
                     SelectedItem="{Binding SelectedSuppression}"
@@ -164,45 +186,6 @@
                       HorizontalAlignment="Left" />
             </StackPanel>
           </Border>
-        </StackPanel>
-      </Border>
-
-      <!-- Current bindings -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="Hotkeys" />
-          <TextBlock Classes="body"
-                     Text="Press a key again while holding Win to widen the window through its cycle." />
-
-          <!-- The picture is the control: click a zone to rebind it, drag the
-               lines between zones to resize them. The same editor the main
-               window offers, so there is one place to learn rather than two
-               that drift apart. -->
-          <Border Classes="card" Padding="10">
-            <ctl:ZoneEditor DataContext="{Binding Editor}" />
-          </Border>
-
-          <ItemsControl ItemsSource="{Binding Bindings}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:BindingRowViewModel">
-                <Grid ColumnDefinitions="110,*,Auto" Margin="0,3">
-                  <Border Classes="keyChip" HorizontalAlignment="Left">
-                    <TextBlock Text="{Binding Key}" />
-                  </Border>
-
-                  <TextBlock Grid.Column="1" Classes="body" Text="{Binding Zone}"
-                             VerticalAlignment="Center" Margin="10,0,0,0" />
-
-                  <Button Grid.Column="2"
-                          Content="{Binding ButtonLabel}"
-                          MinWidth="100"
-                          Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).RebindCommand}"
-                          CommandParameter="{Binding}" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
         </StackPanel>
       </Border>
 

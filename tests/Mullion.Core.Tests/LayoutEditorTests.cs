@@ -116,7 +116,7 @@ public class LayoutEditorTests
     [Fact]
     public void AFreshlyBuiltLayoutMatchesItself()
     {
-        // What the greyed-out "reset keys" button turns on: nothing has moved,
+        // What the grayed-out "reset keys" button turns on: nothing has moved,
         // so there is nothing to put back.
         var displays = SimulatedTopologies.Find("single-32-9")!.Displays;
 
@@ -161,7 +161,7 @@ public class LayoutEditorTests
     public void ZonesAreMatchedByShapeNotByIdentity()
     {
         // Regenerating gives every zone a fresh Guid, so comparing identities
-        // would report every layout as customised and leave the reset button
+        // would report every layout as customized and leave the reset button
         // permanently lit.
         var displays = SimulatedTopologies.Find("three-across")!.Displays;
 

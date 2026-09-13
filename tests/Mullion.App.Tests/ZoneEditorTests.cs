@@ -13,7 +13,7 @@ namespace Mullion.App.Tests;
 /// The editor shared by the main window and settings.
 /// <para>
 /// Its whole point is that the two windows behave the same, so what is asserted
-/// here is the behaviour neither window should have to restate: read-only until
+/// here is the behavior neither window should have to restate: read-only until
 /// asked, editable after, and nothing left listening when it is dismissed.
 /// </para>
 /// </summary>
@@ -28,7 +28,7 @@ public class ZoneEditorTests
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "The Windows host is not available here.");
 
-        var host = new WindowsAppHost(SimulatedTopologies.Find(topologyId));
+        var host = new WindowsAppHost(SimulatedTopologies.Find(topologyId), TestConfig.Path());
         host.Start();
 
         return new ZoneEditorViewModel(host);
@@ -146,11 +146,10 @@ public class ZoneEditorTests
     }
 
     [Fact]
-    public void SettingsHasNoSessionSoItsChangesStandOnTheirOwn()
+    public void ADiagramWithNoPencilRunsNoSession()
     {
-        // No pencil there, so nothing could ever confirm or cancel: a
-        // provisional state with no way to resolve it is just changes that
-        // never get saved.
+        // Nothing could confirm or cancel one, so a provisional state with no
+        // way to resolve it would just be changes that never get saved.
         var editor = Editor();
         editor.CanEdit = false;
         editor.IsEditing = true;
@@ -276,7 +275,7 @@ public class ZoneEditorTests
     }
 
     [Fact]
-    public void TheCapturedCellIsReportedForTheListToFollow()
+    public void TheCapturedCellIsReportedSoTheDiagramCanShowIt()
     {
         var editor = Editor();
         editor.BeginEditCommand.Execute(null);
@@ -289,5 +288,143 @@ public class ZoneEditorTests
         editor.CancelCapture();
 
         seen.ShouldBe([(null, cell), (cell, null)]);
+    }
+    // ---- What is said, and for how long ------------------------------------
+    //
+    // Two kinds of thing get said here and they are not interchangeable. An
+    // instruction or a refusal has to stay up, because it is asking for
+    // something; a confirmation is worth saying once and not worth keeping.
+    // They used to share one line above the diagram, so "Changes discarded."
+    // pushed the whole picture down to announce that nothing had changed, and
+    // then stayed there.
+
+    [Fact]
+    public void DiscardingASessionIsConfirmedInPassing()
+    {
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+        editor.CancelEditCommand.Execute(null);
+
+        editor.Flash.ShouldBe("Changes discarded.");
+        editor.Message.ShouldBeNull("a confirmation must not take the sticky line");
+    }
+
+    [Fact]
+    public void KeepingASessionSaysNothingAtAll()
+    {
+        // Confirming is its own confirmation: the diagram now shows what was
+        // asked for.
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+        editor.ConfirmEditCommand.Execute(null);
+
+        editor.Flash.ShouldBeNull();
+        editor.Message.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResettingZonesActuallyPutsTheDefaultsBack()
+    {
+        // The button's own claim, which nothing checked: it was confirmed in
+        // passing and its message asserted, while whether the zones came back is
+        // the only thing anyone presses it for.
+        var editor = Editor();
+        var before = Shape(editor);
+
+        editor.BeginEditCommand.Execute(null);
+        editor.Diagram.Displays.Single().AddZoneCommand.Execute(null);
+
+        Shape(editor).ShouldNotBe(before, "the edit should have changed something");
+        editor.CanResetZones.ShouldBeTrue();
+
+        editor.ResetZonesCommand.Execute(null);
+
+        Shape(editor).ShouldBe(before);
+        editor.CanResetZones.ShouldBeFalse("nothing is custom any more, so there is nothing to reset");
+    }
+
+    [Fact]
+    public void ResettingZonesForgetsAPinnedSubzoneAxis()
+    {
+        // Same claim for the other kind of customization. A pinned axis is stored
+        // in the same override record as the zone count, so it has to be dropped
+        // by the same button - otherwise "reset zones to default" leaves the desk
+        // not at its default and stays lit with nothing left to do.
+        var editor = Editor();
+        var before = Shape(editor);
+
+        editor.BeginEditCommand.Execute(null);
+
+        var zone = editor.Diagram.Displays.Single().Cells.First(c => c.CanFlipAxis);
+        var wasSideBySide = zone.IsSideBySide;
+        zone.FlipAxisCommand.Execute(null);
+
+        editor.Diagram.Displays.Single().Cells
+            .First(c => c.ZoneIndex == zone.ZoneIndex)
+            .IsSideBySide.ShouldBe(!wasSideBySide, "the flip should have taken");
+
+        editor.ResetZonesCommand.Execute(null);
+
+        Shape(editor).ShouldBe(before);
+        editor.Diagram.Displays.Single().Cells
+            .First(c => c.ZoneIndex == zone.ZoneIndex)
+            .IsSideBySide.ShouldBe(wasSideBySide, "the pin should be gone");
+        editor.CanResetZones.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ResettingZonesIsConfirmedInPassing()
+    {
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+        editor.Diagram.Displays.Single().AddZoneCommand.Execute(null);
+
+        editor.ResetZonesCommand.Execute(null);
+
+        editor.Flash.ShouldNotBeNullOrWhiteSpace();
+        editor.Message.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WaitingForAKeyIsAnInstructionAndStays()
+    {
+        // This one is asking for something, so it holds its line until the key
+        // arrives or the capture is called off.
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+
+        editor.BeginRebindAt(new GridPos(1, 0));
+
+        editor.Message.ShouldNotBeNullOrWhiteSpace();
+        editor.Flash.ShouldBeNull();
+    }
+
+    [Fact]
+    public void AnInstructionClearsAConfirmationLeftOver()
+    {
+        // The two are alternatives. A stale "Zones reset." sitting under a live
+        // "press a key" reads as though both are current.
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+        editor.Diagram.Displays.Single().AddZoneCommand.Execute(null);
+        editor.ResetZonesCommand.Execute(null);
+
+        editor.Flash.ShouldNotBeNull();
+
+        editor.BeginRebindAt(new GridPos(1, 0));
+
+        editor.Flash.ShouldBeNull();
+    }
+
+    [Fact]
+    public void AConfirmationCanBeDismissedWithoutWaitingForIt()
+    {
+        var editor = Editor();
+        editor.BeginEditCommand.Execute(null);
+        editor.CancelEditCommand.Execute(null);
+
+        editor.DismissFlashCommand.Execute(null);
+
+        editor.Flash.ShouldBeNull();
     }
 }

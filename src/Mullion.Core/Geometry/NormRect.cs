@@ -34,6 +34,27 @@ public readonly record struct NormRect(double X, double Y, double W, double H)
         return PxRect.FromLtrb(left, top, right, bottom);
     }
 
+    /// <summary>
+    /// The inverse of <see cref="Project"/>: where one rectangle sits inside
+    /// another, as fractions of it.
+    /// </summary>
+    /// <remarks>
+    /// What lets something drawn inside a zone be positioned without knowing the
+    /// scaling factor in play. A physical pixel and a layout unit are the same
+    /// number only at 100%, so an offset carried across in pixels lands in the
+    /// wrong place on a scaled display; a fraction of the zone does not.
+    /// </remarks>
+    public static NormRect Within(PxRect inner, PxRect outer)
+    {
+        if (outer.Width <= 0 || outer.Height <= 0) return Full;
+
+        return FromEdges(
+            (inner.Left - outer.Left) / (double)outer.Width,
+            (inner.Top - outer.Top) / (double)outer.Height,
+            (inner.Right - outer.Left) / (double)outer.Width,
+            (inner.Bottom - outer.Top) / (double)outer.Height);
+    }
+
     /// <summary>Smallest NormRect containing both. Backs the union-key rule.</summary>
     public NormRect Union(NormRect other) => FromEdges(
         Math.Min(X, other.X),

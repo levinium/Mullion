@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Mullion.App.Services;
@@ -36,9 +37,72 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool _isEditing;
 
-    /// <summary>What just happened, or what is being waited for. Null when idle.</summary>
+    /// <summary>
+    /// What is being waited for, and what went wrong. Null when idle.
+    /// <para>
+    /// Sticky, and on a line of its own: these are the ones that have to be
+    /// read and acted on - which key to press, why the last one was refused -
+    /// and they are long enough to need the width.
+    /// </para>
+    /// </summary>
     [ObservableProperty]
     private string? _message;
+
+    /// <summary>
+    /// What just happened. Clears itself after a few seconds.
+    /// <para>
+    /// A confirmation is worth saying and not worth keeping. Sharing the sticky
+    /// message's line, "Changes discarded." pushed the whole diagram down to
+    /// announce that nothing had changed, and then stayed there. This one sits
+    /// in room the toolbar has already claimed, so showing it moves nothing.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private string? _flash;
+
+    /// <summary>
+    /// How long a confirmation stays up. Long enough to read a short sentence
+    /// twice, short enough that it is gone before it is furniture.
+    /// </summary>
+    private static readonly TimeSpan FlashLifetime = TimeSpan.FromSeconds(4);
+
+    private DispatcherTimer? _flashTimer;
+
+    /// <summary>Say something that does not need answering.</summary>
+    private void ShowFlash(string text)
+    {
+        // The two are alternatives, never both: one line is showing at a time
+        // and a stale instruction under a fresh confirmation reads as current.
+        Message = null;
+        Flash = text;
+
+        // Built on first use rather than in the constructor. A view model is
+        // constructed in tests that never start a dispatcher, and one that
+        // demanded a timer to exist would not be constructible there at all.
+        _flashTimer ??= new DispatcherTimer { Interval = FlashLifetime };
+
+        if (_flashTimer.Tag is null)
+        {
+            _flashTimer.Tag = this;
+            _flashTimer.Tick += (_, _) => DismissFlash();
+        }
+
+        // Restarted, not merely started: a second confirmation gets its own full
+        // reading time rather than inheriting what was left of the first.
+        _flashTimer.Stop();
+        _flashTimer.Start();
+    }
+
+    /// <summary>
+    /// Take it down now. Bound to the message itself, so it can be dismissed by
+    /// clicking rather than waited out.
+    /// </summary>
+    [RelayCommand]
+    private void DismissFlash()
+    {
+        _flashTimer?.Stop();
+        Flash = null;
+    }
 
     /// <summary>Where the diagram is shown but editing is not on offer.</summary>
     [ObservableProperty]
@@ -75,10 +139,10 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     /// <summary>
     /// Whether ending the session has anything to end.
     /// <para>
-    /// Only the window offering the pencil runs a session. Settings is always
-    /// editing and has no way to confirm or cancel, so its changes are written
-    /// as they are made - a provisional state nothing can resolve would just be
-    /// changes that never got saved.
+    /// Only a diagram offering the pencil runs one. Without it there is no way
+    /// to confirm or cancel, so changes are written as they are made: a
+    /// provisional state nothing can resolve is just changes that never get
+    /// saved.
     /// </para>
     /// </summary>
     private bool InSession => CanEdit;
@@ -92,6 +156,7 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
 
         IsEditing = true;
         Message = null;
+        DismissFlash();
         Refresh();
     }
 
@@ -116,7 +181,11 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         }
 
         IsEditing = false;
-        Message = keep ? null : "Changes discarded.";
+        Message = null;
+
+        if (keep) DismissFlash();
+        else ShowFlash("Changes discarded.");
+
         Refresh();
     }
 
@@ -139,7 +208,7 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     private void ResetZones()
     {
         _host.ResetAllOverrides();
-        Message = "Zones reset. Undo brings them back.";
+        ShowFlash("Zones reset. Undo brings them back.");
         Refresh();
     }
 
@@ -147,7 +216,7 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     private void ResetKeys()
     {
         _host.ResetLayout();
-        Message = "Keys reset to their derived positions.";
+        ShowFlash("Keys reset to their derived positions.");
         Refresh();
     }
 
@@ -162,8 +231,8 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     public void Refresh()
     {
         Diagram = IsEditing
-            ? _host.BuildInteractiveDiagram(BeginRebindAt, ApplyWeights, ApplyZoneCount)
-            : _host.BuildInteractiveDiagram(null, null, null);
+            ? _host.BuildInteractiveDiagram(BeginRebindAt, ApplyWeights, ApplyZoneCount, FlipSubzoneAxis)
+            : _host.BuildInteractiveDiagram(null, null, null, null);
 
         if (Capturing is not null) Diagram.SetCapturing(Capturing);
 
@@ -190,6 +259,12 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
     private void ApplyZoneCount(string slot, int count)
     {
         _host.SetDisplayColumns(slot, count);
+        Refresh();
+    }
+
+    private void FlipSubzoneAxis(string slot, int zone)
+    {
+        _host.FlipSubzoneAxis(slot, zone);
         Refresh();
     }
 
@@ -222,15 +297,22 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         CancelCapture();
 
         SetCapturing(position);
+        DismissFlash();
         Message = "Hold the modifier and press the key you want for this zone. Click it again to cancel.";
 
         _host.BeginRebind(position.Row, position.Col, result =>
         {
             SetCapturing(null);
 
-            // Backing out says nothing: the message area is for what happened,
-            // and what happened is that the user changed their mind.
-            Message = result.Cancelled ? null : result.Message;
+            Message = null;
+
+            // Backing out says nothing: the user changed their mind, and there
+            // is nothing to confirm or explain. A key that landed is a
+            // confirmation; one that was refused has to stay up, because it is
+            // asking for a different key.
+            if (result.Canceled) DismissFlash();
+            else if (result.Success) ShowFlash(result.Message);
+            else Message = result.Message;
 
             if (result.Success) Refresh();
         });
@@ -243,6 +325,7 @@ public sealed partial class ZoneEditorViewModel : ObservableObject
         SetCapturing(null);
         _host.CancelRebind();
         Message = null;
+        DismissFlash();
     }
 
     private void SetCapturing(GridPos? position)

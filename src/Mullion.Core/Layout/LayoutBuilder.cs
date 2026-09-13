@@ -296,14 +296,33 @@ public static class LayoutBuilder
                 Kind = sliceCount > 1 ? ZoneKind.Region : ZoneKind.WholeDisplay,
             };
 
-            var halves = area.Split(Axis.Vertical, [1.0, 1.0]);
+            // Cut whichever way leaves two usable windows. Stacking was
+            // unconditional, which on anything wide produced a pair the engine
+            // would have rejected outright as zones - halving a 16:9 gives two
+            // 1920x540 letterboxes against a ZoneAspectMax of 2.20.
+            //
+            // A hand-set axis wins, because which way to cut is a preference as
+            // much as a measurement: a zone can be the right shape for
+            // side-by-side halves and still be the place someone always wants one
+            // window above another.
+            var tierAxis =
+                CustomAxis(display, slice, custom)
+                ?? TierAxis.For(area, display.WorkArea, display.Dpi, t);
+            var halves = area.Split(tierAxis, [1.0, 1.0]);
+
+            // The key above home always takes the first half, the key below the
+            // second - top before bottom, left before right. The words follow the
+            // axis so the name and the rectangle can never disagree.
+            var (firstWord, secondWord) = tierAxis == Axis.Vertical
+                ? ("upper", "lower")
+                : ("left", "right");
 
             if (home - 1 >= 0)
             {
                 yield return new Zone
                 {
                     Id = Guid.NewGuid(),
-                    Name = $"{baseName} upper",
+                    Name = $"{baseName} {firstWord}",
                     Parts = [new ZonePart(display.StableKey, halves[0])],
                     Position = new GridPos(home - 1, surfaceCol),
                 };
@@ -314,7 +333,7 @@ public static class LayoutBuilder
                 yield return new Zone
                 {
                     Id = Guid.NewGuid(),
-                    Name = $"{baseName} lower",
+                    Name = $"{baseName} {secondWord}",
                     Parts = [new ZonePart(display.StableKey, halves[1])],
                     Position = new GridPos(home + 1, surfaceCol),
                 };
@@ -410,6 +429,14 @@ public static class LayoutBuilder
 
         return o.Weights.All(w => w > 0) ? o.Weights : null;
     }
+
+    /// <summary>
+    /// The subzone axis someone chose for one zone of this display, or null to
+    /// derive it from the zone's shape.
+    /// </summary>
+    private static Axis? CustomAxis(
+        DisplayInfo display, int zone, IReadOnlyDictionary<string, DisplayOverride> custom) =>
+        custom.TryGetValue(DisplaySlot.Of(display), out var o) ? o.AxisFor(zone) : null;
 
     private static int HorizontalSplits(
         DisplayInfo d, bool hasOthers, ShapeTuning t,

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -10,6 +11,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow()
     {
         AvaloniaXamlLoader.Load(this);
+        this.FitWhenOpened();
 
         // The window owns the file dialogs, not the view model. StorageProvider
         // needs a top-level to hang off, and a view model that reached for the
@@ -21,6 +23,16 @@ public partial class SettingsWindow : Window
             vm.SaveFileRequested = SaveAsync;
             vm.OpenFileRequested = OpenAsync;
         };
+    }
+
+    /// <summary>
+    /// Fitted to the screen before it is shown, so a size chosen on a big
+    /// display does not hang off the bottom of a small one.
+    /// </summary>
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        this.ClampToScreen();
     }
 
     private static readonly FilePickerFileType LayoutFile = new("Mullion layout")

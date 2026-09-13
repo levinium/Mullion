@@ -11,6 +11,7 @@ using Mullion.Platform.Windows.Windows;
 //   (no args)            print the detected topology and derived layout
 //   --snap <KEY> [--delay N]   snap the foreground window to that zone
 //   --undo                     restore the last move
+//   --toggle-test              verify the Shift+drag size toggle end to end
 
 WindowsDisplayProvider.EnsurePerMonitorDpiAwareness();
 
@@ -215,6 +216,213 @@ if (argv.Contains("--elevation-check"))
         : "MISMATCH - the integrity check disagrees with what actually happened.");
 
     return consistent ? 0 : 1;
+}
+
+if (argv.Contains("--rebind-survives"))
+{
+    // Does a key rebound to a non-default modifier survive the next time the
+    // layout is regenerated? Regenerate() rebuilds from LayoutBuilder, which is
+    // given displays, a surface, tuning, unions and zone overrides - and knows
+    // nothing about which chord a zone was bound to. This says out loud what
+    // that costs.
+    var before = LayoutEditor.Rebind(
+        layout,
+        layout.Zones[0].Position,
+        layout.Zones[0].Position,
+        Mullion.Core.Hotkeys.ChordModifiers.Control | Mullion.Core.Hotkeys.ChordModifiers.Shift);
+
+    Console.WriteLine($"Rebound {layout.Zones[0].Name}: {before.Message}");
+    Console.WriteLine($"  modifier now : {before.Layout.At(layout.Zones[0].Position)!.Modifier?.ToString() ?? "(default)"}");
+    Console.WriteLine();
+
+    // What the builder alone answers. It is given displays, a surface, tuning,
+    // unions and zone shapes, and has never been told which chord a zone was
+    // bound to - so on its own it hands back the allocator's own answer.
+    var rebuilt = LayoutBuilder.Build(displays, surface);
+
+    Console.WriteLine("The builder on its own, which is all a regenerate used to do:");
+    Console.WriteLine($"  modifier now : {rebuilt.At(layout.Zones[0].Position)!.Modifier?.ToString() ?? "(default - the rebind would be gone)"}");
+    Console.WriteLine();
+
+    // What the host does now: rebuild, then put the keys back.
+    var carried = LayoutEditor.CarryKeysOver(rebuilt, before.Layout);
+    var kept = carried.At(layout.Zones[0].Position)!.Modifier;
+
+    Console.WriteLine("And with the keys carried over, which is what a zone count change,");
+    Console.WriteLine("a seam drag, an undo and a display change all go through:");
+    Console.WriteLine($"  modifier now : {kept?.ToString() ?? "(default)"}");
+    Console.WriteLine();
+    Console.WriteLine(kept is null
+        ? "LOST. A rebind does not survive a regenerate."
+        : "Kept. A rebind survives a regenerate.");
+
+    return kept is null ? 1 : 0;
+}
+
+if (argv.Contains("--toggle-test"))
+{
+    // The Shift+drag toggle, end to end against a real window. It looked broken
+    // because the remembered size was kept beside the drop handler, so a window
+    // filled by a HOTKEY had nothing to come back from - and that is precisely
+    // the sequence a person performs. Every step below is a real move through
+    // the real window manager; nothing here simulates the thing under test.
+    using var scratch = new Mullion.Platform.Windows.Testing.ScratchWindow("Mullion toggle test");
+    var hwnd = scratch.Handle;
+    Thread.Sleep(400);
+
+    var mover = new WindowManager();
+    var zone = ProjectZone(layout.At(1, 0)!);
+    var failures = 0;
+
+    Console.WriteLine($"Zone under test: {zone}");
+    Console.WriteLine();
+
+    void Check(string what, bool ok, string detail)
+    {
+        if (!ok) failures++;
+        Console.WriteLine($"  {(ok ? "ok  " : "FAIL")}  {what,-46} {detail}");
+    }
+
+    // One press of the toggle: read the window, ask the same rule the app asks,
+    // move where it says. Calling ZoneFit.Plan rather than restating the rule is
+    // the point - a probe with its own copy could pass while the app failed.
+    bool Toggle(string label)
+    {
+        var current = mover.BoundsOf(hwnd);
+        var plan = ZoneFit.Plan(current, mover.ChosenSizeOf(hwnd), zone);
+        var result = mover.MoveWindowTo(hwnd, plan.Target);
+
+        Console.WriteLine(
+            $"        {label,-20} {(plan.Restoring ? "restore" : "fill   ")} -> {result.Achieved}");
+
+        return plan.Restoring;
+    }
+
+    var original = mover.BoundsOf(hwnd)!.Value;
+    Console.WriteLine($"  window starts at {original}");
+    Console.WriteLine();
+
+    // 1. Filled by hotkey, which is where the old implementation lost the size.
+    Console.WriteLine("  filling the zone the way a hotkey does:");
+    mover.MoveWindowTo(hwnd, zone);
+
+    Check("the pre-move size is remembered",
+        mover.ChosenSizeOf(hwnd) == original,
+        $"{mover.ChosenSizeOf(hwnd)?.ToString() ?? "(none)"}");
+
+    Check("the window fills the zone",
+        ZoneFit.Fills(mover.BoundsOf(hwnd)!.Value, zone),
+        $"{mover.BoundsOf(hwnd)}");
+
+    // 2. Dropped into the same zone: the way back.
+    Console.WriteLine();
+    Console.WriteLine("  dropping it into the same zone:");
+    var restored = Toggle("first drop");
+    var back = mover.BoundsOf(hwnd)!.Value;
+
+    Check("it comes back to its original size", restored &&
+        Math.Abs(back.Width - original.Width) <= ZoneFit.Tolerance &&
+        Math.Abs(back.Height - original.Height) <= ZoneFit.Tolerance,
+        $"{back.Width}x{back.Height} vs {original.Width}x{original.Height}");
+
+    // 3. And out again, because a toggle that only goes one way is a button.
+    var refilled = Toggle("second drop");
+    Check("dropping again fills the zone", !refilled &&
+        ZoneFit.Fills(mover.BoundsOf(hwnd)!.Value, zone),
+        $"{mover.BoundsOf(hwnd)}");
+
+    // 4. The case the user described: resize it yourself, then use Mullion
+    //    again. What comes back must be the size YOU last set, not the one
+    //    Mullion remembered from before you touched it.
+    Console.WriteLine();
+    Console.WriteLine("  resizing it by hand, then filling the zone again:");
+    var byHand = new Mullion.Core.Geometry.PxRect(zone.Left + 120, zone.Top + 90, 640, 480);
+    scratch.ResizeByHand(byHand.Left, byHand.Top, byHand.Width, byHand.Height);
+    Thread.Sleep(250);
+
+    var seen = mover.BoundsOf(hwnd)!.Value;
+    Console.WriteLine($"        resized by hand to  {seen}");
+
+    mover.MoveWindowTo(hwnd, zone);
+
+    var remembered = mover.ChosenSizeOf(hwnd);
+    Check("the hand-set size replaced the old one",
+        remembered is { } r &&
+        Math.Abs(r.Width - seen.Width) <= ZoneFit.Tolerance &&
+        Math.Abs(r.Height - seen.Height) <= ZoneFit.Tolerance,
+        $"{remembered?.ToString() ?? "(none)"}");
+
+    Check("and NOT the size from before that",
+        remembered is { } r2 && Math.Abs(r2.Width - original.Width) > ZoneFit.Tolerance,
+        $"original was {original.Width}x{original.Height}");
+
+    Console.WriteLine();
+    Console.WriteLine("  dropping into the same zone again:");
+    Toggle("third drop");
+    var afterHand = mover.BoundsOf(hwnd)!.Value;
+
+    Check("it returns to the hand-set size",
+        Math.Abs(afterHand.Width - seen.Width) <= ZoneFit.Tolerance &&
+        Math.Abs(afterHand.Height - seen.Height) <= ZoneFit.Tolerance,
+        $"{afterHand.Width}x{afterHand.Height} vs {seen.Width}x{seen.Height}");
+
+    // 5. Moving between zones is not a resize by the user, so the remembered
+    //    size must survive the trip.
+    Console.WriteLine();
+    Console.WriteLine("  sending it through another zone and back:");
+    var other = ProjectZone(layout.Zones.Where(z => z.Position.Row == 1).MaxBy(z => z.Position.Col)!);
+    mover.MoveWindowTo(hwnd, other);
+    mover.MoveWindowTo(hwnd, zone);
+
+    Check("the hand-set size survived the round trip",
+        mover.ChosenSizeOf(hwnd) is { } r3 &&
+        Math.Abs(r3.Width - seen.Width) <= ZoneFit.Tolerance,
+        $"{mover.ChosenSizeOf(hwnd)?.ToString() ?? "(none)"}");
+
+    // 6. The gesture as it is actually performed. Everything above drops the
+    //    window without moving it first, which no real drag does - the window
+    //    follows the pointer, so by the time it is let go it is nowhere near
+    //    the zone it was picked up from.
+    Console.WriteLine();
+    Console.WriteLine("  picking it up, dragging it within the zone, and letting go:");
+    mover.MoveWindowTo(hwnd, zone);
+    var pickedUpAt = mover.BoundsOf(hwnd)!.Value;
+    var wantedBack = mover.ChosenSizeOf(hwnd);
+
+    scratch.DragByHand(340, 210);
+    Thread.Sleep(250);
+
+    var letGoAt = mover.BoundsOf(hwnd)!.Value;
+    Console.WriteLine($"        picked up at        {pickedUpAt}");
+    Console.WriteLine($"        let go at           {letGoAt}");
+
+    Check("the drag really did move it off the zone",
+        !ZoneFit.Fills(letGoAt, zone),
+        "otherwise this step proves nothing");
+
+    // The app asks about where the drag BEGAN, which is the whole point.
+    var dragPlan = ZoneFit.Plan(pickedUpAt, wantedBack, zone);
+
+    Check("dropping it on the zone it already fills restores",
+        dragPlan.Restoring,
+        $"target {dragPlan.Target}");
+
+    Check("asking about the drop position instead would not",
+        !ZoneFit.Plan(letGoAt, wantedBack, zone).Restoring,
+        "which is how the gesture came to look dead");
+
+    mover.MoveWindowTo(hwnd, dragPlan.Target);
+
+    Check("and the remembered size survived the drag",
+        mover.ChosenSizeOf(hwnd) is { } r4 && ZoneFit.SameSize(r4, wantedBack!.Value),
+        $"{mover.ChosenSizeOf(hwnd)?.ToString() ?? "(none)"}");
+
+    Console.WriteLine();
+    Console.WriteLine(failures == 0
+        ? "Toggle behaves as specified."
+        : $"{failures} check(s) failed.");
+
+    return failures == 0 ? 0 : 1;
 }
 
 if (argv.Contains("--drag-test"))

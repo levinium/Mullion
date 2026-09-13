@@ -123,6 +123,64 @@ public sealed class AtLeastConverter : IMultiValueConverter
     }
 }
 
+/// <summary>
+/// How tall a zone's key chip may grow: the smaller of what the chord is allowed
+/// and what the tile actually has spare between its tier chips.
+/// <para>
+/// The allowance alone was a constant, which is right for a diagram whose tiles
+/// are hundreds of pixels tall and wrong for a wizard card, where a tile is
+/// about fifty. The chip took the 24px it was permitted, the tier chips sat at
+/// the quarter marks either side, and all three overlapped - three key labels in
+/// the same place, which is the one thing the card is choosing between.
+/// </para>
+/// <para>
+/// The tier's own rendered height is a binding rather than a number because it
+/// is not one: the chips are smaller in thumbnail mode than in the full diagram,
+/// and a constant tuned for either is wrong for the other.
+/// </para>
+/// </summary>
+public sealed class ChipHeightConverter : IMultiValueConverter
+{
+    public static readonly ChipHeightConverter Instance = new();
+
+    /// <summary>
+    /// Clear air between the chip and a tier chip beside it.
+    /// <para>
+    /// Four, not one: the chip is centered on the tile and the tier chips on
+    /// the halves of a grid inset from it, so the two centers differ by a
+    /// pixel or so and a cap that only just fits still lands on a tier.
+    /// </para>
+    /// </summary>
+    private const double Breathing = 4;
+
+    /// <summary>
+    /// Never returns nothing. A chip shrunk to zero is not a smaller label, it
+    /// is a missing one, and a tile too short for any of this drops the chip
+    /// outright elsewhere rather than here.
+    /// </summary>
+    private const double Floor = 8;
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count < 2) return double.PositiveInfinity;
+        if (values[0] is not double tile || double.IsNaN(tile)) return double.PositiveInfinity;
+        if (values[1] is not double allowed || double.IsNaN(allowed)) return double.PositiveInfinity;
+
+        var tier = values.Count > 2 && values[2] is double t && !double.IsNaN(t) ? t : 0;
+        var inset = values.Count > 3 && values[3] is double i && !double.IsNaN(i) ? i : 0;
+
+        // Where the tier chips actually are, rather than roughly. They sit
+        // centered in the halves of a grid inset from the tile, so the upper
+        // one's lower edge is at inset + (tile - 2*inset)/4 + tier/2, the chip
+        // is centered on the tile, and twice the distance between the two is
+        // all it has. Reasoning from the tile alone overstates that by the
+        // whole inset - which on a card is most of the band.
+        var band = tier > 0 ? tile / 2 - inset - tier - Breathing : tile;
+
+        return Math.Max(Floor, Math.Min(allowed, band));
+    }
+}
+
 /// <summary>One step of a seam drag.</summary>
 /// <param name="Index">Which seam.</param>
 /// <param name="Position">Where it has been dragged to, as a fraction of the display.</param>
@@ -219,4 +277,53 @@ public sealed class EditLabelConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+/// <summary>
+/// Whether a side-by-side subzone chip can sit on its half's middle line, or has
+/// to tuck into the row above it.
+/// <para>
+/// Centring it there is the arrangement that reads correctly - a chip naming the
+/// left half belongs in the middle of the left half. What stands in the way is
+/// the whole-zone block, which owns the middle of the tile and is the widest
+/// thing in it, carrying a chord, a name and a size. Whether the three fit
+/// across one line is not a property of the layout but of the words in them: with
+/// "Win+" chords a 499px tile has room to spare, while the same tile with
+/// "Ctrl+Shift+" chords does not. So it is asked of the arranged widths rather
+/// than answered once with a constant, which is what an earlier version did -
+/// and it took the worst case for the only case, so every tile lost the centring
+/// to spare the few that could not afford it.
+/// </para>
+/// <para>
+/// Returns a Grid.RowSpan: 2 spans both rows and centres on the tile, 1 keeps the
+/// chip in its own row. Expressed that way because the span is the only thing
+/// that has to change - the column, and so the horizontal placement, is the same
+/// either way.
+/// </para>
+/// </summary>
+public sealed class CentredChipFitsConverter : IMultiValueConverter
+{
+    public static readonly CentredChipFitsConverter Instance = new();
+
+    /// <summary>Clear air between the chip and the block, so they read as separate.</summary>
+    private const double Breathing = 10;
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        // Stacked halves already have a row each, well clear of the middle.
+        if (values.Count < 4 || values[0] is not true) return 1;
+
+        if (values[1] is not double tile || double.IsNaN(tile)) return 1;
+        if (values[2] is not double block || double.IsNaN(block)) return 1;
+        if (values[3] is not double chip || double.IsNaN(chip)) return 1;
+
+        // Nothing arranged yet: keep the safe arrangement rather than flicker
+        // into the centred one and back out on the next pass.
+        if (tile <= 0 || chip <= 0) return 1;
+
+        // The chip is centred in its half, so its centre is a quarter of the
+        // tile from the middle; the block is centred on the middle. Halves of
+        // each, because both spread either side of their own centre.
+        return tile / 4 >= (block / 2) + (chip / 2) + Breathing ? 2 : 1;
+    }
 }

@@ -123,9 +123,15 @@ public class MonitorDiagramLayoutTests
     }
 
     /// <summary>
-    /// Upper and lower tier chips must sit the same distance from the middle of
-    /// their tile. Pinned to its edges instead, the pair reads as one centered
-    /// and one bottom-justified.
+    /// The two subzone chips must sit the same distance from the middle of their
+    /// tile. Pinned to its edges instead, the pair reads as one centered and one
+    /// edge-justified.
+    /// <para>
+    /// Measured along whichever axis actually separates them, since subzones are
+    /// no longer always stacked: a side-by-side pair is symmetric left and right
+    /// of the middle and shares one line vertically, which under the original
+    /// vertical-only form of this assertion looked maximally lopsided.
+    /// </para>
     /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(Arrangements))]
@@ -135,20 +141,41 @@ public class MonitorDiagramLayoutTests
 
         foreach (var tile in Descendants<Button>(diagram).Where(b => b.Classes.Contains("zoneTileButton")))
         {
+            // The chip TOGETHER WITH its size label, which is what the eye reads
+            // as one subzone's marker. Measuring the bare chip works only while
+            // the pair is stacked and both carry the same offset from their
+            // label; side by side that offset lands on opposite sides of the
+            // middle and shows up as an asymmetry that is not there.
             var chips = Descendants<Border>(tile)
                 .Where(b => b.Classes.Contains("tierChip") && b.IsVisible && b.Bounds.Height > 0)
-                .Select(b => BoundsIn(b, diagram))
-                .OrderBy(r => r.Top)
+                .Select(b => (Visual)(b.GetVisualAncestors().OfType<Viewbox>().FirstOrDefault() ?? (Visual)b))
+                .Select(v => BoundsIn(v, diagram))
                 .ToList();
 
             if (chips.Count != 2) continue;
 
             var frame = BoundsIn(tile, diagram);
-            var above = frame.Center.Y - chips[0].Center.Y;
-            var below = chips[1].Center.Y - frame.Center.Y;
 
-            Math.Abs(above - below).ShouldBeLessThan(2,
-                $"{topologyId}: tier chips sit {above:F0}px above and {below:F0}px below the middle");
+            // Whichever axis the pair is spread along is the one symmetry means
+            // anything on; the other holds them on a common line.
+            var spreadY = Math.Abs(chips[0].Center.Y - chips[1].Center.Y);
+            var spreadX = Math.Abs(chips[0].Center.X - chips[1].Center.X);
+            var stacked = spreadY >= spreadX;
+
+            var ordered = stacked
+                ? chips.OrderBy(r => r.Center.Y).ToList()
+                : chips.OrderBy(r => r.Center.X).ToList();
+
+            var (mid, first, second) = stacked
+                ? (frame.Center.Y, ordered[0].Center.Y, ordered[1].Center.Y)
+                : (frame.Center.X, ordered[0].Center.X, ordered[1].Center.X);
+
+            var before = mid - first;
+            var after = second - mid;
+
+            Math.Abs(before - after).ShouldBeLessThan(2,
+                $"{topologyId}: subzone chips sit {before:F0}px and {after:F0}px either side of the middle " +
+                $"({(stacked ? "stacked" : "side by side")})");
         }
     }
 
@@ -181,10 +208,16 @@ public class MonitorDiagramLayoutTests
             for (var j = i + 1; j < parts.Count; j++)
             {
                 parts[i].Box.Intersects(parts[j].Box).ShouldBeFalse(
-                    $"{topologyId}: {parts[i].Kind} overlaps {parts[j].Kind}");
+                    $"{topologyId}: {parts[i].Kind} {Say(parts[i].Box)} " +
+                    $"overlaps {parts[j].Kind} {Say(parts[j].Box)} " +
+                    $"in tile {Say(BoundsIn(tile, diagram))}");
             }
         }
     }
+
+    /// <summary>Coordinates, for a failure message that can be acted on.</summary>
+    private static string Say(Rect r) =>
+        $"[{r.X:F0},{r.Y:F0} {r.Width:F0}x{r.Height:F0}]";
 
     /// <summary>
     /// No run of text may be arranged narrower than it needs.
@@ -333,7 +366,7 @@ public class MonitorDiagramLayoutTests
     }
 
     /// <summary>
-    /// Monitor name tabs must not reach a neighbour's. They overflow their own
+    /// Monitor name tabs must not reach a neighbor's. They overflow their own
     /// display on purpose, which is exactly why they need checking.
     /// </summary>
     [AvaloniaTheory]

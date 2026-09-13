@@ -1,4 +1,5 @@
 using Mullion.Core.Config;
+using Mullion.Core.Hotkeys;
 using Mullion.Core.Layout;
 using Mullion.Core.Model;
 using Shouldly;
@@ -163,6 +164,43 @@ public class ProfileResolverTests
     }
 
     [Fact]
+    public void AZoneBoundToItsOwnModifierKeepsItThroughAProfile()
+    {
+        // The failure this was written for: rebinding a zone to something other
+        // than the default modifier changed it on screen and in the running
+        // engine, and was gone the next time the layout came off disk - on a
+        // display change, or simply on the next launch. The profile recorded
+        // the key's position and never the chord it was taken with.
+        var displays = TestDisplays.ThreeAcross();
+        var original = LayoutBuilder.Build(displays);
+
+        var rebound = LayoutEditor.Rebind(
+            original,
+            original.Zones[0].Position,
+            original.Zones[0].Position,
+            ChordModifiers.Control | ChordModifiers.Shift);
+
+        rebound.Success.ShouldBeTrue();
+
+        var profile = ProfileResolver.CreateProfile(displays, rebound.Layout);
+        var restored = ProfileResolver.ToLayout(profile, displays);
+
+        restored.At(original.Zones[0].Position)!.Modifier
+            .ShouldBe(ChordModifiers.Control | ChordModifiers.Shift);
+    }
+
+    [Fact]
+    public void AZoneLeftOnTheDefaultRecordsNoModifierOfItsOwn()
+    {
+        // Null rather than the default spelled out, so a zone nobody has touched
+        // follows the default when the default itself is changed.
+        var displays = TestDisplays.ThreeAcross();
+        var profile = ProfileResolver.CreateProfile(displays, LayoutBuilder.Build(displays));
+
+        ProfileResolver.ToLayout(profile, displays).Zones.ShouldAllBe(z => z.Modifier == null);
+    }
+
+    [Fact]
     public void DropsZonesWhoseDisplayIsGoneRatherThanFailing()
     {
         var displays = TestDisplays.ThreeAcross();
@@ -209,6 +247,61 @@ public class ConfigStoreTests : IDisposable
         loaded.Profiles.Count.ShouldBe(1);
         loaded.Profiles[0].Zones.Count.ShouldBe(profile.Zones.Count);
         loaded.Profiles[0].Zones[0].Parts[0].Area.ShouldBe(profile.Zones[0].Parts[0].Area);
+    }
+
+    [Fact]
+    public void AZonesOwnModifierSurvivesBeingWrittenAndReadBack()
+    {
+        // The round trip that actually matters: rebinding a zone to Ctrl+Shift
+        // used to change it on screen and be gone at the next launch, because
+        // the file it was written to had nowhere to put it.
+        var displays = TestDisplays.SuperUltrawideAlone();
+        var layout = LayoutBuilder.Build(displays);
+
+        var rebound = LayoutEditor.Rebind(
+            layout,
+            layout.Zones[0].Position,
+            layout.Zones[0].Position,
+            ChordModifiers.Control | ChordModifiers.Shift).Layout;
+
+        var profile = ProfileResolver.CreateProfile(displays, rebound, "Desk");
+
+        var store = new ConfigStore(ConfigPath);
+        store.Save(new AppConfig { Profiles = [profile], ActiveProfileId = profile.Id });
+
+        var loaded = new ConfigStore(ConfigPath).Load();
+        var restored = ProfileResolver.ToLayout(loaded.Profiles[0], displays);
+
+        restored.At(layout.Zones[0].Position)!.Modifier
+            .ShouldBe(ChordModifiers.Control | ChordModifiers.Shift);
+    }
+
+    [Fact]
+    public void AFileWrittenBeforeZonesCarriedAModifierStillLoads()
+    {
+        // Every config on disk predates the field. Read back they have no
+        // modifier of their own, which is exactly what they had: the default.
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(ConfigPath, """
+            {
+              "schemaVersion": 1,
+              "wizardCompleted": true,
+              "profiles": [{
+                "id": "22222222-2222-2222-2222-222222222222",
+                "name": "Desk",
+                "hardwareFingerprint": "hw_test",
+                "arrangementFingerprint": "ar_test",
+                "displays": [],
+                "zones": [
+                  { "name": "Left", "row": 1, "col": 0, "parts": [], "kind": "Region" }
+                ]
+              }]
+            }
+            """);
+
+        var loaded = new ConfigStore(ConfigPath).Load();
+
+        loaded.Profiles[0].Zones[0].Modifier.ShouldBeNull();
     }
 
     [Fact]

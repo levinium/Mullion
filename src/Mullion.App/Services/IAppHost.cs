@@ -10,7 +10,6 @@ public sealed record AppSnapshot(
     string HookStatus,
     string PrivilegeStatus,
     bool Paused,
-    string LastAction,
     IReadOnlyList<ConflictViewModel> Conflicts,
     bool IsElevated,
 
@@ -26,7 +25,13 @@ public sealed record AppSnapshot(
     string? DragConflictDetail,
 
     /// <summary>Label for the conflict banner's button; what is left to do changes.</summary>
-    string DragConflictAction);
+    string DragConflictAction,
+
+    /// <summary>Whether dragging a window onto a zone does anything at all.</summary>
+    bool DragToSnap,
+
+    /// <summary>The modifier that arms a drag, named as a person would say it.</summary>
+    string DragModifierName);
 
 /// <summary>
 /// Everything the UI needs from the platform, behind one interface so the
@@ -80,9 +85,11 @@ public sealed class DesignAppHost : IAppHost
     public MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos>? onZoneActivated,
         Action<string, IReadOnlyList<double>>? onSplitChanged,
-        Action<string, int>? onZoneCountChanged) => GetSnapshot().Diagram;
+        Action<string, int>? onZoneCountChanged,
+        Action<string, int>? onSubzoneAxisFlipped) => GetSnapshot().Diagram;
 
     public void SetDisplayColumns(string slot, int columns) { }
+    public void FlipSubzoneAxis(string slot, int zone) { }
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights) { }
     public bool HasCustomZones => false;
     public bool HasCustomKeys => false;
@@ -135,14 +142,15 @@ public sealed class DesignAppHost : IAppHost
             "Design mode",
             "Not elevated",
             Paused,
-            "No hotkey pressed yet.",
             [],
             false,
             null,
             null,
             false,
             null,
-            "Turn off FancyZones");
+            "Turn off FancyZones",
+            true,
+            "Shift");
     }
 
     private static ZoneCellViewModel Cell(
@@ -154,9 +162,9 @@ public sealed class DesignAppHost : IAppHost
             Area = new Rect(x, y, w, h),
             SizeLabel = "—",
             SpansDisplays = false,
-            UpperKey = upper,
-            UpperSize = "—",
-            LowerKey = lower,
-            LowerSize = "—",
+            FirstKey = upper,
+            FirstSize = "—",
+            SecondKey = lower,
+            SecondSize = "—",
         };
 }

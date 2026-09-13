@@ -65,6 +65,20 @@ public static class Icons
     /// <summary>A triangle, for resuming.</summary>
     public static StreamGeometry Play { get; } = BuildPlay();
 
+    /// <summary>A heart, for the one place the app asks for anything.</summary>
+    public static StreamGeometry Heart { get; } = BuildHeart();
+
+    /// <summary>
+    /// A small zone inside a larger one with an arrow reaching out to its edge,
+    /// for the second press that widens a window past the zone it is in.
+    /// </summary>
+    public static StreamGeometry Expand { get; } = BuildExpand();
+
+    /// <summary>
+    /// A window on its way into a zone, for the drag gesture that puts it there.
+    /// </summary>
+    public static StreamGeometry DragToZone { get; } = BuildDragToZone();
+
     private static StreamGeometry BuildGear(
         int teeth,
         double outerRadius,
@@ -113,9 +127,58 @@ public static class Icons
         return geometry;
     }
 
+    /// <summary>
+    /// A pencil lying at 45 degrees.
+    /// <para>
+    /// Built from an axis, a half-width and a set of segments along it, rather
+    /// than from typed-in corners. Drawn the second way it came out thin enough
+    /// to read as a line at 24px, and widening it meant moving every corner by
+    /// hand while keeping the point and the ferrule square to a diagonal.
+    /// </para>
+    /// <para>
+    /// The detail is in the gaps, not in outlines. This is one flat fill, so
+    /// the only way to show that a pencil has a sharpened point and a ferrule
+    /// is to leave the ground showing between them - a solid bar of the same
+    /// width throughout is a crayon.
+    /// </para>
+    /// </summary>
     private static StreamGeometry BuildPencil()
     {
         var geometry = new StreamGeometry();
+
+        // Corner to corner, and the barrel's half-width across it. Far thicker
+        // than a pencil really is, because the shape has to survive being 21
+        // pixels long: at a true proportion the barrel is two pixels wide and
+        // the whole thing reads as a stroke of ink.
+        var tip = new Point(4.3, 19.7);
+        var end = new Point(19.7, 4.3);
+        const double HalfWidth = 2.55;
+
+        // Wide enough to be seen at 24px, which means a whole pixel. Anything
+        // finer closes up under antialiasing and the parts merge back into one
+        // bar - which is what "thicker" cost the first time.
+        const double Gap = 1.1;
+
+        // Better than a quarter of the whole pencil, which is roughly what a
+        // sharpened one looks like. A short nib on a long barrel is a marker.
+        const double PointLength = 6.2;
+        const double FerruleLength = 3.6;
+
+        var span = new Point(end.X - tip.X, end.Y - tip.Y);
+        var length = Math.Sqrt(span.X * span.X + span.Y * span.Y);
+        var ux = span.X / length;
+        var uy = span.Y / length;
+
+        // Across the barrel, not along it.
+        var nx = -uy;
+        var ny = ux;
+
+        Point At(double along, double across) => new(
+            tip.X + ux * along + nx * across,
+            tip.Y + uy * along + ny * across);
+
+        var barrelFrom = PointLength + Gap;
+        var barrelTo = length - FerruleLength - Gap;
 
         using (var ctx = geometry.Open())
         {
@@ -126,28 +189,50 @@ public static class Icons
             // other way round instead.
             ctx.SetFillRule(FillRule.NonZero);
 
-            // The body: a bar from the lower left to the upper right, drawn as
-            // its four corners rather than a stroked line so it takes a fill
-            // like every other icon here.
-            ctx.BeginFigure(new Point(5.4, 16.4), isFilled: true);
-            ctx.LineTo(new Point(14.6, 7.2));
-            ctx.LineTo(new Point(16.8, 9.4));
-            ctx.LineTo(new Point(7.6, 18.6));
-            ctx.EndFigure(isClosed: true);
+            // The sharpened cone, running from the point out to the full width
+            // of the barrel. It is the whole of what makes this a pencil rather
+            // than a ruler, so it gets the room to say so.
+            Triangle(ctx,
+                At(0, 0),
+                At(PointLength, HalfWidth),
+                At(PointLength, -HalfWidth));
 
-            // The tip, running to a point: the reason it reads as a pencil and
-            // not as a ruler.
-            ctx.BeginFigure(new Point(4.4, 19.6), isFilled: true);
-            ctx.LineTo(new Point(5.2, 17.0));
-            ctx.LineTo(new Point(7.0, 18.8));
-            ctx.EndFigure(isClosed: true);
+            // The graphite, as a hole rather than a second color: an icon is
+            // one flat fill, so the only dark available is the ground behind
+            // it. What is left around the hole is the wood, and the cone still
+            // comes to a solid point because its two edges meet before the
+            // hole begins.
+            // As near the point as the wood around it can survive: the hole's
+            // own apex sits where the cone has narrowed to the rim's width, so
+            // a thinner rim starts it closer in. Thinner than the gaps
+            // elsewhere in the glyph for that reason alone.
+            var rim = 0.62;
 
-            // The ferrule end, squared off across the top corner.
-            ctx.BeginFigure(new Point(15.5, 6.3), isFilled: true);
-            ctx.LineTo(new Point(17.0, 4.8));
-            ctx.LineTo(new Point(19.2, 7.0));
-            ctx.LineTo(new Point(17.7, 8.5));
-            ctx.EndFigure(isClosed: true);
+            // Short, and at the front. Graphite is the last few millimetres of
+            // a pencil; run the hole down the cone and the tip stops reading as
+            // sharpened and starts reading as an outlined triangle.
+            var graphiteFrom = rim * PointLength / HalfWidth;
+            var graphiteTo = graphiteFrom + 2.0;
+            var graphiteHalf = HalfWidth * graphiteTo / PointLength - rim;
+
+            TriangleHole(ctx,
+                At(graphiteFrom, 0),
+                At(graphiteTo, graphiteHalf),
+                At(graphiteTo, -graphiteHalf));
+
+            Polygon(ctx,
+                At(barrelFrom, HalfWidth),
+                At(barrelTo, HalfWidth),
+                At(barrelTo, -HalfWidth),
+                At(barrelFrom, -HalfWidth));
+
+            // A shade wider than the barrel, the way a ferrule is: the step is
+            // what says this end is metal and the other end writes.
+            Polygon(ctx,
+                At(length - FerruleLength, HalfWidth * 1.06),
+                At(length, HalfWidth * 1.06),
+                At(length, -HalfWidth * 1.06),
+                At(length - FerruleLength, -HalfWidth * 1.06));
         }
 
         return geometry;
@@ -351,8 +436,8 @@ public static class Icons
             // other way round instead.
             ctx.SetFillRule(FillRule.NonZero);
 
-            // Set slightly right of centre: a triangle balances on its area, not
-            // its bounding box, and centred by the box it looks to be leaning back.
+            // Set slightly right of center: a triangle balances on its area, not
+            // its bounding box, and centered by the box it looks to be leaning back.
             ctx.BeginFigure(new Point(7.8, 5.0), isFilled: true);
             ctx.LineTo(new Point(18.4, 12.0));
             ctx.LineTo(new Point(7.8, 19.0));
@@ -362,7 +447,310 @@ public static class Icons
         return geometry;
     }
 
+    /// <summary>
+    /// The cycling behavior, drawn: a window sitting in its zone, and the same
+    /// key pressed again pushing it out to the edge of the larger one.
+    /// <para>
+    /// The window is solid and the zone an outline. Drawn as two outlines the
+    /// inner square came out as a 3px ring at the size this is actually shown
+    /// at, which reads as a smudge rather than as anything; solid, the two
+    /// shapes are told apart by weight instead of by a detail too small to
+    /// resolve, and "the filled thing is the window" is the reading anyway.
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// A double-headed arrow lying across, for the axis a zone's subzones lie
+    /// along. The upright form is this one turned ninety degrees by the view -
+    /// see the note below.
+    /// </summary>
+    public static StreamGeometry ArrowsLeftRight { get; } = BuildDoubleArrow();
+
+    /// <summary>
+    /// An arrow with a head at each end.
+    /// <para>
+    /// Two heads rather than one because this is not a direction to move in, it
+    /// is an axis to lie along - a single head would read as "push it that way".
+    /// The shaft overlaps both heads rather than butting against them: a seam
+    /// avoided by a tenth of a pixel at one size comes back at another.
+    /// </para>
+    /// <para>
+    /// Only the horizontal form exists. Drawing the upright one as a second
+    /// geometry is the obvious thing and it does not work: the two have different
+    /// bounding boxes - one wide and short, one tall and narrow - and every way
+    /// of fitting a geometry into a box works from those bounds, so the pair
+    /// never quite shares a centre and the mark hops as it swaps. Rotating one
+    /// geometry about its middle makes a common centre a fact of the drawing
+    /// rather than something to be tuned.
+    /// </para>
+    /// </summary>
+    private static StreamGeometry BuildDoubleArrow()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            ctx.SetFillRule(FillRule.NonZero);
+
+            const double Tip = 2.6;      // how close a head comes to the edge
+            const double Base = 8.4;     // where the heads meet the shaft
+            const double Half = 4.2;     // half the head's width
+            const double Thin = 1.15;    // half the shaft's thickness
+
+            const double Mid = 12.0;
+            const double Far = 24.0 - Tip;
+            const double FarBase = 24.0 - Base;
+
+            Bar(ctx, Base - 1.4, Mid - Thin, FarBase + 1.4, Mid + Thin);
+
+            Triangle(ctx,
+                new Point(Tip, Mid),
+                new Point(Base, Mid - Half),
+                new Point(Base, Mid + Half));
+
+            Triangle(ctx,
+                new Point(Far, Mid),
+                new Point(FarBase, Mid + Half),
+                new Point(FarBase, Mid - Half));
+        }
+
+        return geometry;
+    }
+
+    private static StreamGeometry BuildExpand()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            ctx.SetFillRule(FillRule.NonZero);
+
+            // The larger zone. Short of the full canvas height so the icon sits
+            // on the same optical line as the text it labels.
+            RoundedFrame(ctx, 2.0, 5.0, 22.0, 19.0, radius: 2.4, thickness: 1.3);
+
+            // The window as it sits now: square, and left of center so there is
+            // room for the arrow to travel.
+            RoundedRect(ctx, 4.6, 9.2, 10.2, 14.8, radius: 1.0, hole: false);
+
+            // Overlapping the head rather than butted against it - a seam
+            // avoided by a tenth of a pixel comes back at some other size.
+            Bar(ctx, 11.6, 11.15, 17.6, 12.85);
+
+            // Stopping short of the frame's inner edge at 20.6. Run right up to
+            // it and the head merges with the wall it is pointing at, which is
+            // the one relationship the icon exists to show.
+            Triangle(ctx,
+                new Point(19.8, 12.0),
+                new Point(16.6, 9.2),
+                new Point(16.6, 14.8));
+        }
+
+        return geometry;
+    }
+
+    /// <summary>
+    /// A heart.
+    /// <para>
+    /// Two overlapping circles for the lobes and a triangle for the point.
+    /// Walked as a single outline instead it came out as a V wedged between two
+    /// lumps: the cleft is not a point you place, it is wherever the lobes
+    /// happen to cross, and choosing it by hand puts it where the curves do not
+    /// agree with.
+    /// </para>
+    /// <para>
+    /// The sides run from the point TANGENT to each lobe, which is the whole
+    /// difference between this and a heart in a corset. Take the triangle up to
+    /// the lobes' widest point instead and its edges are chords: the circle
+    /// bulges out past the straight line and comes back to meet it lower down,
+    /// so the silhouette swells and pinches. A tangent leaves the circle
+    /// without changing direction, and there is nothing to pinch.
+    /// </para>
+    /// </summary>
+    private static StreamGeometry BuildHeart()
+    {
+        var geometry = new StreamGeometry();
+
+        const double LobeY = 8.9;
+        const double LobeR = 4.5;
+
+        // Less than the radius, so the lobes overlap rather than merely touch.
+        // Touching, they meet on their centre line and the notch cuts down to
+        // it; overlapping, they cross well above it, which is where a heart's
+        // notch sits.
+        const double Spread = 3.8;
+
+        const double Tip = 20.1;
+
+        var apex = new Point(12, Tip);
+
+        // Where a line from the point grazes a lobe. Rotating the direction to
+        // the centre by asin(r/d) turns it into the tangent's direction; the
+        // sign picks which side of the lobe it grazes, and each lobe wants its
+        // outer one.
+        Point GrazeOf(double centreX, double outward)
+        {
+            var vx = centreX - apex.X;
+            var vy = LobeY - apex.Y;
+            var distance = Math.Sqrt(vx * vx + vy * vy);
+            var along = Math.Sqrt(distance * distance - LobeR * LobeR);
+            var turn = Math.Asin(LobeR / distance) * outward;
+
+            var cos = Math.Cos(turn);
+            var sin = Math.Sin(turn);
+
+            return new Point(
+                apex.X + (vx * cos - vy * sin) / distance * along,
+                apex.Y + (vx * sin + vy * cos) / distance * along);
+        }
+
+        using (var ctx = geometry.Open())
+        {
+            ctx.SetFillRule(FillRule.NonZero);
+
+            CircleAt(ctx, 12 - Spread, LobeY, LobeR, hole: false);
+            CircleAt(ctx, 12 + Spread, LobeY, LobeR, hole: false);
+
+            Triangle(ctx, apex, GrazeOf(12 - Spread, -1), GrazeOf(12 + Spread, 1));
+
+            // Over the point where the two lobes cross, low on the centre line.
+            // Three boundaries meet there - both circles and, near enough, the
+            // triangle - and the rasteriser left a single pixel of ground
+            // showing through the middle of the heart. Everything here is well
+            // inside the silhouette, so it changes nothing except that.
+            Bar(ctx, 12 - Spread, LobeY, 12 + Spread, LobeY + LobeR);
+        }
+
+        return geometry;
+    }
+
+    /// <summary>
+    /// The drag gesture, drawn: the pointer, over the zone it is aiming at.
+    /// <para>
+    /// Two shapes, not three. A window, a zone and an arrow between them is the
+    /// obvious drawing and it does not survive: this is rendered at 24px, so a
+    /// shaft two units long is two pixels long, and the arrow came out as a
+    /// smudge between two rectangles.
+    /// </para>
+    /// <para>
+    /// The pointer earns its place twice over - it is legible at this size, and
+    /// it says "mouse" against the keyboard note sitting beside it, which is
+    /// the actual difference between the two gestures.
+    /// </para>
+    /// </summary>
+    private static StreamGeometry BuildDragToZone()
+    {
+        var geometry = new StreamGeometry();
+
+        using (var ctx = geometry.Open())
+        {
+            ctx.SetFillRule(FillRule.NonZero);
+
+            // The zone, drawn to match the expand icon's outer frame so the two
+            // notes are visibly about the same thing.
+            RoundedFrame(ctx, 2.0, 4.0, 22.0, 20.0, radius: 2.2, thickness: 1.3);
+
+            Pointer(ctx, x: 8.0, y: 6.4, scale: 0.72);
+        }
+
+        return geometry;
+    }
+
+    /// <summary>
+    /// A mouse cursor, tip at <paramref name="x"/>,<paramref name="y"/>.
+    /// </summary>
+    /// <remarks>
+    /// The familiar silhouette rather than a plain triangle: the notch where the
+    /// tail meets the head is the whole of what makes it read as a pointer and
+    /// not as an arrowhead, and it is still legible when the thing is nine
+    /// pixels tall.
+    /// </remarks>
+    private static void Pointer(StreamGeometryContext ctx, double x, double y, double scale)
+    {
+        Point At(double px, double py) => new(x + px * scale, y + py * scale);
+
+        Polygon(ctx,
+            At(0.0, 0.0),
+            At(0.0, 14.0),
+            At(3.6, 10.6),
+            At(6.0, 15.6),
+            At(8.4, 14.5),
+            At(5.9, 9.7),
+            At(10.4, 9.3));
+    }
+
+    /// <summary>
+    /// A triangle wound AGAINST the fill, so it cuts a hole in whatever it sits
+    /// inside.
+    /// <para>
+    /// The only way to get a second tone out of a single-color icon: the hole
+    /// shows the ground behind the glyph, which on a toolbar is exactly the dark
+    /// the shape is asking for.
+    /// </para>
+    /// <para>
+    /// Written as the mirror of <see cref="Triangle"/> rather than of Polygon.
+    /// The two normalize to opposite directions - one tests a cross product,
+    /// the other a shoelace sum - so a hole built from the wrong one is wound
+    /// the same way as the shape it is cutting into, merges with it, and leaves
+    /// no hole at all. Which is what it did.
+    /// </para>
+    /// </summary>
+    private static void TriangleHole(StreamGeometryContext ctx, Point a, Point b, Point c)
+    {
+        var turn = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
+
+        ctx.BeginFigure(a, isFilled: true);
+
+        // Triangle walks b then c when the turn is positive; this walks the
+        // other way round for the same input.
+        if (turn >= 0)
+        {
+            ctx.LineTo(c);
+            ctx.LineTo(b);
+        }
+        else
+        {
+            ctx.LineTo(b);
+            ctx.LineTo(c);
+        }
+
+        ctx.EndFigure(isClosed: true);
+    }
+
+    /// <summary>
+    /// A closed shape, wound so it fills rather than cancels.
+    /// <para>
+    /// The same rule <see cref="Triangle"/> follows, for the shapes that need
+    /// more than three corners: under NonZero a figure wound against its
+    /// neighbours punches a hole in them instead of joining them.
+    /// </para>
+    /// </summary>
+    private static void Polygon(StreamGeometryContext ctx, params Point[] points)
+    {
+        // Shoelace: positive area is clockwise on a y-down canvas.
+        var area = 0.0;
+        for (var i = 0; i < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[(i + 1) % points.Length];
+            area += (b.X - a.X) * (b.Y + a.Y);
+        }
+
+        ctx.BeginFigure(points[0], isFilled: true);
+
+        if (area >= 0)
+        {
+            for (var i = 1; i < points.Length; i++) ctx.LineTo(points[i]);
+        }
+        else
+        {
+            for (var i = points.Length - 1; i >= 1; i--) ctx.LineTo(points[i]);
+        }
+
+        ctx.EndFigure(isClosed: true);
+    }
+
     private static StreamGeometry BuildSnap()
+
     {
         var geometry = new StreamGeometry();
 

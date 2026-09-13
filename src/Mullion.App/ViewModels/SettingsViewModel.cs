@@ -6,23 +6,6 @@ using Mullion.Core.Hotkeys;
 
 namespace Mullion.App.ViewModels;
 
-public sealed partial class BindingRowViewModel : ObservableObject
-{
-    [ObservableProperty]
-    private string _key = string.Empty;
-
-    [ObservableProperty]
-    private bool _isCapturing;
-
-    public required string Zone { get; init; }
-    public required int Row { get; init; }
-    public required int Col { get; init; }
-
-    public string ButtonLabel => IsCapturing ? "Press a key…" : "Change";
-
-    partial void OnIsCapturingChanged(bool value) => OnPropertyChanged(nameof(ButtonLabel));
-}
-
 public sealed record SurfaceOption(string Id, string Name)
 {
     public override string ToString() => Name;
@@ -33,60 +16,8 @@ public sealed record SuppressionOption(string Id, string Name)
     public override string ToString() => Name;
 }
 
-/// <summary>One display in the customisation list.</summary>
-public sealed partial class DisplaySplitViewModel : ObservableObject
-{
-    public required string Slot { get; init; }
-    public required string Name { get; init; }
-    public required string Detail { get; init; }
-    public required int Min { get; init; }
-    public required int Max { get; init; }
-
-    [ObservableProperty]
-    private int _columns;
-
-    [ObservableProperty]
-    private bool _isCustom;
-
-    /// <summary>Set by the view model; a row does not know about the host.</summary>
-    public Action<string, int>? ColumnsChanged { get; set; }
-
-    public Action<string>? ResetRequested { get; set; }
-
-    public bool CanAdd => Columns < Max;
-
-    public bool CanRemove => Columns > Min;
-
-    public string Summary => Columns == 1 ? "1 zone" : $"{Columns} zones";
-
-    [RelayCommand]
-    private void Add()
-    {
-        if (CanAdd) ColumnsChanged?.Invoke(Slot, Columns + 1);
-    }
-
-    [RelayCommand]
-    private void Remove()
-    {
-        if (CanRemove) ColumnsChanged?.Invoke(Slot, Columns - 1);
-    }
-
-    [RelayCommand]
-    private void Reset() => ResetRequested?.Invoke(Slot);
-}
-
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    [ObservableProperty]
-    private IReadOnlyList<DisplaySplitViewModel> _splits = [];
-
-    /// <summary>
-    /// The diagram and its editing controls, shared with the main window so
-    /// there is one editor to learn rather than two that drift apart. Always in
-    /// editing mode here: this page is where someone came TO change things.
-    /// </summary>
-    public ZoneEditorViewModel Editor { get; }
-
     [ObservableProperty]
     private string? _layoutMessage;
 
@@ -136,11 +67,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private IReadOnlyList<SurfaceOption> _surfaces = [];
 
-    [ObservableProperty]
-    private IReadOnlyList<BindingRowViewModel> _bindings = [];
-
-    [ObservableProperty]
-    private string? _rebindMessage;
 
     /// <summary>
     /// The same diagram the main window shows, but clickable: picking a zone is
@@ -167,18 +93,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(ISettingsHost host)
     {
         _host = host;
-
-        // Always editing: this page is where someone came TO change things, so
-        // an Edit button to press first would only be in the way.
-        Editor = new ZoneEditorViewModel(host) { IsEditing = true, CanEdit = false };
-
-        // The list and the diagram show the same zones, so a zone waiting for a
-        // key has to look like it in both. The editor is where that state lives.
-        Editor.CapturingChanged += (was, now) =>
-        {
-            if (was is not null) SetRowCapturing(was.Value, false);
-            if (now is not null) SetRowCapturing(now.Value, true);
-        };
 
         Reload();
     }
@@ -239,34 +153,57 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         Surfaces = [.. s.AvailableSurfaces.Select(x => new SurfaceOption(x.Id, x.Name))];
         SelectedSurface = Surfaces.FirstOrDefault(x => x.Id == s.SurfaceId);
-        Bindings = [.. s.Bindings.Select(b => new BindingRowViewModel
-        {
-            Key = b.Key,
-            Zone = b.Zone,
-            Row = b.Row,
-            Col = b.Col,
-        })];
 
-        Splits =
-        [
-            .. _host.GetCustomizations().Select(c => new DisplaySplitViewModel
-            {
-                Slot = c.Slot,
-                Name = c.Name,
-                Detail = c.Detail,
-                Columns = c.Columns,
-                Min = c.Min,
-                Max = c.Max,
-                IsCustom = c.IsCustom,
-                ColumnsChanged = (slot, n) => { _host.SetDisplayColumns(slot, n); Reload(); },
-                ResetRequested = slot => { _host.ResetDisplayOverride(slot); Reload(); },
-            }),
-        ];
-
-        Editor.Refresh();
+        Actions = [.. s.Actions.Select(a => new ActionRowViewModel(a, this))];
+        OnPropertyChanged(nameof(Actions));
 
         OnPropertyChanged(nameof(ElevationBlurb));
         _loading = false;
+    }
+
+    /// <summary>
+    /// The hotkeys that are not zones. They live here rather than on the diagram
+    /// because there is nothing to point at: they act on whatever has focus, so
+    /// no rectangle on the desk represents them.
+    /// </summary>
+    public IReadOnlyList<ActionRowViewModel> Actions { get; private set; } = [];
+
+    /// <summary>What the action rows are saying, if anything.</summary>
+    [ObservableProperty]
+    private string? _actionMessage;
+
+    /// <summary>Set while a capture is armed, so only one row asks at a time.</summary>
+    [ObservableProperty]
+    private string? _capturingAction;
+
+    internal void BeginActionRebind(string command)
+    {
+        // Pressing the same row again calls it off, which is the only way out
+        // that does not involve pressing a key you did not want to bind.
+        if (CapturingAction == command)
+        {
+            _host.CancelRebind();
+            CapturingAction = null;
+            ActionMessage = null;
+            return;
+        }
+
+        CapturingAction = command;
+        ActionMessage = "Hold the modifier and press the key you want.";
+
+        _host.BeginActionRebind(command, result =>
+        {
+            CapturingAction = null;
+            ActionMessage = result.Canceled ? null : result.Message;
+            if (result.Success) Reload();
+        });
+    }
+
+    internal void ResetAction(string command)
+    {
+        _host.ResetAction(command);
+        ActionMessage = null;
+        Reload();
     }
 
     partial void OnStartWithWindowsChanged(bool value) => ApplyAutoStart();
@@ -378,19 +315,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Rebind(BindingRowViewModel? row)
-    {
-        if (row is not null) Editor.BeginRebindAt(new GridPos(row.Row, row.Col));
-    }
-
-    private void SetRowCapturing(GridPos position, bool capturing)
-    {
-        foreach (var row in Bindings)
-            if (row.Row == position.Row && row.Col == position.Col)
-                row.IsCapturing = capturing;
-    }
-
-    [RelayCommand]
     private void RestartElevated() => _host.RestartElevated();
 
     [RelayCommand]
@@ -409,17 +333,21 @@ public sealed class DesignSettingsHost : ISettingsHost
         AutoStartMode.Disabled, false, false, true, true, "DummyKey",
         "left-hand",
         [("left-hand", "Left hand (QWERT / ASDFG / ZXCVB)")],
-        [
-            new BindingEntry("Win+A", "Left", 1, 0),
-            new BindingEntry("Win+S", "Center", 1, 1),
-            new BindingEntry("Win+D", "Right", 1, 2),
-        ],
         @"%APPDATA%\Mullion\config.json",
         @"%LOCALAPPDATA%\Mullion\logs\mullion.log",
         true,
         "Shift",
         false,
-        "Win");
+        "Win",
+        [
+            new ActionBindingView(GlobalAction.Undo, "Undo last move", "Win+Backspace", false),
+            new ActionBindingView(GlobalAction.Minimize, "Minimize window", "Win+`", false),
+        ]);
+
+    public void BeginActionRebind(string command, Action<RebindResult> completed) =>
+        completed(new RebindResult(false, "Design mode."));
+
+    public void ResetAction(string command) { }
 
     public string? SetAutoStart(AutoStartMode mode) => null;
     public void BeginRebind(int row, int col, Action<RebindResult> completed) { }
@@ -435,7 +363,8 @@ public sealed class DesignSettingsHost : ISettingsHost
     public MonitorDiagramViewModel BuildInteractiveDiagram(
         Action<GridPos>? onZoneActivated,
         Action<string, IReadOnlyList<double>>? onSplitChanged,
-        Action<string, int>? onZoneCountChanged) => new();
+        Action<string, int>? onZoneCountChanged,
+        Action<string, int>? onSubzoneAxisFlipped) => new();
 
     public bool HasCustomZones => false;
     public bool HasCustomKeys => false;
@@ -455,8 +384,8 @@ public sealed class DesignSettingsHost : ISettingsHost
         [new DisplayCustomization("5120x1440@0,0", "Sample display", "5120 × 1440", 3, 1, 5, false, [0.25, 0.5, 0.25])];
 
     public void SetDisplayColumns(string slot, int columns) { }
+    public void FlipSubzoneAxis(string slot, int zone) { }
     public void SetDisplayWeights(string slot, IReadOnlyList<double> weights) { }
-    public void ResetDisplayOverride(string slot) { }
     public void ResetAllOverrides() { }
     public string ExportLayout(string name) => "{}";
     public string? ImportLayout(string json) => null;
@@ -466,4 +395,53 @@ public sealed class DesignSettingsHost : ISettingsHost
     public void OpenConfigFolder() { }
     public void OpenLogFolder() { }
     public void RerunWizard() { }
+}
+
+/// <summary>
+/// One non-zone hotkey on the settings screen.
+/// <para>
+/// A row rather than a control of its own, because the interesting part is the
+/// capture and that already exists: it has to run through the keyboard hook,
+/// since a chord with Win in it never reaches a window and no amount of
+/// listening in the UI would ever see one.
+/// </para>
+/// </summary>
+public sealed partial class ActionRowViewModel : ObservableObject
+{
+    private readonly SettingsViewModel _owner;
+
+    public ActionRowViewModel(ActionBindingView binding, SettingsViewModel owner)
+    {
+        _owner = owner;
+        Command = binding.Command;
+        Title = binding.Title;
+        Chord = binding.Chord;
+        IsCustom = binding.IsCustom;
+
+        owner.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SettingsViewModel.CapturingAction))
+                OnPropertyChanged(nameof(IsCapturing));
+        };
+    }
+
+    public string Command { get; }
+
+    public string Title { get; }
+
+    public string Chord { get; }
+
+    /// <summary>Whether it has been moved off the key Mullion ships with.</summary>
+    public bool IsCustom { get; }
+
+    public bool IsCapturing => _owner.CapturingAction == Command;
+
+    /// <summary>Waiting for a key, so the chord it shows is about to be wrong.</summary>
+    public string Display => IsCapturing ? "Press a key…" : Chord;
+
+    [RelayCommand]
+    private void Rebind() => _owner.BeginActionRebind(Command);
+
+    [RelayCommand]
+    private void Reset() => _owner.ResetAction(Command);
 }

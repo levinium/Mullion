@@ -130,4 +130,37 @@ public class PxRectTests
         a.VerticalOverlap(b).ShouldBe(1080);
         a.VerticalOverlap(stacked).ShouldBe(0);
     }
+    [Fact]
+    public void WithinIsTheInverseOfProjecting()
+    {
+        // What the drag overlay leans on to place a preview inside a zone
+        // without knowing the scaling factor in play.
+        var zone = new PxRect(1280, 0, 2560, 1392);
+        var inner = new PxRect(1700, 396, 900, 600);
+
+        NormRect.Within(inner, zone).Project(zone).ShouldBe(inner);
+    }
+
+    [Fact]
+    public void WithinPlacesARectangleWhereItActuallySits()
+    {
+        var zone = new PxRect(100, 200, 400, 800);
+        var inner = new PxRect(200, 400, 100, 200);
+
+        var f = NormRect.Within(inner, zone);
+
+        f.X.ShouldBe(0.25, 1e-9);
+        f.Y.ShouldBe(0.25, 1e-9);
+        f.W.ShouldBe(0.25, 1e-9);
+        f.H.ShouldBe(0.25, 1e-9);
+    }
+
+    [Fact]
+    public void WithinAnEmptyRectangleIsTheWholeOfIt()
+    {
+        // Rather than dividing by zero. A zone with no area cannot have
+        // anything sitting anywhere in particular inside it.
+        NormRect.Within(new PxRect(0, 0, 10, 10), new PxRect(0, 0, 0, 0))
+            .ShouldBe(NormRect.Full);
+    }
 }

@@ -65,6 +65,16 @@ public static class HookConflictDetector
 
         if (!File.Exists(path)) yield break;
 
+        // Remaps left in the file by a module that is switched off are not a
+        // conflict, they are history. PowerToys keeps default.json whatever the
+        // module's state, so reading it alone warned people about a feature they
+        // had deliberately turned off - and a warning that is wrong whenever you
+        // act on it is one you learn to ignore, including the time it is right.
+        //
+        // Only silence on a definite "off". An unreadable settings file means we
+        // do not know, and not knowing is not a reason to stop warning.
+        if (Windows.PowerToysModules.IsOff(Windows.PowerToysModules.KeyboardManager)) yield break;
+
         var running = System.Diagnostics.Process
             .GetProcessesByName("PowerToys.KeyboardManagerEngine").Length > 0;
 

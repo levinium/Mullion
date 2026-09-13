@@ -21,7 +21,15 @@ param(
     [string] $OutputDirectory,
 
     # Publish without running the tests first.
-    [switch] $SkipTests
+    [switch] $SkipTests,
+
+    # Where "Support Mullion" sends people. Left unset - as it is for every
+    # build from a clean checkout - the app has no donate button at all, so a
+    # fork cannot ship one asking on someone else's behalf.
+    #
+    # An {amount} placeholder turns the ask into a picker, and is only worth
+    # including where the destination actually reads the amount out of the URL.
+    [string] $SponsorUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,9 +46,22 @@ if (-not $SkipTests) {
 
 Write-Host 'Publishing...'
 
+# [string[]] and the leading comma are both load-bearing. An `if` used as an
+# expression yields its branch's OUTPUT, and PowerShell enumerates a one-element
+# array down to a bare string on the way out - after which `@sponsor` splats a
+# string, which it does one character at a time. The publish then failed with
+# "Unknown switch" and a command line reading "- p : S p o n s o r U r l = ...".
+[string[]] $sponsor = if ($SponsorUrl) { , "-p:SponsorUrl=$SponsorUrl" } else { @() }
+
+if ($SponsorUrl) {
+    Write-Host "  Support button enabled: $SponsorUrl"
+} else {
+    Write-Host '  No support button (pass -SponsorUrl to include one).'
+}
+
 dotnet publish (Join-Path $root 'src\Mullion.App\Mullion.App.csproj') `
     -c Release -r win-x64 --self-contained true `
-    -o $OutputDirectory --nologo -v q
+    -o $OutputDirectory --nologo -v q @sponsor
 
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 

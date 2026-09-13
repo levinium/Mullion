@@ -48,9 +48,7 @@ public sealed class ZoneFlashOverlay : IDisposable
 
         _window ??= CreateWindow();
 
-        _window.Position = new PixelPoint(target.X, target.Y);
-        _window.Width = target.Width;
-        _window.Height = target.Height;
+        OverlayPlacement.PlaceAt(_window, target);
 
         if (!_window.IsVisible) _window.Show();
 

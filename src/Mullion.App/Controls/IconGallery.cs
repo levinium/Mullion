@@ -52,6 +52,9 @@ public static class IconGallery
         panel.Children.Add(Row("Snap — while dragging", Icons.Snap));
         panel.Children.Add(Row("Reset zones — to defaults", Icons.ResetZones));
         panel.Children.Add(Row("Reset keys — to defaults", Icons.ResetKeys));
+        panel.Children.Add(Row("Expand — a repeat press widens the window", Icons.Expand));
+        panel.Children.Add(Row("Drag to zone — the mouse snap gesture", Icons.DragToZone));
+        panel.Children.Add(Row("Heart — support Mullion", Icons.Heart));
 
         return panel;
     }

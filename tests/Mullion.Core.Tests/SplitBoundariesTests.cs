@@ -54,7 +54,7 @@ public class SplitBoundariesTests
     [Fact]
     public void ASeamStopsAtTheFloorRatherThanSnappingBack()
     {
-        // Dragged well past what the neighbour can give up. Parking it at the
+        // Dragged well past what the neighbor can give up. Parking it at the
         // limit tracks the cursor; reverting to the original would read as the
         // handle being dropped.
         var moved = SplitBoundaries.Move([0.5, 0.5], index: 0, position: 0.01, minFraction: 0.1);
@@ -90,7 +90,7 @@ public class SplitBoundariesTests
     {
         // Legal for THIS seam means inside the span its own two slices share -
         // 0..0.75 here, less the floor at each end. A seam cannot be dragged
-        // past its neighbour into a third slice.
+        // past its neighbor into a third slice.
         // The property the drag depends on: put a seam somewhere legal and it is
         // where you put it, so the handle lands under the cursor.
         foreach (var target in new[] { 0.06, 0.2, 0.35, 0.5, 0.69 })

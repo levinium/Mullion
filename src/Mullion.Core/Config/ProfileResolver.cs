@@ -100,7 +100,9 @@ public static class ProfileResolver
                 z.Position.Row,
                 z.Position.Col,
                 [.. z.Parts.Select(p => new ZonePartRecord(p.DisplayKey, p.Area))],
-                z.Kind.ToString()))],
+                z.Kind.ToString(),
+                z.Modifier is { } m ? ModifierChoice.Format(m) : null,
+                KeyText.Write(z.Key)))],
         };
     }
 
@@ -133,6 +135,20 @@ public static class ProfileResolver
                 Parts = [.. parts.Select(p => new ZonePart(p.DisplayKey, p.Area))],
                 Position = new GridPos(record.Row, record.Col),
                 Kind = Enum.TryParse<ZoneKind>(record.Kind, out var kind) ? kind : ZoneKind.Region,
+
+                // Parsed only when one was written. ModifierChoice.Parse answers
+                // Win for anything it does not recognize, which is right for a
+                // setting and wrong here: it would turn every zone that had no
+                // chord of its own into one pinned to Win, and the default would
+                // stop reaching them.
+                Modifier = string.IsNullOrWhiteSpace(record.Modifier)
+                    ? null
+                    : ModifierChoice.Parse(record.Modifier),
+
+                // Same rule as the modifier: absent means "the key my place
+                // implies", and anything unreadable means the same rather than
+                // pinning the zone to a key nobody chose.
+                Key = KeyText.Read(record.Key),
             });
         }
 

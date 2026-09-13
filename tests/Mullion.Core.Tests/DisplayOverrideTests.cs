@@ -103,8 +103,8 @@ public class DisplayOverrideTests
     // ---- Which display an override belongs to -----------------------------
 
     /// <summary>
-    /// The behaviour asked for explicitly: swap a monitor for a different one of
-    /// the same size in the same place and the customisation stays, because it
+    /// The behavior asked for explicitly: swap a monitor for a different one of
+    /// the same size in the same place and the customization stays, because it
     /// describes the desk rather than the panel.
     /// </summary>
     [Fact]

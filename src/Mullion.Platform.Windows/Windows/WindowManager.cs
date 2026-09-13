@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Mullion.Core.Abstractions;
 using Mullion.Core.Geometry;
+using Mullion.Core.Layout;
 using Mullion.Platform.Windows.Native;
 
 namespace Mullion.Platform.Windows.Windows;
@@ -20,6 +21,18 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
 {
     private readonly Stack<WindowSnapshot> _undo = new();
     private readonly int _undoDepth = Math.Max(1, undoDepth);
+
+    /// <summary>
+    /// Watches what every move does to a window, so it can be put back to the
+    /// size its owner last chose for it.
+    /// <para>
+    /// Here rather than beside the drag handling because moves arrive from two
+    /// places - hotkeys and drops - and a memory that only saw one of them
+    /// could not answer for a window filled by the other. That was the bug:
+    /// filling a zone with Win+A left nothing to toggle back to.
+    /// </para>
+    /// </summary>
+    private readonly WindowSizeMemory _sizes = new();
 
     /// <summary>Shell and desktop classes that must never be moved.</summary>
     private static readonly HashSet<string> ExcludedClasses = new(StringComparer.Ordinal)
@@ -42,11 +55,13 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             : MoveWindowTo(hwnd, target);
     }
 
-    /// <summary>
-    /// Move a specific window. Separated from <see cref="MoveForegroundTo"/> so
-    /// the pipeline can be exercised against a known window in tests without
-    /// depending on which window happens to have focus.
-    /// </summary>
+    public PxRect? ChosenSizeOf(nint hwnd)
+    {
+        var root = Win.GetAncestor(hwnd, Win.GA_ROOT);
+
+        return _sizes.ChosenSizeOf(root != 0 ? root : hwnd);
+    }
+
     public PxRect? BoundsOf(nint hwnd)
     {
         var root = Win.GetAncestor(hwnd, Win.GA_ROOT);
@@ -61,6 +76,11 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         return bounds.Width > 0 && bounds.Height > 0 ? bounds : null;
     }
 
+    /// <summary>
+    /// Move a specific window. Separated from <see cref="MoveForegroundTo"/> so
+    /// the pipeline can be exercised against a known window in tests without
+    /// depending on which window happens to have focus.
+    /// </summary>
     public MoveResult MoveWindowTo(nint hwnd, PxRect target)
     {
         var root = Win.GetAncestor(hwnd, Win.GA_ROOT);
@@ -93,9 +113,14 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             WaitForSettle(hwnd, 150);
         }
 
+        // Note the size the window has right now, before anything of ours
+        // changes it. If it is not the size we last gave it, its owner has
+        // resized it since, and this is the size to bring it back to.
+        _sizes.Observe(hwnd, GetFrameBounds(hwnd));
+
         // A window that cannot be resized is centered at its current size rather
         // than skipped: a dialog that ignores the hotkey reads as a broken app,
-        // whereas centring reads as intentional.
+        // whereas centering reads as intentional.
         if (!resizable)
         {
             var current = GetFrameBounds(hwnd);
@@ -106,9 +131,10 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
                 current.Height);
 
             var placed = Apply(hwnd, centered, out _);
-            return new MoveResult(
-                placed ? MoveOutcome.Centered : MoveOutcome.FailedUnknown,
-                GetFrameBounds(hwnd), 1,
+            if (!placed) return new MoveResult(MoveOutcome.FailedUnknown, default, 1);
+
+            return Placed(
+                hwnd, MoveOutcome.Centered, 1,
                 "Window is not resizable; centered at its current size.");
         }
 
@@ -140,7 +166,7 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
                 Math.Max(Math.Abs(achieved.Left - target.Left), Math.Abs(achieved.Top - target.Top)),
                 Math.Max(Math.Abs(achieved.Width - target.Width), Math.Abs(achieved.Height - target.Height)));
 
-            if (error <= 2) return new MoveResult(MoveOutcome.Moved, achieved, attempts);
+            if (error <= 2) return Placed(hwnd, MoveOutcome.Moved, attempts);
 
             // A window with a hard minimum size never converges. Detect it after
             // two consecutive oversized results and center what we got instead
@@ -155,17 +181,76 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
                     achieved.Height);
 
                 Apply(hwnd, centered, out _);
-                return new MoveResult(
-                    MoveOutcome.MovedApproximate, GetFrameBounds(hwnd), attempts,
+                return Placed(
+                    hwnd, MoveOutcome.MovedApproximate, attempts,
                     $"Window enforces a minimum size of {achieved.Width}x{achieved.Height}; centered in the zone.");
             }
 
             previousOversize = oversize;
         }
 
-        return new MoveResult(
-            MoveOutcome.MovedApproximate, GetFrameBounds(hwnd), attempts,
+        return Placed(
+            hwnd, MoveOutcome.MovedApproximate, attempts,
             "Window did not settle on the requested bounds.");
+    }
+
+    /// <summary>
+    /// A move that landed, recorded as ours before it is reported.
+    /// <para>
+    /// Every successful exit goes through here so none can forget: a single
+    /// path that skipped it would leave that window's remembered size stale
+    /// forever, and the toggle would put it somewhere it had not been in
+    /// hours.
+    /// </para>
+    /// </summary>
+    private MoveResult Placed(nint hwnd, MoveOutcome outcome, int attempts, string? note = null)
+    {
+        var achieved = GetFrameBounds(hwnd);
+
+        _sizes.Applied(hwnd, achieved);
+
+        return new MoveResult(outcome, achieved, attempts, note);
+    }
+
+    /// <summary>
+    /// Minimize whatever has focus.
+    /// <para>
+    /// Through the same eligibility gate as a move, so the hotkey cannot minimize
+    /// the desktop or a shell window - pressed with nothing but the wallpaper in
+    /// front of you, the honest answer is to do nothing.
+    /// </para>
+    /// <para>
+    /// Recorded on the undo stack like a move. It was not, on the reasoning that
+    /// Windows already remembers where a minimized window came from - which is
+    /// true, and beside the point: that is what restoring it from the taskbar
+    /// uses. The undo key means "take back what Mullion just did", and minimizing
+    /// a window is one of the things Mullion does. Costing one more press to
+    /// reach the move before it is how an undo stack is supposed to behave.
+    /// </para>
+    /// </summary>
+    public bool MinimizeForeground()
+    {
+        var hwnd = Win.GetForegroundWindow();
+        if (hwnd == 0) return false;
+
+        var root = Win.GetAncestor(hwnd, Win.GA_ROOT);
+        if (root != 0) hwnd = root;
+
+        if (Eligible(hwnd) is not null) return false;
+
+        // Before minimizing, so the snapshot holds the placement it had while
+        // still on screen. Taken afterwards it would record the minimized state
+        // and undo would restore it to being minimized.
+        var recorded = PushUndo(hwnd);
+
+        if (Win.ShowWindow(hwnd, Win.SW_MINIMIZE)) return true;
+
+        // Nothing happened, so there is nothing to take back. Leaving the entry
+        // would spend the next undo putting a window back where it already is
+        // and lose the move underneath it - but withdraw only an entry this call
+        // actually made, or the pop lands on somebody else's.
+        if (recorded) _undo.TryPop(out _);
+        return false;
     }
 
     public bool UndoLastMove()
@@ -182,6 +267,12 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             if (pid != snap.ProcessId) continue;
             if (ClassNameOf(snap.Handle) != snap.ClassName) continue;
 
+            // Asked BEFORE restoring, because restoring is what stops it being
+            // true. A window coming back from the taskbar should be the one you
+            // are looking at; a window merely being moved back should not steal
+            // focus from whatever you have since switched to.
+            var wasMinimized = Win.IsIconic(snap.Handle);
+
             var placement = FromBlob(snap.PlacementBlob);
             Win.SetWindowPlacement(snap.Handle, ref placement);
             WaitForSettle(snap.Handle, 120);
@@ -197,6 +288,8 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
                 // the recorded screen rect for an exact restore.
                 Apply(snap.Handle, snap.ScreenRect, out _);
             }
+
+            if (wasMinimized) Activate(snap.Handle);
 
             return true;
         }
@@ -301,10 +394,62 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         }
     }
 
-    private void PushUndo(nint hwnd)
+    /// <summary>
+    /// Bring a window to the front and give it the keyboard.
+    /// <para>
+    /// Restoring a minimized window puts it back on screen without focus, which
+    /// leaves it sitting behind whatever was in front - so undoing a minimize
+    /// appeared to do nothing until you went looking for the window.
+    /// </para>
+    /// <para>
+    /// SetForegroundWindow alone is not enough. Windows only lets the process
+    /// that owns the foreground window hand focus away; from a background app the
+    /// call quietly flashes the taskbar button instead. Attaching our input queue
+    /// to the foreground thread's makes us part of it for the length of the call,
+    /// which is the long-standing way through. Detached again immediately: two
+    /// threads sharing an input queue also share focus and key state, and leaving
+    /// that in place would be a far stranger bug than the one being fixed.
+    /// </para>
+    /// </summary>
+    private static void Activate(nint hwnd)
+    {
+        // SW_RESTORE rather than SW_SHOW: it un-minimizes and activates, and is
+        // harmless on a window that is already up.
+        Win.ShowWindow(hwnd, Win.SW_RESTORE);
+
+        if (Win.SetForegroundWindow(hwnd)) return;
+
+        var foreground = Win.GetForegroundWindow();
+        if (foreground == 0) return;
+
+        var theirs = Win.GetWindowThreadProcessId(foreground, out _);
+        var ours = WindowClass.GetCurrentThreadId();
+
+        if (theirs == 0 || theirs == ours) return;
+        if (!Win.AttachThreadInput(ours, theirs, true)) return;
+
+        try
+        {
+            Win.SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            Win.AttachThreadInput(ours, theirs, false);
+        }
+    }
+
+    /// <summary>
+    /// Record where a window is, so the move about to happen can be taken back.
+    /// <para>
+    /// Reports whether anything was actually recorded. A window whose placement
+    /// cannot be read leaves the stack untouched, and a caller that later wants
+    /// to withdraw its own entry must not pop somebody else's.
+    /// </para>
+    /// </summary>
+    private bool PushUndo(nint hwnd)
     {
         var placement = new WINDOWPLACEMENT { length = (uint)Marshal.SizeOf<WINDOWPLACEMENT>() };
-        if (!Win.GetWindowPlacement(hwnd, ref placement)) return;
+        if (!Win.GetWindowPlacement(hwnd, ref placement)) return false;
 
         Win.GetWindowThreadProcessId(hwnd, out var pid);
 
@@ -326,6 +471,8 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
             _undo.Clear();
             foreach (var s in kept) _undo.Push(s);
         }
+
+        return true;
     }
 
     private static byte[] ToBlob(WINDOWPLACEMENT p)

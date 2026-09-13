@@ -16,11 +16,15 @@ namespace Mullion.App.ViewModels;
 /// One drawable cell of a display.
 /// <para>
 /// A cell is not simply a zone. Where the key surface has rows to spare, a
-/// column holds a full-height zone AND its upper and lower halves - three zones
-/// occupying overlapping space. Drawing all three as rectangles stacks them and
-/// the labels collide. So the tallest zone becomes the cell's rectangle and the
-/// tiers are drawn as chips pinned to its top and bottom edges, which states
-/// "A is the whole column, Q its upper half, Z its lower half" without overlap.
+/// column holds a whole-column zone AND its two halves - three zones occupying
+/// overlapping space. Drawing all three as rectangles stacks them and the labels
+/// collide. So the biggest zone becomes the cell's rectangle and the subzones
+/// are drawn as chips inside it, which states "A is the whole column, Q one half
+/// and Z the other" without overlap.
+///
+/// Which way those halves cut the column is not fixed - see TierAxis. The cell
+/// reads it off the rectangles rather than being told, so the drawing cannot
+/// disagree with the geometry.
 /// </para>
 /// </summary>
 public sealed partial class ZoneCellViewModel : ObservableObject
@@ -66,32 +70,169 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     private void Activate() => Activated?.Invoke(Position);
 
     /// <summary>
-    /// Where the upper and lower tiers sit on the key surface.
+    /// Which way this zone's two subzones cut it.
     /// <para>
-    /// A tier is a zone in its own right - the upper half of this column, the
-    /// lower half - drawn as a chip on the tile rather than as a rectangle of
-    /// its own because all three overlap in space. Carrying its position means
-    /// the chip can be clicked to rebind that zone, instead of the tile being
-    /// the only thing on the diagram that answers to a click and always meaning
-    /// the whole column.
+    /// Stacked halves are a letterbox pair on anything wide, so the axis is
+    /// chosen per zone from the same aspect band the engine already holds zones
+    /// to. The diagram has to follow it: subzones drawn the wrong way round are
+    /// a picture that contradicts the key it is labelled with.
     /// </para>
     /// </summary>
-    public GridPos? UpperPosition { get; init; }
+    public Axis TierAxis { get; init; } = Axis.Vertical;
+
+    /// <summary>The same question as TierAxis, in the form a binding can ask.</summary>
+    public bool IsSideBySide => TierAxis == Axis.Horizontal;
+
+    /// <summary>
+    /// Turning this zone's subzones through a right angle, while editing.
+    /// <para>
+    /// Addressed by desk slot and zone index rather than by grid position,
+    /// matching how the override is stored: the choice belongs to a place on the
+    /// desk, so it survives a monitor being swapped for an identical one, and it
+    /// must not move when the zone is rebound to a different key.
+    /// </para>
+    /// </summary>
+    public string? Slot { get; init; }
+
+    public int ZoneIndex { get; init; }
+
+    public Action<string, int>? AxisFlipRequested { get; set; }
+
+    /// <summary>
+    /// Offered only where there is something to turn. A zone with no subzones -
+    /// the top or bottom row of the surface, where the second key falls off the
+    /// edge - has no axis to speak of.
+    /// </summary>
+    public bool CanFlipAxis =>
+        AxisFlipRequested is not null && Slot is not null && (HasFirst || HasSecond);
+
+    /// <summary>What the button will do, since it is an icon and says nothing itself.</summary>
+    public string FlipHint => TierAxis == Axis.Vertical
+        ? "Split this zone side by side instead"
+        : "Split this zone top and bottom instead";
+
+    [RelayCommand]
+    private void FlipAxis()
+    {
+        if (Slot is not null) AxisFlipRequested?.Invoke(Slot, ZoneIndex);
+    }
+
+    /// <summary>
+    /// Where the two subzones sit in a fixed 2x2 grid, spanning the axis they do
+    /// not divide.
+    /// <para>
+    /// A fixed grid with bound placement rather than a UniformGrid that reshapes
+    /// itself: a UniformGrid packs by child order, so a zone with only one half
+    /// - the top or bottom row of the surface, where the other key falls off the
+    /// edge - would have the remaining half slide into the first cell and draw
+    /// the right half on the left.
+    /// </para>
+    /// </summary>
+    public int FirstRow => 0;
+
+    public int FirstColumn => 0;
+
+    public int SecondRow => TierAxis == Axis.Vertical ? 1 : 0;
+
+    public int SecondColumn => TierAxis == Axis.Vertical ? 0 : 1;
+
+    /// <summary>Each half spans the whole of the axis it does not cut.</summary>
+    public int TierRowSpan => TierAxis == Axis.Vertical ? 1 : 2;
+
+    public int TierColumnSpan => TierAxis == Axis.Vertical ? 2 : 1;
+
+    /// <summary>
+    /// Which way a subzone's chip and its size label are laid out.
+    /// <para>
+    /// Along whichever axis the half actually has room in, which is always the
+    /// one it was NOT cut along. Stacked halves are short and wide, so the label
+    /// goes beside the chip; side-by-side halves are tall and narrow, so it goes
+    /// underneath. Laying it beside the chip in a narrow half spends the one
+    /// dimension there is least of and pushes the pair towards the seam.
+    /// </para>
+    /// <para>
+    /// It also squares the chip with its own half. A chip-beside-label group
+    /// centres the GROUP, which leaves the chip itself sitting left of centre by
+    /// half the label's width - visible as the two chips of a side-by-side pair
+    /// being lopsided about the middle. Stacked, the chip is centred because it
+    /// is the thing being centred.
+    /// </para>
+    /// </summary>
+    public Orientation ChipContentOrientation =>
+        TierAxis == Axis.Vertical ? Orientation.Horizontal : Orientation.Vertical;
+
+    /// <summary>
+    /// Room for the chip, plus a second line under it where there is one. Capping
+    /// both at one line's worth would shrink a stacked pair to half size rather
+    /// than let it use the height its half has going spare.
+    /// </summary>
+    public double TierChipMaxHeight => TierAxis == Axis.Vertical ? 20 : 40;
+
+    /// <summary>
+    /// Where the two subzone CHIPS sit, which is not where their hit targets sit.
+    /// <para>
+    /// A target is the whole half, because pointing at a region has to mean that
+    /// region. A chip is a label, and labels have to keep out of each other's
+    /// way. Stacked, the two coincide - a chip centred in the upper half is
+    /// nowhere near the zone's own block on the middle seam.
+    /// </para>
+    /// <para>
+    /// Side by side they cannot. Centring each chip in its half is the obvious
+    /// arrangement and it does not fit: the whole-zone block owns the middle
+    /// line, and on a 508px tile with "Ctrl+Shift+" chords the block is 176px
+    /// wide and each subzone chip 146px, so their centres are 127px apart when
+    /// they need 161px. The tile would have to be about 644px wide - and that
+    /// figure moves with the length of the chord, so no fixed threshold settles
+    /// it either. So a side-by-side chip takes the TOP half of its own column,
+    /// which also puts it on the same line as the chips of any stacked zone
+    /// beside it, while its target still covers the full height.
+    /// </para>
+    /// </summary>
+    public int ChipSecondRow => TierAxis == Axis.Vertical ? 1 : 0;
+
+    public int ChipSecondColumn => TierAxis == Axis.Vertical ? 0 : 1;
+
+    public int ChipColumnSpan => TierAxis == Axis.Vertical ? 2 : 1;
+
+    /// <summary>
+    /// A stacked chip stretches across the tile, since its row is the full width
+    /// and the Viewbox needs that width to know what to shrink to. A side-by-side
+    /// chip has to centre in its own column instead: stretched, it sits against
+    /// the column's left edge, which puts the pair at the far left and the middle
+    /// rather than either side of the middle.
+    /// </summary>
+    public Avalonia.Layout.HorizontalAlignment ChipHorizontalAlignment =>
+        TierAxis == Axis.Vertical
+            ? Avalonia.Layout.HorizontalAlignment.Stretch
+            : Avalonia.Layout.HorizontalAlignment.Center;
+
+    /// <summary>
+    /// Where the two subzones sit on the key surface - the key above home takes
+    /// the first, the key below takes the second.
+    /// <para>
+    /// A subzone is a zone in its own right, drawn as a chip on the tile rather
+    /// than as a rectangle of its own because all three overlap in space.
+    /// Carrying its position means the chip can be clicked to rebind that zone,
+    /// instead of the tile being the only thing on the diagram that answers to a
+    /// click and always meaning the whole column.
+    /// </para>
+    /// </summary>
+    public GridPos? FirstPosition { get; init; }
 
     /// <summary>Names for the tooltips, so each target says which zone it is.</summary>
-    public string? UpperName { get; init; }
+    public string? FirstName { get; init; }
 
-    public string? LowerName { get; init; }
+    public string? SecondName { get; init; }
 
-    public GridPos? LowerPosition { get; init; }
-
-    [ObservableProperty]
-    private bool _isUpperCapturing;
+    public GridPos? SecondPosition { get; init; }
 
     [ObservableProperty]
-    private bool _isLowerCapturing;
+    private bool _isFirstCapturing;
 
-    public bool IsUpperInteractive => IsInteractive && UpperPosition is not null;
+    [ObservableProperty]
+    private bool _isSecondCapturing;
+
+    public bool IsFirstInteractive => IsInteractive && FirstPosition is not null;
 
     /// <summary>
     /// What repeated presses of this key walk through, e.g. "Left, then Left +
@@ -116,22 +257,31 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     /// </summary>
     public string WholeHint => $"{Name} - click to change its key";
 
-    public string UpperHint => $"{UpperName ?? "Upper half"} - click to change its key";
+    /// <summary>
+    /// The fallback names follow the axis. A side-by-side subzone described as
+    /// the "upper half" is the pointer telling you the opposite of what the
+    /// rectangle under it shows.
+    /// </summary>
+    private string FirstWord => TierAxis == Axis.Vertical ? "Upper" : "Left";
 
-    public string LowerHint => $"{LowerName ?? "Lower half"} - click to change its key";
+    private string SecondWord => TierAxis == Axis.Vertical ? "Lower" : "Right";
 
-    public bool IsLowerInteractive => IsInteractive && LowerPosition is not null;
+    public string FirstHint => $"{FirstName ?? $"{FirstWord} half"} - click to change its key";
+
+    public string SecondHint => $"{SecondName ?? $"{SecondWord} half"} - click to change its key";
+
+    public bool IsSecondInteractive => IsInteractive && SecondPosition is not null;
 
     [RelayCommand]
-    private void ActivateUpper()
+    private void ActivateFirst()
     {
-        if (UpperPosition is not null) Activated?.Invoke(UpperPosition.Value);
+        if (FirstPosition is not null) Activated?.Invoke(FirstPosition.Value);
     }
 
     [RelayCommand]
-    private void ActivateLower()
+    private void ActivateSecond()
     {
-        if (LowerPosition is not null) Activated?.Invoke(LowerPosition.Value);
+        if (SecondPosition is not null) Activated?.Invoke(SecondPosition.Value);
     }
 
     /// <summary>
@@ -154,13 +304,13 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     /// forgets to set it - and it would claim the wrong modifier on screen
     /// while everything around it was right.
     /// </summary>
-    public string UpperModifierPrefix
+    public string FirstModifierPrefix
     {
         get => _upperPrefix ?? ModifierPrefix;
         init => _upperPrefix = value;
     }
 
-    public string LowerModifierPrefix
+    public string SecondModifierPrefix
     {
         get => _lowerPrefix ?? ModifierPrefix;
         init => _lowerPrefix = value;
@@ -172,15 +322,15 @@ public sealed partial class ZoneCellViewModel : ObservableObject
     internal static IReadOnlyList<string> ChordSegments(string prefix) =>
         [.. prefix.Split('+', StringSplitOptions.RemoveEmptyEntries).Select(part => $"{part}+")];
 
-    public string? UpperKey { get; init; }
-    public string? UpperSize { get; init; }
-    public string? LowerKey { get; init; }
-    public string? LowerSize { get; init; }
+    public string? FirstKey { get; init; }
+    public string? FirstSize { get; init; }
+    public string? SecondKey { get; init; }
+    public string? SecondSize { get; init; }
 
-    public bool HasUpper => UpperKey is not null;
-    public bool HasLower => LowerKey is not null;
+    public bool HasFirst => FirstKey is not null;
+    public bool HasSecond => SecondKey is not null;
 
-    private bool HasTiers => HasUpper || HasLower;
+    private bool HasTiers => HasFirst || HasSecond;
 
     /// <summary>
     /// How tall this zone must be drawn before its name will fit, in device
@@ -196,6 +346,22 @@ public sealed partial class ZoneCellViewModel : ObservableObject
 
     /// <summary>As <see cref="NameNeedsHeight"/>, with a line for the size too.</summary>
     public double SizeNeedsHeight => (HasTiers ? 142 : 62) + BlockChrome;
+
+    /// <summary>
+    /// How tall this zone must be drawn before its tier chips are worth having.
+    /// <para>
+    /// Below this the band they leave in the middle is narrower than the zone's
+    /// own key needs, and all three end up printed over one another. Something
+    /// has to give, and it is the tiers: they are the halves of the column, and
+    /// the home-row key is what the column IS.
+    /// </para>
+    /// <para>
+    /// Twice what the middle has to hold, since the tiers take an equal bite
+    /// above and below it: a legible chip, the grid's inset, a tier chip, and
+    /// clear air between the two.
+    /// </para>
+    /// </summary>
+    public double TiersNeedHeight => 52;
 
     /// <summary>
     /// The padding and border of the outline drawn round the chip, name and
@@ -283,37 +449,37 @@ public sealed partial class HorizontalSpanViewModel : SpanMeasureViewModel
     /// the same vertical order. They are separate zones, but three rules stacked
     /// under the desk would all look alike and say nothing about which is which.
     /// </summary>
-    public string? UpperKey { get; init; }
+    public string? FirstKey { get; init; }
 
-    public string? UpperSize { get; init; }
-    public string? LowerKey { get; init; }
-    public string? LowerSize { get; init; }
+    public string? FirstSize { get; init; }
+    public string? SecondKey { get; init; }
+    public string? SecondSize { get; init; }
 
     private readonly string? _upperPrefix;
     private readonly string? _lowerPrefix;
 
     /// <summary>As on a zone cell: a tier follows the span's own chord.</summary>
-    public string UpperModifierPrefix
+    public string FirstModifierPrefix
     {
         get => _upperPrefix ?? ModifierPrefix;
         init => _upperPrefix = value;
     }
 
-    public string LowerModifierPrefix
+    public string SecondModifierPrefix
     {
         get => _lowerPrefix ?? ModifierPrefix;
         init => _lowerPrefix = value;
     }
 
-    public bool HasUpper => UpperKey is not null;
-    public bool HasLower => LowerKey is not null;
+    public bool HasFirst => FirstKey is not null;
+    public bool HasSecond => SecondKey is not null;
 
     // The label and the chip riding the rule, plus a row for each tier chip.
     // Asymmetric because the span chip is taller than its own row and is raised
     // within it: it reaches up under the text, so the upper tier needs clearing
     // above, while below it already ends short of its row.
     public override double LaneThickness =>
-        40 + (HasUpper ? 30 : 0) + (HasLower ? 18 : 0);
+        40 + (HasFirst ? 30 : 0) + (HasSecond ? 18 : 0);
 }
 
 /// <summary>
@@ -695,6 +861,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         Action<GridPos>? onZoneActivated = null,
         Action<string, IReadOnlyList<double>>? onSplitChanged = null,
         Action<string, int>? onZoneCountChanged = null,
+        Action<string, int>? onSubzoneAxisFlipped = null,
         ShapeTuning? tuning = null,
         bool snapSplits = true,
         ChordModifiers defaultModifier = ChordModifiers.Win)
@@ -725,6 +892,16 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
 
             foreach (var span in vm.Spans)
                 span.Activated = onZoneActivated;
+        }
+
+        if (onSubzoneAxisFlipped is not null)
+        {
+            // Slot and index are set on every cell regardless, so the button is
+            // decided by whether anything is listening rather than by whether the
+            // cell happens to know where it lives.
+            foreach (var node in vm.Displays)
+            foreach (var cell in node.Cells)
+                cell.AxisFlipRequested = onSubzoneAxisFlipped;
         }
 
         if (onSplitChanged is not null || onZoneCountChanged is not null)
@@ -789,8 +966,8 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
         foreach (var cell in Displays.SelectMany(d => d.Cells))
         {
             cell.IsCapturing = position is not null && cell.Position == position.Value;
-            cell.IsUpperCapturing = position is not null && cell.UpperPosition == position;
-            cell.IsLowerCapturing = position is not null && cell.LowerPosition == position;
+            cell.IsFirstCapturing = position is not null && cell.FirstPosition == position;
+            cell.IsSecondCapturing = position is not null && cell.SecondPosition == position;
         }
 
         foreach (var span in Spans)
@@ -834,7 +1011,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
 
             var extent = PxRect.Union(pixels);
             var bounds = new Rect(extent.X, extent.Y, extent.Width, extent.Height);
-            var label = layout.Surface.FallbackLabelAt(zone.Position);
+            var label = KeyNames.Of(zone.KeyOn(layout.Surface));
             var size = $"{extent.Width} × {extent.Height}";
 
             if (IsVertical(zone, pixels, byKeyLookup))
@@ -870,12 +1047,12 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                     SizeLabel = size,
                     Position = zone.Position,
                     ModifierPrefix = Prefix(zone, defaultModifier),
-                    UpperModifierPrefix = Prefix(upper, defaultModifier),
-                    LowerModifierPrefix = Prefix(lower, defaultModifier),
-                    UpperKey = upper is null ? null : layout.Surface.FallbackLabelAt(upper.Position),
-                    UpperSize = Extent(upper, byKey),
-                    LowerKey = lower is null ? null : layout.Surface.FallbackLabelAt(lower.Position),
-                    LowerSize = Extent(lower, byKey),
+                    FirstModifierPrefix = Prefix(upper, defaultModifier),
+                    SecondModifierPrefix = Prefix(lower, defaultModifier),
+                    FirstKey = upper is null ? null : KeyNames.Of(upper.KeyOn(layout.Surface)),
+                    FirstSize = Extent(upper, byKey),
+                    SecondKey = lower is null ? null : KeyNames.Of(lower.KeyOn(layout.Surface)),
+                    SecondSize = Extent(lower, byKey),
                 });
             }
         }
@@ -998,12 +1175,19 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
 
         var cells = new List<ZoneCellViewModel>();
 
+        // The zone index the subzone-axis override is keyed by: position on the
+        // desk, left to right, which is the order GroupByHorizontalSpan yields
+        // and the same order the stored weights are in.
+        var slot = DisplaySlot.Of(display);
+        var zoneIndex = -1;
+
         // Group by GEOMETRY, not by grid column. Rebinding lets a zone's key
         // move without its rectangle moving, so grid position and physical
         // position diverge - grouping by column then draws unrelated zones on
         // top of each other.
         foreach (var column in GroupByHorizontalSpan(onThisDisplay, display))
         {
+            zoneIndex++;
             var entries = column
                 .Select(z =>
                 {
@@ -1013,8 +1197,11 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 .OrderBy(e => e.Part.Area.Y)
                 .ToList();
 
-            // The tallest zone is the one the others sit inside.
-            var primary = entries.MaxBy(e => e.Part.Area.H);
+            // The biggest zone is the one the others sit inside. By AREA, not by
+            // height: with side-by-side subzones all three are the same height,
+            // so height alone picks whichever happened to come first and the
+            // whole column then draws itself inside one of its own halves.
+            var primary = entries.MaxBy(e => e.Part.Area.W * e.Part.Area.H);
 
             var overlapping = entries.Count > 1 && entries
                 .Where(e => e.Zone != primary.Zone)
@@ -1030,7 +1217,7 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                     cells.Add(new ZoneCellViewModel
                     {
                         Name = e.Zone.Name,
-                        KeyLabel = layout.Surface.FallbackLabelAt(e.Zone.Position),
+                        KeyLabel = KeyNames.Of(e.Zone.KeyOn(layout.Surface)),
                         Area = ToDisplayFraction(e.Part.Area, display),
                         SizeLabel = $"{e.Pixels.Width} × {e.Pixels.Height}",
                         SpansDisplays = e.Zone.SpansDisplays,
@@ -1043,34 +1230,73 @@ public sealed partial class MonitorDiagramViewModel : ObservableObject
                 continue;
             }
 
-            var mid = primary.Part.Area.Y + primary.Part.Area.H / 2;
-            var upper = entries.FirstOrDefault(e => e.Zone != primary.Zone && e.Part.Area.Bottom <= mid + 1e-6);
-            var lower = entries.FirstOrDefault(e => e.Zone != primary.Zone && e.Part.Area.Y >= mid - 1e-6);
+            // Which way the subzones cut this column, read off the rectangles
+            // themselves rather than carried alongside them. A tier that keeps
+            // the column's full width is a stacked half; one that keeps its full
+            // height is a side-by-side half. Deriving it here means the drawing
+            // cannot disagree with the geometry, which is the failure a stored
+            // flag invites the first time one is updated without the other.
+            var placed = entries
+                .Where(e => e.Zone != primary.Zone)
+                .Select(e => (Entry: e, Place: TierPlace(primary.Part.Area, e.Part.Area)))
+                .Where(p => p.Place is not null)
+                .ToList();
+
+            var axis = placed.Count > 0 ? placed[0].Place!.Value.Axis : Axis.Vertical;
+            var upper = placed.FirstOrDefault(p => p.Place!.Value.IsFirst).Entry;
+            var lower = placed.FirstOrDefault(p => !p.Place!.Value.IsFirst).Entry;
 
             cells.Add(new ZoneCellViewModel
             {
                 Name = primary.Zone.Name,
-                KeyLabel = layout.Surface.FallbackLabelAt(primary.Zone.Position),
+                KeyLabel = KeyNames.Of(primary.Zone.KeyOn(layout.Surface)),
                 Area = ToDisplayFraction(primary.Part.Area, display),
                 SizeLabel = $"{primary.Pixels.Width} × {primary.Pixels.Height}",
                 SpansDisplays = primary.Zone.SpansDisplays,
                 Position = primary.Zone.Position,
                 ModifierPrefix = Prefix(primary.Zone, defaultModifier),
                 Cycle = Describe(primary.Zone, layout, allDisplays),
-                UpperModifierPrefix = Prefix(upper.Zone, defaultModifier),
-                LowerModifierPrefix = Prefix(lower.Zone, defaultModifier),
-                UpperKey = upper.Zone is null ? null : layout.Surface.FallbackLabelAt(upper.Zone.Position),
-                UpperPosition = upper.Zone?.Position,
-                UpperName = upper.Zone?.Name,
-                UpperSize = upper.Zone is null ? null : $"{upper.Pixels.Width} × {upper.Pixels.Height}",
-                LowerKey = lower.Zone is null ? null : layout.Surface.FallbackLabelAt(lower.Zone.Position),
-                LowerPosition = lower.Zone?.Position,
-                LowerName = lower.Zone?.Name,
-                LowerSize = lower.Zone is null ? null : $"{lower.Pixels.Width} × {lower.Pixels.Height}",
+                TierAxis = axis,
+                Slot = slot,
+                ZoneIndex = zoneIndex,
+                FirstModifierPrefix = Prefix(upper.Zone, defaultModifier),
+                SecondModifierPrefix = Prefix(lower.Zone, defaultModifier),
+                FirstKey = upper.Zone is null ? null : KeyNames.Of(upper.Zone.KeyOn(layout.Surface)),
+                FirstPosition = upper.Zone?.Position,
+                FirstName = upper.Zone?.Name,
+                FirstSize = upper.Zone is null ? null : $"{upper.Pixels.Width} × {upper.Pixels.Height}",
+                SecondKey = lower.Zone is null ? null : KeyNames.Of(lower.Zone.KeyOn(layout.Surface)),
+                SecondPosition = lower.Zone?.Position,
+                SecondName = lower.Zone?.Name,
+                SecondSize = lower.Zone is null ? null : $"{lower.Pixels.Width} × {lower.Pixels.Height}",
             });
         }
 
         return cells;
+    }
+
+    /// <summary>
+    /// Where a subzone sits inside the zone it belongs to, and therefore which
+    /// way that zone is cut.
+    /// <para>
+    /// A tier keeping the parent's full width can only be a stacked half; one
+    /// keeping its full height can only be a side-by-side half. Null for a
+    /// rectangle that is neither, which is not a tier at all.
+    /// </para>
+    /// </summary>
+    private static (Axis Axis, bool IsFirst)? TierPlace(NormRect parent, NormRect tier)
+    {
+        const double Slack = 1e-6;
+
+        var keepsWidth = Math.Abs(tier.W - parent.W) <= Slack;
+        var keepsHeight = Math.Abs(tier.H - parent.H) <= Slack;
+
+        // Both means the tier is the parent, which is not a tier.
+        if (keepsWidth == keepsHeight) return null;
+
+        return keepsWidth
+            ? (Axis.Vertical, tier.Y <= parent.Y + Slack)
+            : (Axis.Horizontal, tier.X <= parent.X + Slack);
     }
 
     /// <summary>

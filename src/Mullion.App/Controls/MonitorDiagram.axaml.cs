@@ -34,12 +34,44 @@ public partial class MonitorDiagram : UserControl
     /// </summary>
     public Thickness TierTopMargin => Compact ? new Thickness(0) : new Thickness(0, 22, 0, 0);
 
+    /// <summary>
+    /// Space held clear above the desk for the monitor name tabs.
+    /// <para>
+    /// Nothing at all in compact mode, because nothing is drawn up there: the
+    /// tab is one of the things thumbnail mode drops. Charged anyway, it took
+    /// 46 of a card's 110 pixels for empty space, and the monitor it left room
+    /// beside came out at four fifths of the width it had been given.
+    /// </para>
+    /// </summary>
+    public double Headroom => Compact ? 0 : 46;
+
+    /// <summary>
+    /// How far inside its tile the tier chips are drawn.
+    /// <para>
+    /// Every pixel of it comes out of the band left in the middle for the zone's
+    /// own key, twice over, and on a card that band is about ten pixels wide to
+    /// begin with. Generous where there is room; nearly nothing where there is
+    /// not.
+    /// </para>
+    /// </summary>
+    public double TierInset => Compact ? 2 : 6;
+
+    public Thickness TierInsetMargin => new(TierInset);
+
     static MonitorDiagram()
     {
         CompactProperty.Changed.AddClassHandler<MonitorDiagram>((d, _) =>
         {
             d.RaisePropertyChanged(DetailedProperty, !d.Detailed, d.Detailed);
             d.RaisePropertyChanged(TierTopMarginProperty, default, d.TierTopMargin);
+            d.RaisePropertyChanged(HeadroomProperty, default, d.Headroom);
+            d.RaisePropertyChanged(TierInsetProperty, default, d.TierInset);
+            d.RaisePropertyChanged(TierInsetMarginProperty, default, d.TierInsetMargin);
+
+            // A class as well as a property, so the chip metrics can be stated
+            // in the theme with the rest of them rather than as numbers wired
+            // through the control.
+            d.Classes.Set("compact", d.Compact);
         });
 
         // ModifierSegments is derived, so it has to be told when its source
@@ -53,6 +85,16 @@ public partial class MonitorDiagram : UserControl
 
     private static readonly DirectProperty<MonitorDiagram, Thickness> TierTopMarginProperty =
         AvaloniaProperty.RegisterDirect<MonitorDiagram, Thickness>(nameof(TierTopMargin), o => o.TierTopMargin);
+
+    private static readonly DirectProperty<MonitorDiagram, double> HeadroomProperty =
+        AvaloniaProperty.RegisterDirect<MonitorDiagram, double>(nameof(Headroom), o => o.Headroom);
+
+    private static readonly DirectProperty<MonitorDiagram, double> TierInsetProperty =
+        AvaloniaProperty.RegisterDirect<MonitorDiagram, double>(nameof(TierInset), o => o.TierInset);
+
+    private static readonly DirectProperty<MonitorDiagram, Thickness> TierInsetMarginProperty =
+        AvaloniaProperty.RegisterDirect<MonitorDiagram, Thickness>(
+            nameof(TierInsetMargin), o => o.TierInsetMargin);
 
     /// <summary>
     /// Shown before each key, so a chip reads as the whole chord rather than a
@@ -145,11 +187,11 @@ public partial class MonitorDiagram : UserControl
         vm.HoverHint = span.IsInteractive ? span.WholeHint : null;
     }
 
-    private void OnUpperEntered(object? sender, PointerEventArgs e) =>
-        Hint((sender as Control)?.DataContext, c => c.UpperHint);
+    private void OnFirstEntered(object? sender, PointerEventArgs e) =>
+        Hint((sender as Control)?.DataContext, c => c.FirstHint);
 
-    private void OnLowerEntered(object? sender, PointerEventArgs e) =>
-        Hint((sender as Control)?.DataContext, c => c.LowerHint);
+    private void OnSecondEntered(object? sender, PointerEventArgs e) =>
+        Hint((sender as Control)?.DataContext, c => c.SecondHint);
 
     /// <summary>
     /// The tile speaks only when nothing more specific can.
@@ -168,6 +210,19 @@ public partial class MonitorDiagram : UserControl
         if (cell.IsInteractive) return;
 
         Hint(cell, c => c.WholeHint);
+    }
+
+    /// <summary>
+    /// The flip button says what it would do, through the same floating hint as
+    /// everything else here rather than a tooltip - a tooltip is a window, and a
+    /// window over a 22px control covers the thing being pointed at.
+    /// </summary>
+    private void OnFlipEntered(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is not MonitorDiagramViewModel vm) return;
+        if ((sender as Control)?.DataContext is not ZoneCellViewModel cell) return;
+
+        vm.HoverHint = cell.FlipHint;
     }
 
     private void OnHoverLeft(object? sender, PointerEventArgs e)

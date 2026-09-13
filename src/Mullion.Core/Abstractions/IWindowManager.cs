@@ -53,10 +53,23 @@ public interface IWindowManager
     /// </summary>
     PxRect? BoundsOf(nint hwnd);
 
+    /// <summary>
+    /// The last size this window had that Mullion did not give it, so filling
+    /// a zone can be undone by filling it again. Null for a window Mullion
+    /// has never moved.
+    /// </summary>
+    PxRect? ChosenSizeOf(nint hwnd);
+
     MoveResult MoveForegroundTo(PxRect target);
 
     /// <summary>Restore the most recent move. Returns false when nothing is on the stack.</summary>
     bool UndoLastMove();
+
+    /// <summary>
+    /// Minimize the focused window. Returns false when there is nothing eligible
+    /// to minimize - the desktop, a shell window, or one Mullion may not touch.
+    /// </summary>
+    bool MinimizeForeground();
 
     int UndoDepth { get; }
 }

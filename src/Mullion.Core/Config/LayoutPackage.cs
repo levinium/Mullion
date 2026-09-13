@@ -98,7 +98,7 @@ public static class LayoutPackageIo
         }
     }
 
-    /// <summary>Build a package from what is currently customised.</summary>
+    /// <summary>Build a package from what is currently customized.</summary>
     public static LayoutPackage Export(
         IReadOnlyList<DisplayOverride> overrides, IReadOnlyList<string> slots, string surfaceId, string name) =>
         new()

@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctl="using:Mullion.App.Controls"
+        xmlns:vm="using:Mullion.App.ViewModels"
+        x:Class="Mullion.App.Views.SponsorWindow"
+        x:DataType="vm:SponsorViewModel"
+        Title="Support Mullion"
+        Width="440" SizeToContent="Height"
+        MinWidth="380"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Surface}">
+
+  <!-- The only place Mullion asks for anything, and it is behind a button
+       nobody has to press. So it is written to be easy to say no to: no
+       countdown, nothing pre-ticked beyond the amount, and a door that is
+       obviously open. An ask that has to trick someone is not worth the money.
+
+       SizeToContent, because the picker is there only where the destination
+       accepts an amount and a fixed height would leave a hole otherwise. -->
+  <StackPanel Margin="28,24" Spacing="16">
+
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Path Data="{x:Static ctl:Icons.Heart}" Classes="sponsorMark" VerticalAlignment="Center" />
+      <TextBlock Classes="h1" Text="Support Mullion" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <!-- What it is and what it is not. The second sentence is the one that
+         matters: someone deciding whether to give should know they are not
+         buying anything, and that nothing is being withheld. -->
+    <TextBlock Classes="body" TextWrapping="Wrap"
+               Text="Mullion is free and open source. There is no paid version, nothing is held back, and this is the only place it asks." />
+
+    <TextBlock Classes="body" TextWrapping="Wrap"
+               Text="If it has earned a place on your desk, you can put something toward keeping it maintained." />
+
+    <StackPanel Spacing="10" IsVisible="{Binding ShowAmounts}">
+      <ItemsControl ItemsSource="{Binding Amounts}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:SponsorAmountViewModel">
+            <Button Classes="amountChip"
+                    Classes.chosen="{Binding IsSelected}"
+                    Content="{Binding Label}"
+                    Command="{Binding $parent[Window].((vm:SponsorViewModel)DataContext).ChooseCommand}"
+                    CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Classes="amountChip"
+                Classes.chosen="{Binding IsOther}"
+                Content="Other"
+                Command="{Binding ChooseOtherCommand}" />
+
+        <TextBox Width="110" PlaceholderText="Amount"
+                 IsVisible="{Binding IsOther}"
+                 Text="{Binding OtherAmount}"
+                 VerticalAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+      <Button Classes="accent"
+              Content="{Binding ActionLabel}"
+              IsEnabled="{Binding CanSponsor}"
+              Command="{Binding SponsorCommand}" />
+
+      <Button Content="Not now" Command="{Binding DismissCommand}" />
+    </StackPanel>
+
+    <TextBlock Classes="zoneSize" TextWrapping="Wrap"
+               Text="Opens your browser. Mullion never sees your payment details." />
+
+  </StackPanel>
+</Window>

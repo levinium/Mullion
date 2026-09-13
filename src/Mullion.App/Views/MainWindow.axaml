@@ -10,6 +10,13 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Surface}">
 
+  <!-- No ScrollViewer here, deliberately. The middle row is the diagram, and a
+       diagram's whole job is to fit the room it is given: inside a scroll
+       viewport the available height is infinite, so it stops letterboxing and
+       asks for its full to-scale height instead - 1329 layout units on a 32:9,
+       which then scrolls on a screen it used to fit. What has to give on a
+       short window is the picture, not the controls, and a star row already
+       says exactly that. -->
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
 
     <!-- Header -->
@@ -19,30 +26,66 @@
         <TextBlock Classes="body" Text="{Binding TopologySummary}" />
       </StackPanel>
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+      <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+
+        <!-- Over the controls rather than beside them: the row is already four
+             icons wide and a fifth item in it would read as another one. Right
+             aligned, so it sits above the gear and the block has a straight
+             edge down its right side. -->
+        <TextBlock Classes="zoneSize" Text="{Binding Version}"
+                   HorizontalAlignment="Right" Margin="0,0,4,0" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <!-- Left of every button, so it never lands between two of them and
+             breaks the row into pieces. Beside pause because that is the control
+             it is about, and the only other place the hotkeys' state is
+             expressed. Shown only when something is wrong: working hotkeys
+             announce themselves by working. -->
+        <TextBlock Classes="hookWarning"
+                   Text="{Binding HookWarning}"
+                   IsVisible="{Binding ShowHookWarning}"
+                   VerticalAlignment="Center" Margin="0,0,4,0" />
+
+        <!-- Only where the build was published with somewhere to send anyone.
+             A clean checkout has no destination, so there is no button and
+             nothing for a fork to have to remember to remove. Furthest from the
+             controls people actually came for, because an ask that sits in the
+             way is an ask that gets resented. -->
         <Button Classes="iconButton"
-                Command="{Binding RescanCommand}"
-                ToolTip.Tip="Rescan the displays">
-          <Path Data="{x:Static ctl:Icons.Refresh}" />
+                IsVisible="{Binding CanSponsor}"
+                Command="{Binding ShowSponsorCommand}"
+                ToolTip.Tip="Support Mullion">
+          <Path Data="{x:Static ctl:Icons.Heart}" />
         </Button>
 
         <!-- One button showing what pressing it will do, rather than a toggle
              showing what is already the case: at a glance a pressed-in "pause"
              and an unpressed one look far too alike to tell whether the hotkeys
-             are live. -->
+             are live.
+
+             Leftmost of the working controls, next to the line that reports on it. The
+             heart stays further left still: it is an ask, not a control, and it
+             is absent from every build without a sponsor destination. -->
         <Button Classes="iconButton"
                 Command="{Binding TogglePauseCommand}"
                 ToolTip.Tip="{Binding PauseTooltip}">
           <Path Data="{Binding PauseIcon}" />
         </Button>
 
+        <Button Classes="iconButton"
+                Command="{Binding RescanCommand}"
+                ToolTip.Tip="Rescan the displays">
+          <Path Data="{x:Static ctl:Icons.Refresh}" />
+        </Button>
+
         <!-- Furthest right, where a settings control is conventionally looked
-             for. Unlabelled, so it carries a tooltip. -->
+             for. Unlabeled, so it carries a tooltip. -->
         <Button Classes="iconButton"
                 Command="{Binding ShowSettingsCommand}"
                 ToolTip.Tip="Settings">
           <Path Data="{x:Static ctl:Icons.Gear}" />
         </Button>
+        </StackPanel>
       </StackPanel>
     </Grid>
 
@@ -129,25 +172,57 @@
       </Border>
     </Grid>
 
-    <!-- Status -->
+    <!-- Tips: the three gestures the diagram cannot draw.
+         One heading for the card, not one per column - both columns hold the
+         same kind of thing, so a heading over each was labelling the layout
+         rather than the content. -->
     <Border Grid.Row="2" Classes="card" Margin="0,16,0,0">
-      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
-        <TextBlock Grid.Row="0" Grid.Column="0" Classes="h2" Text="Hotkeys" />
-        <TextBlock Grid.Row="1" Grid.Column="0" Classes="body" Text="{Binding HookStatus}" />
+      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h2" Text="Tips" />
+
         <!-- Hidden while the banner is up, which says the same thing louder. -->
-        <TextBlock Grid.Row="2" Grid.Column="0" Classes="body" Text="{Binding PrivilegeStatus}"
-                   Margin="0,4,0,0" IsVisible="{Binding !ShowElevationBanner}" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Classes="body"
+                   Text="{Binding PrivilegeStatus}"
+                   Margin="0,6,0,0" IsVisible="{Binding !ShowElevationBanner}" />
 
-        <TextBlock Grid.Row="0" Grid.Column="1" Classes="h2" Text="Last action" Margin="20,0,0,0" />
-        <TextBlock Grid.Row="1" Grid.Column="1" Classes="body" Text="{Binding LastAction}" Margin="20,0,0,0" />
-
-        <!-- The one behaviour the picture cannot show. A zone is a rectangle and
+        <!-- The one behavior the picture cannot show. A zone is a rectangle and
              the diagram draws it; that a second press widens the window past it
              is invisible until someone does it by accident. Hovering a zone
              names its own sequence - this line is what makes anyone hover. -->
-        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Classes="body"
-                   Margin="0,10,0,0" TextWrapping="Wrap"
-                   Text="{Binding CycleNote}" />
+        <Grid Grid.Row="3" Grid.Column="0" ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+          <Path Grid.Column="0" Data="{x:Static ctl:Icons.Expand}"
+                Classes="noteIcon" VerticalAlignment="Top" Margin="0,1,8,0" />
+
+          <TextBlock Grid.Column="1" Classes="body" TextWrapping="Wrap"
+                     Text="{Binding CycleNote}" />
+        </Grid>
+
+        <!-- Its counterpart, under the column it belongs to. The keyboard
+             gesture leaves a trace in the diagram - every zone wears its key -
+             but the mouse gesture leaves none at all, so without this line
+             nothing on this screen would say it exists. Hidden rather than
+             greyed when drag-to-snap is off: an instruction for something
+             switched off is not a dimmer instruction, it is a wrong one. -->
+        <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="Auto,*"
+              Margin="20,6,0,0" IsVisible="{Binding ShowSnapNote}">
+          <Path Grid.Column="0" Data="{x:Static ctl:Icons.DragToZone}"
+                Classes="noteIcon" VerticalAlignment="Top" Margin="0,1,8,0" />
+
+          <TextBlock Grid.Column="1" Classes="body" TextWrapping="Wrap"
+                     Text="{Binding SnapNote}" />
+        </Grid>
+
+        <!-- The third gesture, and the one nothing else hints at: a zone's
+             subzones are drawn one way round, and that the other way is a
+             keystroke away is invisible. Under the cycling tip because both are
+             about what a key does while the modifier is held. -->
+        <Grid Grid.Row="4" Grid.Column="0" ColumnDefinitions="Auto,*" Margin="0,10,0,0">
+          <Path Grid.Column="0" Data="{x:Static ctl:Icons.ArrowsLeftRight}"
+                Classes="noteIcon" VerticalAlignment="Top" Margin="0,1,8,0" />
+
+          <TextBlock Grid.Column="1" Classes="body" TextWrapping="Wrap"
+                     Text="{Binding FlipNote}" />
+        </Grid>
       </Grid>
     </Border>
 
