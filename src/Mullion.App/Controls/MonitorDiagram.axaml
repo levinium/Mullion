@@ -304,7 +304,7 @@
                     Canvas.Bottom="{Binding $parent[Canvas].Bounds.Height}"
                     MaxWidth="{Binding $parent[Canvas].Bounds.Width,
                               Converter={x:Static ctl:ReserveWhenWideConverter.Instance},
-                              ConverterParameter=150;76}"
+                              ConverterParameter=130;76}"
                     CornerRadius="8,8,0,0" BorderThickness="1,1,1,0"
                     ToolTip.Tip="{Binding TitleAndDetail}">
               <StackPanel Orientation="Vertical">
@@ -317,20 +317,31 @@
 
             <!-- Inside the top-left corner, for a display with another directly
                  above it: there is no room over it, and a tab drawn there would
-                 appear to label the display above. -->
-            <Border Classes="monitorLabel" IsVisible="{Binding LabelInside}"
-                    Canvas.Left="0" Canvas.Top="0"
+                 appear to label the display above.
+
+                 The name only, unlike the tab that sits above a display. This
+                 one is drawn ON the zones rather than over empty space, and at
+                 two lines it printed across the key chip underneath - "Win+X"
+                 reduced to "X" on a stacked pair, which is the one thing on the
+                 diagram nobody can afford to misread. The resolution it drops
+                 is not lost: a whole-display zone already prints its own size
+                 directly below, and the tooltip carries both either way. -->
+            <Border Classes="monitorLabel" Canvas.Left="0" Canvas.Top="0"
                     MaxWidth="{Binding $parent[Canvas].Bounds.Width,
                               Converter={x:Static ctl:ReserveWhenWideConverter.Instance},
-                              ConverterParameter=150;76}"
+                              ConverterParameter=130;76}"
                     CornerRadius="0,0,8,0" BorderThickness="0,0,1,1"
                     ToolTip.Tip="{Binding TitleAndDetail}">
-              <StackPanel Orientation="Vertical">
-                <TextBlock Classes="monitorTitle" Text="{Binding Title}"
-                           TextWrapping="Wrap" />
-                <TextBlock Classes="monitorDetail" Text="{Binding Detail}"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
+              <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                  <Binding Path="LabelInside" />
+                  <Binding Path="$parent[Canvas].Bounds.Height"
+                           Converter="{x:Static ctl:ShowWhenTallerThanConverter.Instance}"
+                           ConverterParameter="130" />
+                </MultiBinding>
+              </Border.IsVisible>
+              <TextBlock Classes="monitorTitle" Text="{Binding Title}"
+                         TextTrimming="CharacterEllipsis" />
             </Border>
 
             <!-- Zone stepper, opposite the name tab.
@@ -350,7 +361,7 @@
                   <Binding Path="CanEditZoneCount" />
                   <Binding Path="$parent[Canvas].Bounds.Width"
                            Converter="{x:Static ctl:WiderThanConverter.Instance}"
-                           ConverterParameter="150" />
+                           ConverterParameter="130" />
                   <Binding Path="LabelAbove" />
                 </MultiBinding>
               </Border.IsVisible>
@@ -375,7 +386,7 @@
                   <Binding Path="CanEditZoneCount" />
                   <Binding Path="$parent[Canvas].Bounds.Width"
                            Converter="{x:Static ctl:WiderThanConverter.Instance}"
-                           ConverterParameter="150" />
+                           ConverterParameter="130" />
                   <Binding Path="LabelInside" />
                 </MultiBinding>
               </Border.IsVisible>

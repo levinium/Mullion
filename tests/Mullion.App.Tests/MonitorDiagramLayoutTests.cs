@@ -55,8 +55,10 @@ public class MonitorDiagramLayoutTests
         return data;
     }
 
-    private static MonitorDiagram Render(string topologyId, ChordModifiers modifier)
+    private static MonitorDiagram Render(string topologyId, ChordModifiers modifier, Size? canvas = null)
     {
+        var size = canvas ?? Canvas;
+
         var topology = SimulatedTopologies.Find(topologyId)!;
         var layout = LayoutBuilder.Build(topology.Displays, KeySurface.LeftHandBlock);
 
@@ -66,7 +68,7 @@ public class MonitorDiagramLayoutTests
                 topology.Displays, layout, defaultModifier: modifier),
         };
 
-        var window = new Window { Width = Canvas.Width, Height = Canvas.Height, Content = diagram };
+        var window = new Window { Width = size.Width, Height = size.Height, Content = diagram };
         window.Show();
 
         // Several passes, pumping the dispatcher between them. One is not
@@ -76,8 +78,8 @@ public class MonitorDiagramLayoutTests
         // all, so the test would measure a half-built layout the app never shows.
         for (var pass = 0; pass < 3; pass++)
         {
-            window.Measure(Canvas);
-            window.Arrange(new Rect(Canvas));
+            window.Measure(size);
+            window.Arrange(new Rect(size));
             Dispatcher.UIThread.RunJobs();
         }
 
@@ -412,5 +414,119 @@ public class MonitorDiagramLayoutTests
             chord.StartsWith(LongestPrefix, StringComparison.Ordinal).ShouldBeTrue(
                 $"{topologyId}: a chip shows '{chord}' rather than the whole chord");
         }
+    }
+
+    /// <summary>
+    /// A monitor's name tab must not sit on top of a key chip.
+    /// <para>
+    /// The tab is drawn inside the top-left corner for any display with another
+    /// directly above it, because there is no headroom to put it in. On a short
+    /// display that corner is also where the zone's own chip ends up, and the
+    /// two were printing over each other - two stacked monitors flanked by
+    /// verticals put "Win+X" across the words "Center lower".
+    /// </para>
+    /// <para>
+    /// Stated as rectangles rather than as a rule about which arrangements are
+    /// affected, because the next one that collides will not be on the list.
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// Diagram sizes to check the tab against, because the collision depends on
+    /// one. The default harness canvas is wide and short; the window the app
+    /// actually opens at is neither, and that is where this was first seen.
+    /// </summary>
+    public static TheoryData<string, double, double> ArrangementsAndSizes()
+    {
+        var data = new TheoryData<string, double, double>();
+
+        // Swept rather than sampled. The collision appears at some sizes and not
+        // others, so three convenient numbers would only prove that those three
+        // were clear - and the threshold that clears them would be fitted to the
+        // sample rather than to the problem.
+        foreach (var t in SimulatedTopologies.All)
+        {
+            for (var width = 560d; width <= 1100; width += 60)
+            {
+                for (var height = 220d; height <= 400; height += 30)
+                {
+                    data.Add(t.Id, width, height);
+                }
+            }
+        }
+
+        return data;
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(ArrangementsAndSizes))]
+    public void AMonitorsNameTabDoesNotCoverItsKeyChips(string topologyId, double width, double height)
+    {
+        var diagram = Render(topologyId, LongestModifier, new Size(width, height));
+
+        var labels = Descendants<Border>(diagram)
+            .Where(b => b.Classes.Contains("monitorLabel") && b.IsVisible && b.Bounds.Width > 0);
+
+        foreach (var label in labels)
+        {
+            // Up to the display, not the bezel. The tab's canvas is a SIBLING of
+            // the bezel with a ZIndex that puts it over the zones, so scoping
+            // this to the bezel finds no tabs at all and quietly checks nothing.
+            var display = label.GetVisualAncestors()
+                .OfType<Visual>()
+                .FirstOrDefault(a => Descendants<Border>(a).Any(b => b.Classes.Contains("monitorBezel")));
+
+            if (display is null) continue;
+
+            var tab = BoundsIn(label, diagram);
+
+            foreach (var chip in Descendants<Border>(display).Where(b => b.Classes.Contains("keyChip")))
+            {
+                if (!chip.IsVisible || chip.Bounds.Width <= 0) continue;
+
+                var box = BoundsIn(chip, diagram);
+                var over = tab.Intersect(box);
+
+                // A shared edge is not a collision; ink over ink is.
+                (over.Width * over.Height).ShouldBeLessThanOrEqualTo(1,
+                    $"{topologyId} at {width}x{height}: the name tab at {tab} covers a key chip at {box}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The tab that yields must not yield always.
+    /// <para>
+    /// The fix for the collision above is that a display too short to carry its
+    /// name tab inside it does without one. That has an obvious degenerate
+    /// solution - never draw the tab - which would pass the collision test
+    /// perfectly and lose the labelling on every stacked desk. This is the
+    /// assertion that keeps the first test honest.
+    /// </para>
+    /// </summary>
+    [AvaloniaFact]
+    public void AStackedDisplayWithRoomStillGetsItsName()
+    {
+        // Two monitors stacked: the lower one has no headroom above it, so its
+        // name goes inside - and at this size there is plenty of room for it.
+        var diagram = Render("two-stacked", LongestModifier, new Size(1040, 560));
+
+        var inside = Descendants<Border>(diagram)
+            .Where(b => b.Classes.Contains("monitorLabel") && b.IsVisible && b.Bounds.Width > 0)
+            .ToList();
+
+        inside.Count.ShouldBeGreaterThanOrEqualTo(2,
+            "both displays should be named - one tab above, one inside");
+
+        var named = inside
+            .SelectMany(b => Descendants<TextBlock>(b))
+            .Select(t => t.Text)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
+
+        // "Bottom" is the lower of the two in this arrangement, and the one
+        // with a display directly above it - so it is the one whose tab has to
+        // sit inside the monitor rather than above it.
+        named.ShouldContain(t => t!.Contains("Bottom", StringComparison.OrdinalIgnoreCase),
+            "the lower display is the one whose tab sits inside it");
     }
 }

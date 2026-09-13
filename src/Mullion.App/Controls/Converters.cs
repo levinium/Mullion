@@ -262,6 +262,45 @@ public sealed class ReserveWhenWideConverter : IValueConverter
 }
 
 /// <summary>
+/// Whether a display is tall enough on screen to carry a name tab inside it.
+/// <para>
+/// The tab that sits ON a display - the one used where another display is
+/// stacked directly above and there is no headroom - is drawn over the zones
+/// rather than over empty space. On a display rendered short, the zone's own key
+/// chip is centered in what is also the top-left corner, and the tab printed
+/// across it: "Win+X" showing as "X" on a stacked pair.
+/// </para>
+/// <para>
+/// So the tab yields. The chip is the whole point of the diagram and must never
+/// be obscured; the name is context, it is still in the tooltip, and for a
+/// whole-display zone the zone's own label repeats it directly underneath.
+/// </para>
+/// <para>
+/// The vertical twin of <see cref="WiderThanConverter"/>, and deliberately a
+/// separate type rather than a reuse of it: the call site binds a Height, and a
+/// converter named "wider than" sitting on one reads as a mistake every time
+/// anybody looks at it.
+/// </para>
+/// </summary>
+public sealed class ShowWhenTallerThanConverter : IValueConverter
+{
+    public static readonly ShowWhenTallerThanConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not double actual || double.IsNaN(actual)) return false;
+
+        var threshold = double.TryParse(
+            parameter as string, NumberStyles.Any, CultureInfo.InvariantCulture, out var t) ? t : 0;
+
+        return actual >= threshold;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
 /// "Edit zones" or "Done", for the button that toggles editing.
 /// <para>
 /// The label has to say what pressing it will do, and both halves of that are
