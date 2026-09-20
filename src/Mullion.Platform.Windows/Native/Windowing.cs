@@ -52,6 +52,7 @@ internal static partial class Win
     // DWM attributes
     internal const uint DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     internal const uint DWMWA_CLOAKED = 14;
+    internal const uint DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
     internal const uint MONITOR_DEFAULTTONEAREST = 2;
 

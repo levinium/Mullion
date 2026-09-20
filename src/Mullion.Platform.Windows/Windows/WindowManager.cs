@@ -324,8 +324,10 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
 
     /// <summary>
     /// Position the window so its VISIBLE frame lands on <paramref name="target"/>,
-    /// compensating for the invisible resize border that GetWindowRect includes
-    /// but the user cannot see. Without this every window sits ~7-11px inset.
+    /// compensating for the parts of the frame the user cannot see: the invisible
+    /// resize border that GetWindowRect includes, and the translucent border DWM
+    /// paints inside the extended frame bounds. Without the first every window
+    /// sits ~7-11px inset; without the second, one pixel of it.
     /// </summary>
     private static bool Apply(nint hwnd, PxRect target, out int lastError)
     {
@@ -353,11 +355,13 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         if (Win.DwmGetWindowAttributeRect(hwnd, Win.DWMWA_EXTENDED_FRAME_BOUNDS, out var ef, Marshal.SizeOf<RECT>()) != 0)
             return default;
 
+        var border = BorderThickness(hwnd);
+
         var pad = new Padding(
-            ef.Left - wr.Left,
-            ef.Top - wr.Top,
-            wr.Right - ef.Right,
-            wr.Bottom - ef.Bottom);
+            ef.Left + border - wr.Left,
+            ef.Top + border - wr.Top,
+            wr.Right - (ef.Right - border),
+            wr.Bottom - (ef.Bottom - border));
 
         // Reject nonsense from windows caught mid-animation, over RDP, or with
         // exotic frames rather than trusting it and flinging the window away.
@@ -369,14 +373,56 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         return pad;
     }
 
+    /// <summary>
+    /// Where the window's opaque edges are - the rectangle a person would trace
+    /// around it. Every read-back, undo snapshot and zone-fit test goes through
+    /// here, so it is measured the same way the targets handed to
+    /// <see cref="Apply"/> are; a mismatch of even a pixel between the two would
+    /// have each move nudge the window one further.
+    /// </summary>
     private static PxRect GetFrameBounds(nint hwnd)
     {
         if (Win.DwmGetWindowAttributeRect(hwnd, Win.DWMWA_EXTENDED_FRAME_BOUNDS, out var ef, Marshal.SizeOf<RECT>()) == 0)
-            return PxRect.FromLtrb(ef.Left, ef.Top, ef.Right, ef.Bottom);
+        {
+            var border = BorderThickness(hwnd);
+            return PxRect.FromLtrb(
+                ef.Left + border, ef.Top + border, ef.Right - border, ef.Bottom - border);
+        }
 
         return Win.GetWindowRect(hwnd, out var wr)
             ? PxRect.FromLtrb(wr.Left, wr.Top, wr.Right, wr.Bottom)
             : default;
+    }
+
+    /// <summary>
+    /// The border DWM paints around a window, in physical pixels.
+    /// <para>
+    /// It is drawn INSIDE the extended frame bounds and it is translucent, so a
+    /// window sized exactly to its zone still shows a pixel of whatever is
+    /// behind it along every edge - and two windows in adjacent zones show two,
+    /// one from each side of the seam. Counting the border as frame rather than
+    /// as content is what closes those gaps.
+    /// </para>
+    /// <para>
+    /// Asked per window rather than hardcoded to 1: this is a physical
+    /// measurement, so it grows with the scaling of the display the window is
+    /// on, and DWM is the only thing that knows whether it drew a border at all.
+    /// </para>
+    /// </summary>
+    private static int BorderThickness(nint hwnd)
+    {
+        // Unsupported before Windows 11, where the call fails and leaves the
+        // value untouched. Zero is the honest answer there: no correction, and
+        // behavior identical to never having asked.
+        if (Win.DwmGetWindowAttributeInt(
+                hwnd, Win.DWMWA_VISIBLE_FRAME_BORDER_THICKNESS, out var thickness, sizeof(int)) != 0)
+            return 0;
+
+        // Windows answers 0xFFFFFFFF - read back as -1 - for a window it draws
+        // no border around, and the value scales with DPI, so bound it rather
+        // than trust it. Anything outside the range means "do not correct".
+        const int MaxBorder = 8;
+        return thickness is >= 0 and <= MaxBorder ? thickness : 0;
     }
 
     /// <summary>Poll until two consecutive reads agree, or the budget runs out. Never a fixed sleep.</summary>
