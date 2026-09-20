@@ -23,7 +23,7 @@
   <PropertyGroup>
     <Product>Mullion</Product>
     <Company>Mullion</Company>
-    <VersionPrefix>1.0.1</VersionPrefix>
+    <VersionPrefix>1.0.2</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
     <Copyright>Copyright (c) 2026 levinium</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
