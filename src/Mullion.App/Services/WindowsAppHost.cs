@@ -1150,6 +1150,21 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     /// </summary>
     private UpdateVerdict? _update;
 
+    /// <summary>
+    /// How work that ends up touching a view model gets onto the UI thread.
+    /// <para>
+    /// A seam rather than a direct call to the dispatcher so tests can run it
+    /// inline. A headless test has no message loop, so anything posted to the
+    /// dispatcher is queued and never drained - and the test then proves only
+    /// that nothing happened.
+    /// </para>
+    /// </summary>
+    public Action<Action> OnUiThread { get; set; } = work =>
+    {
+        if (Dispatcher.UIThread.CheckAccess()) work();
+        else Dispatcher.UIThread.Post(work);
+    };
+
     public void SetCheckForUpdates(bool value)
     {
         UpdateGeneral(g => g with { CheckForUpdates = value });
@@ -1197,8 +1212,15 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
     /// <summary>
     /// Files what a check concluded: remembers the answer if it is worth showing,
     /// and stamps the time so the daily throttle has something to measure from.
+    /// <para>
+    /// Marshals itself onto the UI thread. It raises <see cref="StateChanged"/>,
+    /// and everything listening to that is a view model bound to controls that
+    /// refuse to be touched from anywhere else - so where this is called from
+    /// decides whether the app redraws or dies, and a caller cannot be relied
+    /// upon to know which thread an await left it on.
+    /// </para>
     /// </summary>
-    private void Record(UpdateVerdict verdict)
+    private void Record(UpdateVerdict verdict) => OnUiThread(() =>
     {
         // Only a definite answer resets the clock. Counting a failed check as
         // "asked today" means a machine that is offline at the same time each
@@ -1208,7 +1230,7 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
         _update = verdict.IsAvailable ? verdict : null;
         StateChanged?.Invoke();
-    }
+    });
 
     // ---- installing one ----------------------------------------------------
 
@@ -1284,9 +1306,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
         {
             var verdict = await Updates.CheckAsync().ConfigureAwait(false);
 
-            // Back to the UI thread: Record raises StateChanged, and everything
-            // listening to that is a view model.
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => Record(verdict));
+            // Record puts itself back on the UI thread; this call is off it.
+            Record(verdict);
         });
     }
 

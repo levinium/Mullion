@@ -1,4 +1,6 @@
 using System.Runtime.Versioning;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Mullion.App.Services;
 using Mullion.App.ViewModels;
 using Mullion.Core.Simulation;
@@ -20,11 +22,19 @@ namespace Mullion.App.Tests;
 [SupportedOSPlatform("windows")]
 public class UpdateNoticeTests
 {
-    private static WindowsAppHost Host()
+    /// <param name="realUiThread">
+    /// Leave false unless the test is ABOUT which thread the answer is filed on.
+    /// These tests have no message loop, so the host's own marshal would queue
+    /// what it posts and nothing would ever drain it.
+    /// </param>
+    private static WindowsAppHost Host(bool realUiThread = false)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "The Windows host is not available here.");
 
         var host = new WindowsAppHost(SimulatedTopologies.Find("single-32-9"), TestConfig.Path());
+
+        if (!realUiThread) host.OnUiThread = work => work();
+
         host.Start();
         return host;
     }
@@ -77,6 +87,39 @@ public class UpdateNoticeTests
         vm.NewerVersion.ShouldBe("99.1.0");
         vm.NewerVersionUrl.ShouldBe("https://example.invalid/99");
         vm.UpdateLine.ShouldBe("Mullion 99.1.0 available");
+    }
+
+    [AvaloniaFact]
+    public async Task AManualCheckFilesItsAnswerOnTheUiThread()
+    {
+        // The crash this exists to prevent: the check awaits the network,
+        // resumes on a thread-pool thread, and files the answer from there.
+        // Filing it raises StateChanged, the window refreshes, and Avalonia
+        // ends the process for touching a control from a thread that does not
+        // own it. The daily check posted itself back and the settings button
+        // did not, so the app died only for whoever went looking.
+        //
+        // Needs a real UI thread to be about anything, which is what separates
+        // this from every other test in the file.
+        using var host = Host(realUiThread: true);
+
+        // Genuinely asynchronous, unlike the Task.FromResult feeds above: a
+        // check that completes inline never leaves the UI thread, and so could
+        // not fail this way however the answer was filed.
+        host.Updates = new UpdateService(async _ =>
+        {
+            await Task.Delay(20).ConfigureAwait(false);
+            return """{ "tag_name": "v99.1.0" }""";
+        });
+
+        var strayThread = false;
+        host.StateChanged += () => strayThread |= !Dispatcher.UIThread.CheckAccess();
+
+        await ((ISettingsHost)host).CheckForUpdatesNow(TestContext.Current.CancellationToken);
+        Dispatcher.UIThread.RunJobs();
+
+        strayThread.ShouldBeFalse("a view model was refreshed from a background thread");
+        host.GetSnapshot().NewerVersion.ShouldBe("99.1.0");
     }
 
     [Fact]
