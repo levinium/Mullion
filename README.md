@@ -172,7 +172,7 @@ Once a day Mullion asks GitHub whether a newer version exists and says so on the
 main window if one does. **Settings → About → Download update** fetches it and
 **Restart to finish** puts it in place. Two clicks, and nothing happens without
 them — no silent updates, and no moment where the app decides on its own to
-disappear and come back.
+disappear and come back. [What changed in each version](CHANGELOG.md).
 
 The check sends nothing: no identifier, no machine, nothing about you. It is a
 request for a public file, and the answer is compared on your own machine. That
