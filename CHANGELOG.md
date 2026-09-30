@@ -42,6 +42,28 @@ something you had set up.
 
 ---
 
+## 1.0.3
+
+**Filling a whole display now maximizes the window.** Sending a window to a zone
+that covers an entire monitor — the last step of a key's cycle, or a zone on a
+display Mullion gave only one — used to size the window to the work area and stop
+there. It looked right and it was not: a window sized to fill a display is not a
+maximized window, so its own maximize button still had somewhere to go, apps that
+square off their corners or hide a title bar when maximized never did, and
+Windows left it out of the snap groups it remembers.
+
+It is the maximize button's job, so Mullion now asks the maximize button to do
+it, on whichever display the zone belongs to. Un-maximizing puts the window back
+at the size its owner last chose for it rather than at the size of the display it
+just filled, and pressing the same key again costs nothing instead of restoring
+the window and inflating it a second time. A window without a maximize box, and
+any zone short of a whole display, are filled exactly as before.
+
+Dropping a window into a whole-display zone goes the same way, since both arrive
+through the same mover.
+
+---
+
 ## 1.0.2
 
 **Checking for updates no longer closes the app.** Pressing **Check for updates**
