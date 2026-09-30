@@ -103,6 +103,24 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
 
         var resizable = IsResizable(hwnd);
 
+        // Filling a whole display is the maximize button's job, so let it do it.
+        // A window merely sized to the work area is not maximized and nothing
+        // treats it as though it were: its own maximize button still has
+        // somewhere to go, apps that square off their corners or hide a title
+        // bar when maximized never do, and Windows leaves it out of the
+        // snap-group arrangements it remembers.
+        var maximizing = CoversWholeDisplay(target, out var monitor) && CanMaximize(hwnd);
+
+        // Already maximized on the display it is being sent to. Restoring it and
+        // blowing it straight back up would animate twice to arrive where it
+        // started, so say what is true and touch nothing - the undo stack
+        // included, because there is nothing here to take back.
+        if (maximizing && Win.IsZoomed(hwnd) && !Win.IsIconic(hwnd) &&
+            Win.MonitorFromWindow(hwnd, Win.MONITOR_DEFAULTTONEAREST) == monitor)
+        {
+            return new MoveResult(MoveOutcome.Maximized, GetFrameBounds(hwnd), 0);
+        }
+
         PushUndo(hwnd);
 
         // A maximized window silently ignores SetWindowPos, and reading its rect
@@ -116,7 +134,7 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         // Note the size the window has right now, before anything of ours
         // changes it. If it is not the size we last gave it, its owner has
         // resized it since, and this is the size to bring it back to.
-        _sizes.Observe(hwnd, GetFrameBounds(hwnd));
+        var chosen = _sizes.Observe(hwnd, GetFrameBounds(hwnd));
 
         // A window that cannot be resized is centered at its current size rather
         // than skipped: a dialog that ignores the hotkey reads as a broken app,
@@ -142,22 +160,37 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         var lastError = 0;
         var previousOversize = false;
 
+        if (maximizing)
+        {
+            attempts++;
+
+            // Sized to what it should come BACK to before being blown up, rather
+            // than to the target: that rectangle becomes the window's restore
+            // position, and it is also what decides which display the maximize
+            // lands on, so one SetWindowPos does both jobs. Capped into the
+            // target, or a window larger than the display would restore to
+            // somewhere off the edge of it.
+            if (!Apply(hwnd, ZoneFit.Restore(chosen ?? target, target), out lastError))
+                return Failed(lastError, attempts);
+
+            if (Win.ShowWindow(hwnd, Win.SW_SHOWMAXIMIZED))
+            {
+                WaitForSettle(hwnd, 150);
+
+                // Confirmed rather than assumed. A window can carry a maximize
+                // box and still refuse to use it, and one that did has just been
+                // sized to its restore rectangle - which is not where the user
+                // asked for it - so fall through and fill the display the way
+                // every other zone is filled.
+                if (Win.IsZoomed(hwnd)) return Placed(hwnd, MoveOutcome.Maximized, attempts);
+            }
+        }
+
         for (var i = 0; i < 3; i++)
         {
             attempts++;
 
-            if (!Apply(hwnd, target, out lastError))
-            {
-                return lastError switch
-                {
-                    Win.ERROR_ACCESS_DENIED => new MoveResult(
-                        MoveOutcome.FailedAccessDenied, default, attempts,
-                        "The focused window belongs to an elevated process. Restart Mullion as administrator to move it."),
-                    Win.ERROR_INVALID_WINDOW_HANDLE => new MoveResult(
-                        MoveOutcome.SkippedInvalid, default, attempts),
-                    _ => new MoveResult(MoveOutcome.FailedUnknown, default, attempts, $"SetWindowPos failed ({lastError})."),
-                };
-            }
+            if (!Apply(hwnd, target, out lastError)) return Failed(lastError, attempts);
 
             WaitForSettle(hwnd, 80);
             var achieved = GetFrameBounds(hwnd);
@@ -321,6 +354,69 @@ public sealed class WindowManager(int undoDepth = 20) : IWindowManager
         var style = (long)Win.GetWindowLongPtr(hwnd, Win.GWL_STYLE);
         return (style & Win.WS_THICKFRAME) != 0 || (style & Win.WS_MAXIMIZEBOX) != 0;
     }
+
+    /// <summary>
+    /// Whether the window has a maximize box. Narrower than
+    /// <see cref="IsResizable"/> on purpose: a window can be draggable to any
+    /// size and still have no maximized state to be put into.
+    /// </summary>
+    private static bool CanMaximize(nint hwnd) =>
+        ((long)Win.GetWindowLongPtr(hwnd, Win.GWL_STYLE) & Win.WS_MAXIMIZEBOX) != 0;
+
+    /// <summary>
+    /// Whether a target is the whole work area of one display, and which display
+    /// that is.
+    /// <para>
+    /// Asked of Windows rather than of the layout, so the answer is measured
+    /// against the same work area the zones were projected onto, and so a target
+    /// that arrived from somewhere else - a drop, the probe - is judged by the
+    /// same rule as one that came from a hotkey.
+    /// </para>
+    /// </summary>
+    private static bool CoversWholeDisplay(PxRect target, out nint monitor)
+    {
+        var rect = new RECT
+        {
+            Left = target.Left,
+            Top = target.Top,
+            Right = target.Right,
+            Bottom = target.Bottom,
+        };
+
+        // DEFAULTTONULL: a rectangle on no display cannot be a display's work
+        // area, and the nearest display's would be an answer about somewhere
+        // else. A rectangle spanning two displays picks the one it covers most
+        // and then fails the comparison below, which is the right answer too.
+        monitor = Win.MonitorFromRect(ref rect, Win.MONITOR_DEFAULTTONULL);
+        if (monitor == 0) return false;
+
+        var info = new MONITORINFOEXW { cbSize = (uint)Marshal.SizeOf<MONITORINFOEXW>() };
+        if (!User32.GetMonitorInfo(monitor, ref info)) return false;
+
+        var work = PxRect.FromLtrb(
+            info.rcWork.Left, info.rcWork.Top, info.rcWork.Right, info.rcWork.Bottom);
+
+        // The zone tolerance, not an exact match: the work area is projected
+        // through a fraction on the way to becoming a target, and a rounded
+        // pixel at one edge should not decide whether the window maximizes.
+        return ZoneFit.Fills(target, work);
+    }
+
+    /// <summary>
+    /// A SetWindowPos that came back false, turned into the reason it did.
+    /// Shared so the maximize path and the fill path cannot come to disagree
+    /// about what an access-denied means.
+    /// </summary>
+    private static MoveResult Failed(int lastError, int attempts) => lastError switch
+    {
+        Win.ERROR_ACCESS_DENIED => new MoveResult(
+            MoveOutcome.FailedAccessDenied, default, attempts,
+            "The focused window belongs to an elevated process. Restart Mullion as administrator to move it."),
+        Win.ERROR_INVALID_WINDOW_HANDLE => new MoveResult(
+            MoveOutcome.SkippedInvalid, default, attempts),
+        _ => new MoveResult(
+            MoveOutcome.FailedUnknown, default, attempts, $"SetWindowPos failed ({lastError})."),
+    };
 
     /// <summary>
     /// Position the window so its VISIBLE frame lands on <paramref name="target"/>,

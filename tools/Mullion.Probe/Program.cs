@@ -12,6 +12,7 @@ using Mullion.Platform.Windows.Windows;
 //   --snap <KEY> [--delay N]   snap the foreground window to that zone
 //   --undo                     restore the last move
 //   --toggle-test              verify the Shift+drag size toggle end to end
+//   --maximize-test            verify that a whole-display target maximizes
 
 WindowsDisplayProvider.EnsurePerMonitorDpiAwareness();
 
@@ -56,11 +57,17 @@ if (argv.Contains("--self-test"))
         var dh = Math.Abs(r.Achieved.Height - t.Height);
         var worst = Math.Max(Math.Max(dx, dy), Math.Max(dw, dh));
 
-        if (worst > 2) failures++;
+        // A zone covering a whole display maximizes instead of being sized to
+        // match, and Windows owns where a maximized window's frame sits - so it
+        // is held to the zone tolerance rather than to the 2px a SetWindowPos we
+        // issued ourselves is expected to hit.
+        var allowed = r.Outcome == MoveOutcome.Maximized ? ZoneFit.Tolerance : 2;
+
+        if (worst > allowed) failures++;
 
         Console.WriteLine(
             $"  {surface.FallbackLabelAt(z.Position),-5} {r.Outcome,-18} {t,-26} {r.Achieved,-26} " +
-            $"{(worst <= 2 ? "ok" : $"OFF BY {worst}px")}");
+            $"{(worst <= allowed ? "ok" : $"OFF BY {worst}px")}");
 
         if (r.Note is not null) Console.WriteLine($"        note: {r.Note}");
     }
@@ -71,8 +78,8 @@ if (argv.Contains("--self-test"))
 
     Console.WriteLine();
     Console.WriteLine(failures == 0
-        ? "All zones landed within 2px."
-        : $"{failures} zone(s) missed by more than 2px.");
+        ? "Every zone landed within tolerance."
+        : $"{failures} zone(s) missed their target.");
 
     return failures == 0 ? 0 : 1;
 }
@@ -420,6 +427,112 @@ if (argv.Contains("--toggle-test"))
     Console.WriteLine();
     Console.WriteLine(failures == 0
         ? "Toggle behaves as specified."
+        : $"{failures} check(s) failed.");
+
+    return failures == 0 ? 0 : 1;
+}
+
+if (argv.Contains("--maximize-test"))
+{
+    // A target covering a whole display is the maximize button's job. Sizing a
+    // window to the work area instead leaves it unmaximized, which measures the
+    // same and is not the same thing - so every check below asks Windows whether
+    // the window is maximized rather than where its edges are.
+    using var scratch = new Mullion.Platform.Windows.Testing.ScratchWindow("Mullion maximize test");
+    var hwnd = scratch.Handle;
+    Thread.Sleep(400);
+
+    var mover = new WindowManager();
+    var failures = 0;
+
+    void Check(string what, bool ok, string detail)
+    {
+        if (!ok) failures++;
+        Console.WriteLine($"  {(ok ? "ok  " : "FAIL")}  {what,-46} {detail}");
+    }
+
+    foreach (var display in displays)
+    {
+        // The rectangle the ring's "Whole display" step projects to, arrived at
+        // the same way the hotkey engine arrives at it.
+        var whole = new Mullion.Core.Geometry.NormRect(0, 0, 1, 1).Project(display.WorkArea);
+
+        Console.WriteLine($"{display.FriendlyName}: work area {display.WorkArea}");
+        Console.WriteLine();
+
+        // Placed by hand rather than by Mullion, and small: it puts the window
+        // on this display to begin with, and the size it lands at is a size its
+        // owner chose - which is the one the restore rectangle has to agree with.
+        scratch.ResizeByHand(display.WorkArea.Left + 200, display.WorkArea.Top + 150, 800, 600);
+        Thread.Sleep(250);
+
+        var original = mover.BoundsOf(hwnd)!.Value;
+        Console.WriteLine($"  window starts at {original}");
+        Console.WriteLine();
+
+        var filled = mover.MoveWindowTo(hwnd, whole);
+
+        Check("filling the display reports Maximized",
+            filled.Outcome == MoveOutcome.Maximized, $"{filled.Outcome}");
+
+        Check("and Windows agrees the window is maximized",
+            MaximizeProbe.Maximized(hwnd), $"{mover.BoundsOf(hwnd)}");
+
+        Check("it covers the work area",
+            ZoneFit.Fills(mover.BoundsOf(hwnd)!.Value, display.WorkArea),
+            $"{mover.BoundsOf(hwnd)} vs {display.WorkArea}");
+
+        // Pressing the same key again used to restore the window and blow it
+        // back up for no change. It should now cost nothing at all.
+        var again = mover.MoveWindowTo(hwnd, whole);
+
+        Check("filling it again does nothing",
+            again.Outcome == MoveOutcome.Maximized && again.Attempts == 0 &&
+            MaximizeProbe.Maximized(hwnd),
+            $"{again.Outcome}, {again.Attempts} attempt(s)");
+
+        // The point of maximizing rather than resizing: the window has a
+        // maximized state to come out of, and the size it comes out to is the
+        // one it had before Mullion touched it.
+        MaximizeProbe.Unmaximize(hwnd);
+        Thread.Sleep(250);
+        var restored = mover.BoundsOf(hwnd)!.Value;
+
+        Check("un-maximizing leaves it unmaximized",
+            !MaximizeProbe.Maximized(hwnd), $"{restored}");
+
+        Check("and back at the size its owner chose",
+            ZoneFit.SameSize(restored, original),
+            $"{restored.Width}x{restored.Height} vs {original.Width}x{original.Height}");
+
+        Check("not at the size of the display it filled",
+            !ZoneFit.SameSize(restored, display.WorkArea),
+            "which is what a resize would have left behind");
+
+        // A zone that is not the whole display must be untouched by any of this.
+        var part = new Mullion.Core.Geometry.NormRect(0, 0, 0.5, 1).Project(display.WorkArea);
+        var half = mover.MoveWindowTo(hwnd, part);
+
+        Check("half the display is still sized, not maximized",
+            half.Outcome == MoveOutcome.Moved && !MaximizeProbe.Maximized(hwnd),
+            $"{half.Outcome} {half.Achieved}");
+
+        // And undo has to be able to take a maximize back, or the key lies.
+        mover.MoveWindowTo(hwnd, whole);
+        var maximizedByUs = MaximizeProbe.Maximized(hwnd);
+        mover.UndoLastMove();
+        Thread.Sleep(250);
+
+        Check("undo takes the maximize back",
+            maximizedByUs && !MaximizeProbe.Maximized(hwnd) &&
+            ZoneFit.Fills(mover.BoundsOf(hwnd)!.Value, part),
+            $"{mover.BoundsOf(hwnd)} vs {part}");
+
+        Console.WriteLine();
+    }
+
+    Console.WriteLine(failures == 0
+        ? "Whole-display targets maximize."
         : $"{failures} check(s) failed.");
 
     return failures == 0 ? 0 : 1;
@@ -906,4 +1019,25 @@ internal static class DragProbe
 {
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
+}
+
+/// <summary>
+/// Asked of Windows directly, because "maximized" is Windows' answer to give and
+/// a rectangle cannot stand in for it - a window sized to the work area and a
+/// window maximized into it measure the same and behave differently.
+/// </summary>
+internal static class MaximizeProbe
+{
+    private const int SW_RESTORE = 9;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsZoomed(nint hwnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(nint hwnd, int cmdShow);
+
+    internal static bool Maximized(nint hwnd) => IsZoomed(hwnd);
+
+    /// <summary>What clicking the restore button does.</summary>
+    internal static void Unmaximize(nint hwnd) => ShowWindow(hwnd, SW_RESTORE);
 }

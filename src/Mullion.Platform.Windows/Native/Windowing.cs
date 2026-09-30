@@ -54,6 +54,7 @@ internal static partial class Win
     internal const uint DWMWA_CLOAKED = 14;
     internal const uint DWMWA_VISIBLE_FRAME_BORDER_THICKNESS = 37;
 
+    internal const uint MONITOR_DEFAULTTONULL = 0;
     internal const uint MONITOR_DEFAULTTONEAREST = 2;
 
     internal const int ERROR_ACCESS_DENIED = 5;
@@ -144,6 +145,9 @@ internal static partial class Win
 
     [LibraryImport("user32.dll")]
     internal static partial nint MonitorFromPoint(POINT pt, uint flags);
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint MonitorFromRect(ref RECT rect, uint flags);
 
     // Distinct names rather than overloads: `out var` cannot disambiguate
     // between the RECT and int forms at the call site.

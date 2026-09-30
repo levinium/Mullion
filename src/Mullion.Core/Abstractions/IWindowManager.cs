@@ -7,6 +7,12 @@ public enum MoveOutcome
     /// <summary>Landed within tolerance of the target.</summary>
     Moved,
 
+    /// <summary>
+    /// The target was a whole display, so the window was maximized instead of
+    /// sized to match it.
+    /// </summary>
+    Maximized,
+
     /// <summary>Best effort: the window resisted, e.g. a hard minimum size.</summary>
     MovedApproximate,
 
@@ -30,7 +36,11 @@ public readonly record struct MoveResult(
     int Attempts,
     string? Note = null)
 {
-    public bool Success => Outcome is MoveOutcome.Moved or MoveOutcome.MovedApproximate or MoveOutcome.Centered;
+    public bool Success => Outcome
+        is MoveOutcome.Moved
+        or MoveOutcome.Maximized
+        or MoveOutcome.MovedApproximate
+        or MoveOutcome.Centered;
 }
 
 public sealed record WindowSnapshot(

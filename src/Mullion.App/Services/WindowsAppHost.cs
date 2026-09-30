@@ -390,7 +390,8 @@ public sealed class WindowsAppHost : IAppHost, IWizardHost, ISettingsHost, IDisp
 
             _log.Info(_lastAction);
 
-            if (result.Outcome == MoveOutcome.Moved) _flash.Flash(result.Achieved);
+            if (result.Outcome is MoveOutcome.Moved or MoveOutcome.Maximized)
+                _flash.Flash(result.Achieved);
             StateChanged?.Invoke();
         });
     }
